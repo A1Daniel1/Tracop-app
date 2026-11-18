@@ -77,6 +77,30 @@ export interface ChangeRecorderPort {
     readonly occurredAt: Date;
   }): Promise<string | null>;
 }
+
+export interface LotQuoteSnapshot {
+  readonly id: string;
+  readonly providerId: string;
+  readonly unit: string;
+  readonly unitPrice: bigint;
+  readonly availableUntil: Date;
+  readonly status: string;
+  readonly availableQuantityMilli: bigint;
+}
+
+export interface CatalogOrderingApi {
+  getLotQuote(lotId: string): Promise<LotQuoteSnapshot>;
+  reserveLots(input: {
+    readonly orderId: string;
+    readonly lines: readonly { readonly lotId: string; readonly quantityMilli: bigint }[];
+    readonly expiresAt: Date;
+  }): Promise<void>;
+  releaseOrderReservations(orderId: string): Promise<void>;
+  findExpiredReservationOrderIds(now: Date, limit: number): Promise<readonly string[]>;
+}
+
+export const CATALOG_ORDERING_API = Symbol('CATALOG_ORDERING_API');
+
 export interface CatalogCursor {
   readonly version: 1;
   readonly sort: 'price' | 'distance' | 'availability' | 'recent';

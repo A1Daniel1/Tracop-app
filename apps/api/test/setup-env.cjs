@@ -26,4 +26,7 @@ Object.assign(process.env, {
   TELEGRAM_WEBHOOK_SECRET: 'test_webhook_secret',
   TELEGRAM_BOT_USERNAME: 'tracop_test_bot',
   TELEGRAM_API_ROOT: 'https://api.telegram.org',
+  ORDER_COMMISSION_RATE_BPS: '0',
+  ORDER_FREIGHT_COP: '0',
+  ORDER_SUBTOTAL_ROUNDING: 'half_up',
 });

@@ -5627,6 +5627,164 @@
         "summary": "Obtener cambios sincronizables",
         "tags": ["sync"]
       }
+    },
+    "/orders": {
+      "post": {
+        "operationId": "OrderingController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Pedido creado o recuperado por idempotencia"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "409": {
+            "description": "Conflicto de idempotencia con contenido distinto"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Crear pedido (solo compradores)",
+        "tags": ["ordering"]
+      }
+    },
+    "/orders/mine": {
+      "get": {
+        "operationId": "OrderingController_listMine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado"
+          },
+          "403": {
+            "description": "Rol no autorizado"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar mis pedidos (comprador)",
+        "tags": ["ordering"]
+      }
+    },
+    "/orders/incoming": {
+      "get": {
+        "operationId": "OrderingController_listIncoming",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado"
+          },
+          "403": {
+            "description": "Rol no autorizado"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar pedidos entrantes (proveedor, solo accepted+)",
+        "tags": ["ordering"]
+      }
+    },
+    "/orders/{id}/accept": {
+      "post": {
+        "operationId": "OrderingController_accept",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Cotización aceptada"
+          },
+          "409": {
+            "description": "Versión obsoleta o cotización expirada"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Aceptar cotización (comprador)",
+        "tags": ["ordering"]
+      }
+    },
+    "/orders/{id}/cancel": {
+      "post": {
+        "operationId": "OrderingController_cancel",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Pedido cancelado"
+          },
+          "403": {
+            "description": "No autorizado"
+          },
+          "409": {
+            "description": "Estado no permite cancelación o versión obsoleta"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancelar pedido (comprador o proveedor según estado)",
+        "tags": ["ordering"]
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "operationId": "OrderingController_getById",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Detalle del pedido"
+          },
+          "401": {
+            "description": "No autenticado"
+          },
+          "403": {
+            "description": "No es participante del pedido"
+          },
+          "404": {
+            "description": "Pedido no encontrado"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Consultar pedido (comprador o proveedor del pedido)",
+        "tags": ["ordering"]
+      }
     }
   },
   "info": {

@@ -9,6 +9,8 @@ import { CatalogModule } from '../modules/catalog/index.js';
 import { CatalogBridgeModule } from './catalog-bridge.module.js';
 import { SyncModule } from '../modules/sync/index.js';
 import { CatalogSyncBridgeModule } from './catalog-sync-bridge.module.js';
+import { OrderingModule } from '../modules/ordering/index.js';
+import { OrderingBridgeModule } from './ordering-bridge.module.js';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 @ApiTags('health')
@@ -53,6 +55,8 @@ class HealthController {
     MessagingModule,
     IdentityModule,
     OtpDeliveryModule,
+    OrderingBridgeModule,
+    OrderingModule,
   ],
   controllers: [HealthController],
 })

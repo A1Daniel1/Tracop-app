@@ -79,7 +79,11 @@ const envSchema = z.object({
   ORDER_QUOTE_TTL_HOURS: z.coerce.number().int().positive().default(24),
   ORDER_RESERVATION_TTL_HOURS: z.coerce.number().int().positive().default(24),
   ORDER_SUBTOTAL_ROUNDING: z.enum(['half_up', 'floor', 'ceil']).default('half_up'),
-  ORDER_COMMISSION_RATE_BPS: z.coerce.number().int().min(0).max(10_000).default(0),
+  ORDER_COMMISSION_RATE_BPS: z
+    .string()
+    .regex(/^(0|[1-9]\d{0,4})$/)
+    .default('0')
+    .transform(BigInt),
   ORDER_FREIGHT_COP: z
     .string()
     .regex(/^(0|[1-9]\d{0,18})$/)

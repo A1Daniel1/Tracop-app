@@ -24,11 +24,19 @@ const toOrderProps = (row: typeof orders.$inferSelect): OrderProps => ({
   cancelReason: row.cancelReason ?? null,
 });
 
+const parseMilli = (value: string): bigint => {
+  // numeric(12,3) from PostgreSQL comes as string like "1000.000"
+  // Convert to millis by removing decimal point
+  const [whole, frac] = value.split('.');
+  const fraction = (frac ?? '').padEnd(3, '0').slice(0, 3);
+  return BigInt(whole ?? '0') * 1000n + BigInt(fraction);
+};
+
 const toLineProps = (row: typeof orderLines.$inferSelect): OrderLineProps => ({
   id: row.id,
   lotId: row.lotId,
   providerId: row.providerId,
-  quantityMilli: BigInt(row.quantityMilli),
+  quantityMilli: parseMilli(row.quantityMilli),
   unitPrice: BigInt(row.unitPrice),
   unit: row.unit,
 });
