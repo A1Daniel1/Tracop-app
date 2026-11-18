@@ -2,15 +2,11 @@ import { Module } from '@nestjs/common';
 import { OrderingController } from './adapters/in/ordering.controller.js';
 import { OrderingService } from './application/ordering-service.js';
 import { DrizzleOrderRepository } from './adapters/out/drizzle-repositories.js';
-import { DrizzleLotQuotePort } from './adapters/out/drizzle-repositories.js';
-import { DrizzleLotReservationPort } from './adapters/out/drizzle-repositories.js';
 import { envPricingPortProvider } from './adapters/out/drizzle-repositories.js';
 import { InMemoryOrderingRateLimit } from './adapters/in/rate-limiter.js';
 import { UNIT_OF_WORK, APP_CLOCK } from '../../shared/infra/tokens.js';
 import {
   ORDER_REPOSITORY,
-  LOT_QUOTE_PORT,
-  LOT_RESERVATION_PORT,
   PRICING_PORT,
   ORDERING_UNIT_OF_WORK,
   ORDERING_CLOCK,
@@ -23,8 +19,7 @@ import { APP_ENVIRONMENT } from '../../shared/infra/tokens.js';
   providers: [
     OrderingService,
     { provide: ORDER_REPOSITORY, useClass: DrizzleOrderRepository },
-    { provide: LOT_QUOTE_PORT, useClass: DrizzleLotQuotePort },
-    { provide: LOT_RESERVATION_PORT, useClass: DrizzleLotReservationPort },
+    // LOT_QUOTE_PORT and LOT_RESERVATION_PORT provided by OrderingBridgeModule
     envPricingPortProvider,
     { provide: ORDERING_UNIT_OF_WORK, useExisting: UNIT_OF_WORK },
     { provide: ORDERING_CLOCK, useExisting: APP_CLOCK },
@@ -40,12 +35,22 @@ import { APP_ENVIRONMENT } from '../../shared/infra/tokens.js';
       inject: [APP_ENVIRONMENT],
     },
     {
+      provide: 'ORDER_QUOTE_TTL_HOURS',
+      useFactory: (env: { ORDER_QUOTE_TTL_HOURS: number }) => env.ORDER_QUOTE_TTL_HOURS,
+      inject: [APP_ENVIRONMENT],
+    },
+    {
+      provide: 'ORDER_RESERVATION_TTL_HOURS',
+      useFactory: (env: { ORDER_RESERVATION_TTL_HOURS: number }) => env.ORDER_RESERVATION_TTL_HOURS,
+      inject: [APP_ENVIRONMENT],
+    },
+    {
       provide: 'ORDER_SUBTOTAL_ROUNDING',
       useFactory: (env: { ORDER_SUBTOTAL_ROUNDING: 'half_up' | 'floor' | 'ceil' }) =>
         env.ORDER_SUBTOTAL_ROUNDING,
       inject: [APP_ENVIRONMENT],
     },
   ],
-  exports: [OrderingService, ORDER_REPOSITORY, LOT_QUOTE_PORT, LOT_RESERVATION_PORT, PRICING_PORT],
+  exports: [OrderingService, ORDER_REPOSITORY, PRICING_PORT],
 })
 export class OrderingModule {}

@@ -1,9 +1,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Inject, Injectable, OnApplicationShutdown } from '@nestjs/common';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { sql } from 'drizzle-orm';
 import { Pool } from 'pg';
 import { APP_ENVIRONMENT, DATABASE_POOL } from './tokens.js';
 import type { AppEnvironment } from './env.js';
+import { DomainError } from '../kernel/domain-error.js';
 
 export type AppDatabase = NodePgDatabase<Record<string, never>>;
 export type DatabaseTransaction = Parameters<Parameters<AppDatabase['transaction']>[0]>[0];
@@ -12,12 +14,15 @@ export type DatabaseTransaction = Parameters<Parameters<AppDatabase['transaction
 export class DatabaseService implements OnApplicationShutdown {
   readonly db: AppDatabase;
   private readonly transactions = new AsyncLocalStorage<AppDatabase | DatabaseTransaction>();
+  private readonly lockTimeoutMs: number;
+  private readonly statementTimeoutMs: number;
 
   constructor(
     @Inject(DATABASE_POOL) private readonly pool: Pool,
     @Inject(APP_ENVIRONMENT) environment: AppEnvironment,
   ) {
-    void environment;
+    this.lockTimeoutMs = environment.ORDER_LOCK_TIMEOUT_MS;
+    this.statementTimeoutMs = environment.ORDER_STATEMENT_TIMEOUT_MS;
     this.db = drizzle(pool);
   }
 
@@ -28,7 +33,33 @@ export class DatabaseService implements OnApplicationShutdown {
   async transaction<T>(operation: () => Promise<T>): Promise<T> {
     const current = this.transactions.getStore();
     if (current) return operation();
-    return this.db.transaction((transaction) => this.transactions.run(transaction, operation));
+    try {
+      return await this.db.transaction(async (transaction) => {
+        await transaction.execute(
+          sql`select set_config('lock_timeout', ${`${this.lockTimeoutMs}ms`}, true)`,
+        );
+        await transaction.execute(
+          sql`select set_config('statement_timeout', ${`${this.statementTimeoutMs}ms`}, true)`,
+        );
+        return this.transactions.run(transaction, operation);
+      });
+    } catch (error) {
+      const code =
+        typeof error === 'object' && error !== null && 'code' in error
+          ? String((error as { code: unknown }).code)
+          : '';
+      if (code === '55P03')
+        throw new DomainError(
+          'La operación excedió el tiempo de espera del bloqueo.',
+          'lock_timeout',
+        );
+      if (code === '57014')
+        throw new DomainError(
+          'La operación excedió el tiempo máximo de ejecución.',
+          'statement_timeout',
+        );
+      throw error;
+    }
   }
 
   async onApplicationShutdown(): Promise<void> {

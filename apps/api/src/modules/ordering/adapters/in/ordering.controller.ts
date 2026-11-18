@@ -8,6 +8,7 @@ import {
   Req,
   HttpCode,
   HttpStatus,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import {
@@ -18,11 +19,12 @@ import {
 import { z } from 'zod';
 import { OrderingService } from '../../application/ordering-service.js';
 import type { OrderAggregate } from '../../ports/ordering-ports.js';
-
-type Actor = { readonly sub: string; readonly role: string };
+import { DomainError } from '../../../../shared/kernel/domain-error.js';
+import { AuthGuard, type AuthPrincipal } from '../../../../shared/auth/index.js';
 
 @ApiTags('ordering')
 @ApiBearerAuth()
+@UseGuards(AuthGuard)
 @Controller('orders')
 export class OrderingController {
   constructor(private readonly ordering: OrderingService) {}
@@ -33,7 +35,7 @@ export class OrderingController {
   @ApiResponse({ status: 201, description: 'Pedido creado o recuperado por idempotencia' })
   @ApiResponse({ status: 400, description: 'Entrada inválida' })
   @ApiResponse({ status: 409, description: 'Conflicto de idempotencia con contenido distinto' })
-  async create(@Req() req: { identity: Actor }, @Body() body: unknown) {
+  async create(@Req() req: { identity: AuthPrincipal }, @Body() body: unknown) {
     const input = createOrderSchema.parse(body);
     const actor = req.identity;
     const lines = input.lines.map(({ lotId, quantityMilli }) => ({
@@ -41,30 +43,43 @@ export class OrderingController {
       quantityMilli: BigInt(quantityMilli),
     }));
     const aggregate = await this.ordering.createOrder(actor, {
+      id: input.id,
       buyerId: actor.sub,
       lines,
       deliveryAddress: input.deliveryAddress,
       deliveryWindow: input.deliveryWindow ?? null,
     });
-    return this.serializeOrder(aggregate);
+    return this.serializeOrder(aggregate, req.identity);
   }
 
   @Get('mine')
   @ApiOperation({ summary: 'Listar mis pedidos (comprador)' })
   @ApiResponse({ status: 200, type: () => orderPageResponseSchema })
-  async listMine(@Req() req: { identity: Actor }, @Query() query: unknown) {
+  @ApiResponse({ status: 401, description: 'No autenticado' })
+  @ApiResponse({ status: 403, description: 'Rol no autorizado' })
+  async listMine(@Req() req: { identity: AuthPrincipal }, @Query() query: unknown) {
     const { cursor, limit } = orderCursorQuerySchema.parse(query);
-    const result = await this.ordering.listMine(req.identity.sub, cursor, limit);
-    return { items: result.items.map(this.serializeOrder), nextCursor: result.nextCursor };
+    const actor = req.identity;
+    const result = await this.ordering.listMine(actor.sub, cursor, limit);
+    return {
+      items: result.items.map((a) => this.serializeOrder(a, actor)),
+      nextCursor: result.nextCursor,
+    };
   }
 
   @Get('incoming')
   @ApiOperation({ summary: 'Listar pedidos entrantes (proveedor, solo accepted+)' })
   @ApiResponse({ status: 200, type: () => orderPageResponseSchema })
-  async listIncoming(@Req() req: { identity: Actor }, @Query() query: unknown) {
+  @ApiResponse({ status: 401, description: 'No autenticado' })
+  @ApiResponse({ status: 403, description: 'Rol no autorizado' })
+  async listIncoming(@Req() req: { identity: AuthPrincipal }, @Query() query: unknown) {
     const { cursor, limit } = orderCursorQuerySchema.parse(query);
-    const result = await this.ordering.listIncoming(req.identity.sub, cursor, limit);
-    return { items: result.items.map(this.serializeOrder), nextCursor: result.nextCursor };
+    const actor = req.identity;
+    const result = await this.ordering.listIncoming(actor.sub, cursor, limit);
+    return {
+      items: result.items.map((a) => this.serializeOrder(a, actor)),
+      nextCursor: result.nextCursor,
+    };
   }
 
   @Post(':id/accept')
@@ -73,7 +88,7 @@ export class OrderingController {
   @ApiResponse({ status: 200, description: 'Cotización aceptada' })
   @ApiResponse({ status: 409, description: 'Versión obsoleta o cotización expirada' })
   async accept(
-    @Req() req: { identity: Actor },
+    @Req() req: { identity: AuthPrincipal },
     @Param('id') id: string,
     @Body() body: { expectedVersion: number },
   ) {
@@ -84,7 +99,7 @@ export class OrderingController {
       orderId: id,
       expectedVersion: input.expectedVersion,
     });
-    return this.serializeOrder(aggregate);
+    return this.serializeOrder(aggregate, actor);
   }
 
   @Post(':id/cancel')
@@ -94,7 +109,7 @@ export class OrderingController {
   @ApiResponse({ status: 403, description: 'No autorizado' })
   @ApiResponse({ status: 409, description: 'Estado no permite cancelación o versión obsoleta' })
   async cancel(
-    @Req() req: { identity: Actor },
+    @Req() req: { identity: AuthPrincipal },
     @Param('id') id: string,
     @Body() body: { expectedVersion: number; reason?: string },
   ) {
@@ -105,15 +120,33 @@ export class OrderingController {
         reason: z.string().max(200).optional(),
       })
       .parse(body);
-    const cancelInput: { actor: Actor; orderId: string; expectedVersion: number; reason?: string } =
-      { actor, orderId: id, expectedVersion: input.expectedVersion };
+    const cancelInput: {
+      actor: AuthPrincipal;
+      orderId: string;
+      expectedVersion: number;
+      reason?: string;
+    } = { actor, orderId: id, expectedVersion: input.expectedVersion };
     if (input.reason !== undefined) cancelInput.reason = input.reason;
     const aggregate = await this.ordering.cancelOrder(cancelInput);
-    return this.serializeOrder(aggregate);
+    return this.serializeOrder(aggregate, actor);
   }
 
-  private serializeOrder(aggregate: OrderAggregate) {
-    return {
+  @Get(':id')
+  @ApiOperation({ summary: 'Consultar pedido (comprador o proveedor del pedido)' })
+  @ApiResponse({ status: 200, description: 'Detalle del pedido' })
+  @ApiResponse({ status: 401, description: 'No autenticado' })
+  @ApiResponse({ status: 403, description: 'No es participante del pedido' })
+  @ApiResponse({ status: 404, description: 'Pedido no encontrado' })
+  async getById(@Req() req: { identity: AuthPrincipal }, @Param('id') id: string) {
+    const actor = req.identity;
+    const aggregate = await this.ordering.getById(actor, id);
+    if (!aggregate) throw new DomainError('Pedido no encontrado.', 'not_found');
+    return this.serializeOrder(aggregate, actor);
+  }
+
+  private serializeOrder(aggregate: OrderAggregate, actor?: AuthPrincipal) {
+    const isBuyer = actor?.sub === aggregate.order.buyerId;
+    const base = {
       id: aggregate.order.id,
       status: aggregate.order.status,
       providerId: aggregate.order.providerId,
@@ -128,11 +161,18 @@ export class OrderingController {
       commission: aggregate.quote.commission.toString(),
       total: aggregate.quote.total.toString(),
       providerNet: aggregate.quote.providerNet.toString(),
-      deliveryAddress: aggregate.order.deliveryAddress,
-      deliveryWindow: aggregate.order.deliveryWindow,
       acceptedAt: aggregate.order.acceptedAt,
       cancelReason: aggregate.order.cancelReason,
       quoteValidUntil: aggregate.quote.validUntil.toISOString(),
     };
+    if (isBuyer) {
+      return {
+        ...base,
+        deliveryAddress: aggregate.order.deliveryAddress,
+        deliveryWindow: aggregate.order.deliveryWindow,
+      };
+    }
+    // Provider view: no delivery address or window
+    return base;
   }
 }

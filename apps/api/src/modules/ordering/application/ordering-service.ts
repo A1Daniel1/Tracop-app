@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { OUTBOX_WRITER } from '../../../shared/infra/tokens.js';
 import type { OutboxWriter } from '../../../shared/ports/outbox-writer.js';
 import { DomainError } from '../../../shared/kernel/domain-error.js';
-import { Order, type OrderProps, type OrderLineProps } from '../domain/order.js';
+import { Order, type OrderEvent, type OrderProps, type OrderLineProps } from '../domain/order.js';
 import { Quote, type QuoteProps } from '../domain/quote.js';
 import { hashOrderEvent } from '../domain/order-events.js';
 import type {
@@ -25,10 +25,12 @@ import {
   ORDERING_CLOCK,
 } from '../ports/ordering-ports.js';
 import { createId } from '../../../shared/kernel/ids.js';
+import { createHash } from 'node:crypto';
 
 type Actor = { readonly sub: string; readonly role: string };
 
 export interface CreateOrderInput {
+  readonly id: string;
   readonly buyerId: string;
   readonly lines: readonly { readonly lotId: string; readonly quantityMilli: bigint }[];
   readonly deliveryAddress: string;
@@ -58,6 +60,22 @@ export interface ExpireReservationInput {
   readonly now: Date;
 }
 
+const enrichEventsWithHash = (events: readonly OrderEvent[]): readonly OrderEvent[] => {
+  let previousHash: string | null = null;
+  return events.map((event) => {
+    const payload = { ...event.payload };
+    const hash = hashOrderEvent(previousHash, payload);
+    const enriched = {
+      ...event,
+      prevHash: previousHash,
+      hash,
+      payload: { ...payload, prevHash: previousHash, hash },
+    };
+    previousHash = hash;
+    return enriched;
+  });
+};
+
 @Injectable()
 export class OrderingService {
   constructor(
@@ -69,6 +87,8 @@ export class OrderingService {
     @Inject(ORDERING_CLOCK) private readonly clock: OrderingClock,
     @Inject(ORDERING_RATE_LIMIT) private readonly rateLimit: OrderingRateLimit,
     @Inject(OUTBOX_WRITER) private readonly outbox: OutboxWriter,
+    @Inject('ORDER_QUOTE_TTL_HOURS') private readonly quoteTtlHours: number,
+    @Inject('ORDER_RESERVATION_TTL_HOURS') private readonly reservationTtlHours: number,
   ) {}
 
   async createOrder(actor: Actor, input: CreateOrderInput): Promise<OrderAggregate> {
@@ -76,9 +96,22 @@ export class OrderingService {
       throw new DomainError('Solo el rol buyer puede crear pedidos.', 'invalid_role');
     this.rateLimit.consume(actor.sub, 'create_order');
 
-    const requestHash = this.hashRequest(input);
-    const existing = await this.orderRepository.findById(requestHash);
-    if (existing) return existing;
+    const orderId = input.id;
+    const requestHash = this.hashRequest(actor.sub, input);
+    const existing = await this.orderRepository.findById(orderId);
+    if (existing) {
+      if (existing.order.buyerId !== actor.sub)
+        throw new DomainError(
+          'La clave de pedido ya fue usada por otro comprador.',
+          'idempotency_conflict',
+        );
+      if (existing.order.requestHash !== requestHash)
+        throw new DomainError(
+          'El pedido ya existe con contenido distinto.',
+          'idempotency_conflict',
+        );
+      return existing;
+    }
 
     return this.uow.run(async () => {
       const now = this.clock.now();
@@ -120,23 +153,24 @@ export class OrderingService {
       const providerId = lineProps[0]!.providerId;
 
       const quoteAmounts = this.pricingPort.calculate(pricingLines);
-      const quoteTtlHours = 24;
-      const validUntil = new Date(now.getTime() + quoteTtlHours * 60 * 60 * 1000);
+      const validUntil = new Date(now.getTime() + this.quoteTtlHours * 60 * 60 * 1000);
+      const reservationExpiresAt = new Date(
+        now.getTime() + this.reservationTtlHours * 60 * 60 * 1000,
+      );
       const quoteId = createId();
       const quote: QuoteProps = {
         id: quoteId,
-        orderId: requestHash,
+        orderId,
         ...quoteAmounts,
         validUntil,
         status: 'active',
       };
 
-      const orderId = requestHash;
       const order: OrderProps = {
         id: orderId,
         buyerId: input.buyerId,
         providerId,
-        status: 'requested',
+        status: 'draft',
         deliveryAddress: input.deliveryAddress,
         deliveryWindow: input.deliveryWindow,
         requestHash,
@@ -158,7 +192,7 @@ export class OrderingService {
         quote: Quote.create(quote).props,
       };
       await this.orderRepository.create(aggregate);
-      await this.lotReservationPort.reserve(orderId, input.lines, validUntil);
+      await this.lotReservationPort.reserve(orderId, input.lines, reservationExpiresAt);
       await this.recordOrderEvents(orderEvents);
 
       return aggregate;
@@ -192,13 +226,14 @@ export class OrderingService {
       const orderEntity = Order.reconstitute(aggregate.order);
       orderEntity.transition('accepted', now, { actorId: input.actor.sub });
       const orderEvents = orderEntity.drainEvents();
+      const enrichedEvents = enrichEventsWithHash(orderEvents);
 
       const updatedAggregate: OrderAggregate = {
         order: orderEntity.props,
         lines: aggregate.lines,
         quote: { ...quote, status: 'accepted' },
       };
-      await this.orderRepository.save(updatedAggregate, orderEvents);
+      await this.orderRepository.save(updatedAggregate, enrichedEvents);
       await this.recordOrderEvents(orderEvents);
 
       return updatedAggregate;
@@ -229,13 +264,14 @@ export class OrderingService {
         actorId: input.actor.sub,
       });
       const orderEvents = orderEntity.drainEvents();
+      const enrichedEvents = enrichEventsWithHash(orderEvents);
 
       const updatedAggregate: OrderAggregate = {
         order: orderEntity.props,
         lines: aggregate.lines,
         quote: { ...aggregate.quote, status: 'cancelled' },
       };
-      await this.orderRepository.save(updatedAggregate, orderEvents);
+      await this.orderRepository.save(updatedAggregate, enrichedEvents);
       await this.lotReservationPort.release(input.orderId);
       await this.recordOrderEvents(orderEvents);
 
@@ -253,13 +289,14 @@ export class OrderingService {
       const orderEntity = Order.reconstitute(aggregate.order);
       orderEntity.transition('cancelled', input.now, { reason: 'expired' });
       const orderEvents = orderEntity.drainEvents();
+      const enrichedEvents = enrichEventsWithHash(orderEvents);
 
       const updatedAggregate: OrderAggregate = {
         order: orderEntity.props,
         lines: aggregate.lines,
         quote: { ...aggregate.quote, status: 'expired' },
       };
-      await this.orderRepository.save(updatedAggregate, orderEvents);
+      await this.orderRepository.save(updatedAggregate, enrichedEvents);
       await this.lotReservationPort.release(input.orderId);
       await this.recordOrderEvents(orderEvents);
 
@@ -306,15 +343,37 @@ export class OrderingService {
     return this.orderRepository.listIncoming(providerId, cursor, limit);
   }
 
-  private hashRequest(input: CreateOrderInput): string {
+  async expireReservations(now: Date, limit: number): Promise<number> {
+    const expiredOrderIds = await this.lotReservationPort.findExpiredOrderIds(now, limit);
+    let count = 0;
+    for (const orderId of expiredOrderIds) {
+      const didExpire = await this.expireReservation({ orderId, now });
+      if (didExpire) count += 1;
+    }
+    return count;
+  }
+
+  async getById(actor: Actor, orderId: string): Promise<OrderAggregate | null> {
+    const aggregate = await this.orderRepository.findById(orderId);
+    if (!aggregate) return null;
+    const isBuyer = actor.sub === aggregate.order.buyerId;
+    const isProvider = actor.sub === aggregate.order.providerId;
+    if (!isBuyer && !isProvider) {
+      throw new DomainError('Pedido no encontrado.', 'not_found');
+    }
+    return aggregate;
+  }
+
+  private hashRequest(buyerId: string, input: CreateOrderInput): string {
     const normalized = {
+      buyerId,
       lines: [...input.lines]
         .sort((a, b) => a.lotId.localeCompare(b.lotId))
         .map((l) => ({ lotId: l.lotId, quantityMilli: l.quantityMilli.toString() })),
       deliveryAddress: input.deliveryAddress.trim(),
       deliveryWindow: input.deliveryWindow,
     };
-    return createId().slice(0, 32) + '_' + hashOrderEvent(null, normalized);
+    return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
   }
 
   private async recordOrderEvents(
