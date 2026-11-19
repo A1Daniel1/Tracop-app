@@ -306,7 +306,9 @@ export class DrizzleLotRepository implements LotRepository {
       WHERE order_id = ${orderId}::uuid AND status = 'active'
       RETURNING lot_id
     `);
-    return [...new Set((rows.rows as { lot_id: string }[]).map(({ lot_id }) => lot_id))].sort();
+    return [...new Set((rows.rows as { lot_id: string }[]).map(({ lot_id }) => lot_id))].sort(
+      (left, right) => left.localeCompare(right),
+    );
   }
   async save(lot: LotProps): Promise<'created' | 'exists'> {
     const now = this.clock.now();
