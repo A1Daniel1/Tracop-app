@@ -48,6 +48,8 @@ const envSchema = z.object({
   CATALOG_SEARCH_RADIUS_MAX_KM: z.coerce.number().positive().max(1000).default(500),
   CATALOG_SEARCH_RATE_LIMIT: z.coerce.number().int().positive().default(60),
   CATALOG_SEARCH_RATE_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
+  CATALOG_PRODUCT_PROPOSAL_RATE_LIMIT: z.coerce.number().int().positive().default(10),
+  CATALOG_PRODUCT_PROPOSAL_RATE_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   CATALOG_PHOTO_MAX_COUNT: z.coerce.number().int().positive().max(5).default(5),
   CATALOG_PHOTO_MAX_BYTES: z.coerce
     .number()

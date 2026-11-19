@@ -26,6 +26,9 @@ const domainStatus: Record<string, number> = {
   statement_timeout: HttpStatus.SERVICE_UNAVAILABLE,
   lot_has_active_reservations: HttpStatus.CONFLICT,
   insufficient_stock: HttpStatus.CONFLICT,
+  pending_limit_reached: HttpStatus.CONFLICT,
+  product_similar_exists: HttpStatus.CONFLICT,
+  product_pending_review: HttpStatus.CONFLICT,
   photo_limit: HttpStatus.CONFLICT,
   photo_not_pending: HttpStatus.CONFLICT,
   photo_order_invalid: HttpStatus.CONFLICT,
@@ -66,9 +69,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
       const status = domainStatus[exception.code] ?? HttpStatus.BAD_REQUEST;
       if (exception instanceof RateLimitExceeded)
         response.setHeader('Retry-After', String(exception.retryAfter));
-      response
-        .status(status)
-        .json({ statusCode: status, code: exception.code, message: exception.message });
+      response.status(status).json({
+        statusCode: status,
+        code: exception.code,
+        message: exception.message,
+        ...(exception.details ? { details: exception.details } : {}),
+        ...(Array.isArray(exception.details?.suggestions)
+          ? { suggestions: exception.details.suggestions }
+          : {}),
+      });
       return;
     }
     if (exception instanceof HttpException) {

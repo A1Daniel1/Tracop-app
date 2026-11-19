@@ -16,6 +16,23 @@ export interface ProductRepository {
   findById(id: string): Promise<ProductProps | null>;
   findAll(filter?: { categoryId?: string; q?: string }): Promise<readonly ProductProps[]>;
   save(product: ProductProps): Promise<void>;
+  lockForProductProposal(categoryId: string, searchText: string): Promise<void>;
+  lockPendingLimitByUser(userId: string): Promise<void>;
+  findExactVisible(
+    categoryId: string,
+    searchText: string,
+    viewerId: string,
+    viewerRole: string,
+  ): Promise<ProductProps | null>;
+  findSimilarVisible(
+    categoryId: string,
+    searchText: string,
+    viewerId: string,
+    viewerRole: string,
+    limit: number,
+  ): Promise<readonly ProductProps[]>;
+  countPendingByUser(userId: string): Promise<number>;
+  findPending(viewerId: string, viewerRole: string): Promise<readonly ProductProps[]>;
 }
 export interface LotRepository {
   findById(id: string): Promise<LotProps | null>;

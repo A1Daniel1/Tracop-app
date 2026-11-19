@@ -18,6 +18,7 @@ import { DrizzleLotPhotoRepository } from './adapters/out/drizzle-lot-photo-repo
 import { InMemoryStorageAdapter } from './adapters/out/in-memory-storage.adapter.js';
 import { PhotoUploadRateLimiter } from './adapters/out/photo-upload-rate-limiter.js';
 import { S3StorageAdapter } from './adapters/out/s3-storage.adapter.js';
+import { InMemoryProductProposalRateLimiter } from './adapters/in/product-proposal-rate-limiter.js';
 import { SharpPhotoProcessorAdapter } from './adapters/out/sharp-photo-processor.adapter.js';
 import {
   CATALOG_CATEGORY_REPOSITORY,
@@ -49,6 +50,7 @@ import { STORAGE_PORT, type StoragePort } from './ports/storage-port.js';
     DrizzleLotRepository,
     DrizzleCatalogUnitOfWork,
     DrizzleLotPhotoRepository,
+    InMemoryProductProposalRateLimiter,
     SharedCatalogClock,
     SharedCatalogEventWriter,
     InMemoryStorageAdapter,

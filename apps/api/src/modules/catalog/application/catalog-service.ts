@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DomainError } from '../../../shared/kernel/domain-error.js';
 import { Category, type CategoryProps } from '../domain/category.js';
 import { Lot, type LotProps } from '../domain/lot.js';
-import { Product, type ProductProps } from '../domain/product.js';
+import { Product, normalizeProductSearchText, type ProductProps } from '../domain/product.js';
 import {
   CATALOG_CATEGORY_REPOSITORY,
   CATALOG_CLOCK,
@@ -117,6 +117,161 @@ export class CatalogService {
     });
   }
 
+  async createProductProposal(
+    actor: Actor,
+    input: Omit<
+      ProductProps,
+      'status' | 'proposedBy' | 'reviewedBy' | 'reviewedAt' | 'rejectionReason'
+    > & {
+      readonly confirm?: boolean;
+    },
+  ): Promise<{
+    readonly product: ProductProps;
+    readonly created: boolean;
+    readonly suggestions: readonly ProductProps[];
+  }> {
+    this.requireRole(actor, PROVIDERS);
+    return this.uow.run(async () => {
+      if (!(await this.categories.findById(input.categoryId)))
+        throw new DomainError('Categoría no encontrada.', 'not_found');
+      const searchText = normalizeProductSearchText(input.name);
+      await this.products.lockForProductProposal(input.categoryId, searchText);
+      await this.products.lockPendingLimitByUser(actor.sub);
+
+      const exact = await this.products.findExactVisible(
+        input.categoryId,
+        searchText,
+        actor.sub,
+        actor.role,
+      );
+      if (exact) return { product: exact, created: false, suggestions: [] };
+
+      const pendingCount = await this.products.countPendingByUser(actor.sub);
+      if (pendingCount >= 5)
+        throw new DomainError(
+          'Has alcanzado el límite de productos pendientes.',
+          'pending_limit_reached',
+        );
+
+      const similar = await this.products.findSimilarVisible(
+        input.categoryId,
+        searchText,
+        actor.sub,
+        actor.role,
+        5,
+      );
+      if (similar.length > 0 && input.confirm !== true) {
+        throw new DomainError('Existe un producto similar.', 'product_similar_exists', {
+          suggestions: similar,
+        });
+      }
+
+      const proposal = Product.create({
+        id: input.id,
+        categoryId: input.categoryId,
+        name: input.name,
+        unit: input.unit,
+        attributes: input.attributes,
+        status: 'pending_review',
+        proposedBy: actor.sub,
+        reviewedBy: null,
+        reviewedAt: null,
+        rejectionReason: null,
+      }).props;
+      await this.products.save(proposal);
+      await this.recordProduct(proposal, 'upsert', actor.sub);
+      await this.events.append([
+        {
+          aggregate: `product:${proposal.id}`,
+          type: 'ProductProposed',
+          payload: {
+            id: proposal.id,
+            categoryId: proposal.categoryId,
+            name: proposal.name,
+            proposedBy: actor.sub,
+          },
+        },
+      ]);
+      return { product: proposal, created: true, suggestions: [] };
+    });
+  }
+
+  async listProductProposals(actor: Actor): Promise<readonly ProductProps[]> {
+    if (
+      actor.role !== 'operator' &&
+      actor.role !== 'admin' &&
+      !PROVIDERS.includes(actor.role as 'producer' | 'supplier')
+    )
+      throw new DomainError('No tienes permiso para listar propuestas.', 'forbidden');
+    return this.products.findPending(actor.sub, actor.role);
+  }
+
+  async approveProductProposal(actor: Actor, id: string): Promise<ProductProps> {
+    this.requireRole(actor, STAFF);
+    return this.uow.run(async () => {
+      const current = await this.products.findById(id);
+      if (!current || current.status !== 'pending_review')
+        throw new DomainError('Propuesta no encontrada.', 'not_found');
+      const approved = Product.create({
+        ...current,
+        status: 'approved',
+        proposedBy: null,
+        reviewedBy: actor.sub,
+        reviewedAt: this.clock.now(),
+        rejectionReason: null,
+      }).props;
+      await this.products.save(approved);
+      await this.recordProduct(approved, 'upsert', null);
+      await this.events.append([
+        {
+          aggregate: `product:${approved.id}`,
+          type: 'ProductApproved',
+          payload: {
+            id: approved.id,
+            categoryId: approved.categoryId,
+            reviewedBy: actor.sub,
+          },
+        },
+      ]);
+      return approved;
+    });
+  }
+
+  async rejectProductProposal(
+    actor: Actor,
+    id: string,
+    rejectionReason: string,
+  ): Promise<ProductProps> {
+    this.requireRole(actor, STAFF);
+    return this.uow.run(async () => {
+      const current = await this.products.findById(id);
+      if (!current || current.status !== 'pending_review')
+        throw new DomainError('Propuesta no encontrada.', 'not_found');
+      const rejected = Product.create({
+        ...current,
+        status: 'rejected',
+        reviewedBy: actor.sub,
+        reviewedAt: this.clock.now(),
+        rejectionReason,
+      }).props;
+      await this.products.save(rejected);
+      await this.recordProduct(rejected, 'delete', current.proposedBy ?? null);
+      await this.events.append([
+        {
+          aggregate: `product:${rejected.id}`,
+          type: 'ProductRejected',
+          payload: {
+            id: rejected.id,
+            categoryId: rejected.categoryId,
+            reviewedBy: actor.sub,
+            rejectionReason,
+          },
+        },
+      ]);
+      return rejected;
+    });
+  }
+
   async createLot(
     actor: Actor,
     input: Omit<LotProps, 'providerId' | 'status' | 'version'>,
@@ -130,6 +285,10 @@ export class CatalogService {
       }
       const product = await this.products.findById(input.productId);
       if (!product) throw new DomainError('Producto no encontrado.', 'not_found');
+      if (product.status === 'pending_review' && product.proposedBy !== actor.sub)
+        throw new DomainError('El producto está pendiente de revisión.', 'product_pending_review');
+      if (product.status === 'rejected')
+        throw new DomainError('El producto fue rechazado.', 'product_pending_review');
       const lot = Lot.create(
         { ...input, providerId: actor.sub, status: 'draft', version: 1 },
         product.unit,
@@ -558,6 +717,11 @@ export class CatalogService {
       const current = await this.lockOwnedLot(id, actor.sub);
       if (current.version !== expectedVersion)
         throw new DomainError('Conflicto de versión.', 'version_conflict');
+      if (status === 'published') {
+        const product = await this.products.findById(current.productId);
+        if (!product || product.status !== 'approved')
+          throw new DomainError('El producto no está aprobado.', 'product_pending_review');
+      }
       if (
         status === 'cancelled' &&
         (await this.lots.getAvailableQuantity(id, this.clock.now())) < current.quantityMilli
@@ -599,13 +763,17 @@ export class CatalogService {
     });
   }
 
-  private async recordProduct(product: ProductProps): Promise<void> {
+  private async recordProduct(
+    product: ProductProps,
+    op = 'upsert',
+    ownerUserId: string | null = null,
+  ): Promise<void> {
     await this.changeRecorder.record({
       entity: 'product',
       entityId: product.id,
-      op: 'upsert',
+      op,
       payload: this.productPayload(product),
-      ownerUserId: null,
+      ownerUserId,
       occurredAt: this.clock.now(),
     });
   }
@@ -662,6 +830,11 @@ export class CatalogService {
       name: product.name,
       unit: product.unit,
       attributes: product.attributes,
+      status: product.status ?? 'approved',
+      proposedBy: product.proposedBy ?? null,
+      reviewedBy: product.reviewedBy ?? null,
+      reviewedAt: product.reviewedAt?.toISOString() ?? null,
+      rejectionReason: product.rejectionReason ?? null,
     };
   }
 

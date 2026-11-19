@@ -39,6 +39,12 @@ describe('catalog application', () => {
     save: async (item) => {
       products.set(item.id, item);
     },
+    lockForProductProposal: async () => undefined,
+    lockPendingLimitByUser: async () => undefined,
+    findExactVisible: async () => null,
+    findSimilarVisible: async () => [],
+    countPendingByUser: async () => 0,
+    findPending: async () => [],
   };
   const lotRepository: LotRepository = {
     findById: async (id) => lots.get(id) ?? null,
