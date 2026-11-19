@@ -15,7 +15,7 @@ describe('OpenAPI export', () => {
       const outputPath = resolve(process.cwd(), '../../docs/openapi.json');
       if (process.env.OPENAPI_CHECK === 'true') {
         const current = await readFile(outputPath, 'utf8').catch(() => '');
-        expect(current).toBe(generated);
+        expect(JSON.parse(current)).toEqual(document);
       } else {
         await writeFile(outputPath, generated);
       }
