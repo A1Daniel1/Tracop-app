@@ -20,7 +20,7 @@
     "catalog:purge-orphan-photos": "tsx scripts/purge-orphan-photos.ts",
     "ordering:expire-reservations": "tsx scripts/expire-reservations.ts",
     "db:check-migrations": "tsx scripts/check-migration-numbering.ts",
-    "openapi:export": "pnpm --filter @tracop/contracts build && jest --runInBand --coverage=false test/openapi-export.spec.ts",
+    "openapi:export": "pnpm --filter @tracop/contracts build && OPENAPI_EXPORT=true jest --runInBand --coverage=false test/openapi-export.spec.ts",
     "openapi:check": "pnpm --filter @tracop/contracts build && OPENAPI_CHECK=true jest --runInBand --coverage=false test/openapi-export.spec.ts"
   },
   "dependencies": {

@@ -13,11 +13,11 @@ describe('OpenAPI export', () => {
       const document = createOpenApiDocument(app);
       const generated = `${JSON.stringify(document, null, 2)}\n`;
       const outputPath = resolve(process.cwd(), '../../docs/openapi.json');
-      if (process.env.OPENAPI_CHECK === 'true') {
+      if (process.env.OPENAPI_EXPORT === 'true') {
+        await writeFile(outputPath, generated);
+      } else {
         const current = await readFile(outputPath, 'utf8').catch(() => '');
         expect(JSON.parse(current)).toEqual(document);
-      } else {
-        await writeFile(outputPath, generated);
       }
     } finally {
       await app.close();
