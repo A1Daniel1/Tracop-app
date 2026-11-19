@@ -38,7 +38,7 @@ export interface OrderAggregate {
 
 export interface OrderRepository {
   findById(id: string, lock?: boolean): Promise<OrderAggregate | null>;
-  create(aggregate: OrderAggregate): Promise<void>;
+  create(aggregate: OrderAggregate, events: readonly OrderEvent[]): Promise<void>;
   save(aggregate: OrderAggregate, events: readonly OrderEvent[]): Promise<void>;
   listMine(
     buyerId: string,
@@ -63,6 +63,18 @@ export interface OrderingRateLimit {
   consume(userId: string, action: string): void;
 }
 
+export interface ProviderPublicSummary {
+  readonly displayName: string;
+  readonly municipality: string;
+  readonly department: string;
+}
+
+export interface ProviderDirectoryPort {
+  getProviderPublicSummaries(
+    ids: readonly string[],
+  ): Promise<ReadonlyMap<string, ProviderPublicSummary>>;
+}
+
 export const ORDER_REPOSITORY = Symbol('ORDER_REPOSITORY');
 export const ORDERING_UNIT_OF_WORK = Symbol('ORDERING_UNIT_OF_WORK');
 export const ORDERING_CLOCK = Symbol('ORDERING_CLOCK');
@@ -70,3 +82,4 @@ export const PRICING_PORT = Symbol('PRICING_PORT');
 export const LOT_QUOTE_PORT = Symbol('LOT_QUOTE_PORT');
 export const LOT_RESERVATION_PORT = Symbol('LOT_RESERVATION_PORT');
 export const ORDERING_RATE_LIMIT = Symbol('ORDERING_RATE_LIMIT');
+export const ORDER_PROVIDER_DIRECTORY = Symbol('ORDER_PROVIDER_DIRECTORY');

@@ -24,6 +24,7 @@ export const createOrderSchema = z
         code: 'custom',
         path: ['lines'],
         message: 'Cada lote puede aparecer una sola vez.',
+        params: { code: 'duplicate_lot_line' },
       });
     if (input.lines.some(({ quantityMilli }) => BigInt(quantityMilli) <= 0n))
       ctx.addIssue({ code: 'custom', path: ['lines'], message: 'La cantidad debe ser positiva.' });
@@ -55,7 +56,6 @@ export const orderResponseSchema = z
   .object({
     id: z.string().uuid(),
     status: orderStatusSchema,
-    providerId: z.string().uuid().optional(),
     lines: z.array(
       z
         .object({
@@ -71,6 +71,14 @@ export const orderResponseSchema = z
     commission: unsignedIntegerString,
     total: unsignedIntegerString,
     providerNet: unsignedIntegerString,
+    provider: z
+      .object({
+        displayName: z.string(),
+        municipality: z.string(),
+        department: z.string(),
+      })
+      .nullable()
+      .optional(),
     deliveryAddress: z.string().optional(),
     deliveryWindow: z.string().datetime().nullable().optional(),
     acceptedAt: z.string().datetime().nullable(),

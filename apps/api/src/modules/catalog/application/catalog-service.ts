@@ -357,7 +357,11 @@ export class CatalogService {
     now: Date,
   ): Promise<void> {
     const entity = Lot.reconstitute(lot);
-    entity.transition(status, now);
+    entity.transition(status, now, {
+      ...(lot.status === 'reserved' && status === 'published'
+        ? { previousStatus: 'reserved' }
+        : {}),
+    });
     const next = entity.props;
     if (!(await this.lots.update(next, lot.version)))
       throw new DomainError('Conflicto de versión.', 'version_conflict');

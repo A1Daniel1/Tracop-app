@@ -35,11 +35,9 @@ export class DatabaseService implements OnApplicationShutdown {
     if (current) return operation();
     try {
       return await this.db.transaction(async (transaction) => {
+        await transaction.execute(sql.raw(`SET LOCAL lock_timeout = '${this.lockTimeoutMs}ms'`));
         await transaction.execute(
-          sql`select set_config('lock_timeout', ${`${this.lockTimeoutMs}ms`}, true)`,
-        );
-        await transaction.execute(
-          sql`select set_config('statement_timeout', ${`${this.statementTimeoutMs}ms`}, true)`,
+          sql.raw(`SET LOCAL statement_timeout = '${this.statementTimeoutMs}ms'`),
         );
         return this.transactions.run(transaction, operation);
       });

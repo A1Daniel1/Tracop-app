@@ -8,20 +8,22 @@ import {
   type LotQuoteSnapshot,
 } from '../modules/ordering/index.js';
 import { CATALOG_ORDERING_API, type CatalogOrderingApi } from '../modules/catalog/index.js';
-import { DomainError } from '../shared/kernel/domain-error.js';
+import {
+  IdentityModule,
+  ProviderProfileService,
+  PROVIDER_PROFILE_SERVICE,
+} from '../modules/identity/index.js';
+import {
+  ORDER_PROVIDER_DIRECTORY,
+  type ProviderDirectoryPort,
+  type ProviderPublicSummary,
+} from '../modules/ordering/index.js';
 
 export class CatalogLotQuoteAdapter implements LotQuotePort {
   constructor(private readonly api: CatalogOrderingApi) {}
 
   async getQuote(lotId: string): Promise<LotQuoteSnapshot> {
-    try {
-      return await this.api.getLotQuote(lotId);
-    } catch (error) {
-      if (error instanceof DomainError && error.code === 'not_found') {
-        throw new DomainError('Lote no encontrado.', 'not_found');
-      }
-      throw error;
-    }
+    return this.api.getLotQuote(lotId);
   }
 }
 
@@ -33,14 +35,7 @@ export class CatalogLotReservationAdapter implements LotReservationPort {
     lines: readonly { lotId: string; quantityMilli: bigint }[],
     expiresAt: Date,
   ): Promise<void> {
-    try {
-      await this.api.reserveLots({ orderId, lines, expiresAt });
-    } catch (error) {
-      if (error instanceof DomainError) {
-        throw error;
-      }
-      throw new DomainError('Error al reservar lotes.', 'reservation_failed');
-    }
+    await this.api.reserveLots({ orderId, lines, expiresAt });
   }
 
   async release(orderId: string): Promise<void> {
@@ -52,10 +47,26 @@ export class CatalogLotReservationAdapter implements LotReservationPort {
   }
 }
 
+export class OrderingProviderDirectoryAdapter implements ProviderDirectoryPort {
+  constructor(private readonly profiles: ProviderProfileService) {}
+
+  getProviderPublicSummaries(
+    ids: readonly string[],
+  ): Promise<ReadonlyMap<string, ProviderPublicSummary>> {
+    return this.profiles.getProviderPublicSummaries(ids);
+  }
+}
+
 @Global()
 @Module({
-  imports: [CatalogModule],
+  imports: [CatalogModule, IdentityModule],
   providers: [
+    {
+      provide: ORDER_PROVIDER_DIRECTORY,
+      inject: [PROVIDER_PROFILE_SERVICE],
+      useFactory: (profiles: ProviderProfileService) =>
+        new OrderingProviderDirectoryAdapter(profiles),
+    },
     {
       provide: LOT_QUOTE_PORT,
       inject: [CATALOG_ORDERING_API],
@@ -67,6 +78,6 @@ export class CatalogLotReservationAdapter implements LotReservationPort {
       useFactory: (api: CatalogOrderingApi) => new CatalogLotReservationAdapter(api),
     },
   ],
-  exports: [LOT_QUOTE_PORT, LOT_RESERVATION_PORT],
+  exports: [LOT_QUOTE_PORT, LOT_RESERVATION_PORT, ORDER_PROVIDER_DIRECTORY],
 })
 export class OrderingBridgeModule {}

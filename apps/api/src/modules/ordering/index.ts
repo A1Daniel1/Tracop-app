@@ -31,6 +31,8 @@ export type {
   OrderingUnitOfWork,
   OrderingClock,
   OrderingRateLimit,
+  ProviderDirectoryPort,
+  ProviderPublicSummary,
 } from './ports/ordering-ports.js';
 export {
   ORDER_REPOSITORY,
@@ -40,4 +42,5 @@ export {
   ORDERING_UNIT_OF_WORK,
   ORDERING_CLOCK,
   ORDERING_RATE_LIMIT,
+  ORDER_PROVIDER_DIRECTORY,
 } from './ports/ordering-ports.js';

@@ -35,6 +35,11 @@ export type LotEvent =
   | { readonly type: 'LotExpired'; readonly lotId: string; readonly occurredAt: string }
   | { readonly type: 'LotDeleted'; readonly lotId: string; readonly occurredAt: string }
   | {
+      readonly type: 'LotAvailabilityRestored';
+      readonly lotId: string;
+      readonly occurredAt: string;
+    }
+  | {
       readonly type: 'LotCancelled';
       readonly lotId: string;
       readonly previousStatus: LotStatus;
@@ -98,18 +103,27 @@ export class Lot {
     return new Lot({ ...props, status: 'draft', version: 1 });
   }
 
-  transition(next: LotStatus, occurredAt: Date): void {
+  transition(next: LotStatus, occurredAt: Date, details: Record<string, unknown> = {}): void {
     const previousStatus = this.props.status;
     if (!transitions[previousStatus].includes(next))
       throw new DomainError('Transición de lote inválida.', 'invalid_transition');
     (this.props as { status: LotStatus; version: number }).status = next;
     (this.props as { status: LotStatus; version: number }).version += 1;
-    if (next === 'published')
-      this.pendingEvents.push({
-        type: 'LotPublished',
-        lotId: this.props.id,
-        occurredAt: occurredAt.toISOString(),
-      });
+    if (next === 'published') {
+      this.pendingEvents.push(
+        details.previousStatus === 'reserved'
+          ? {
+              type: 'LotAvailabilityRestored',
+              lotId: this.props.id,
+              occurredAt: occurredAt.toISOString(),
+            }
+          : {
+              type: 'LotPublished',
+              lotId: this.props.id,
+              occurredAt: occurredAt.toISOString(),
+            },
+      );
+    }
     if (next === 'reserved')
       this.pendingEvents.push({
         type: 'LotReserved',

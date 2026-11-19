@@ -2,7 +2,13 @@ import { Inject, Injectable } from '@nestjs/common';
 import { OUTBOX_WRITER } from '../../../shared/infra/tokens.js';
 import type { OutboxWriter } from '../../../shared/ports/outbox-writer.js';
 import { DomainError } from '../../../shared/kernel/domain-error.js';
-import { Order, type OrderEvent, type OrderProps, type OrderLineProps } from '../domain/order.js';
+import {
+  Order,
+  assertNoDuplicateLotLines,
+  type OrderEvent,
+  type OrderProps,
+  type OrderLineProps,
+} from '../domain/order.js';
 import { Quote, type QuoteProps } from '../domain/quote.js';
 import { hashOrderEvent } from '../domain/order-events.js';
 import type {
@@ -94,6 +100,7 @@ export class OrderingService {
   async createOrder(actor: Actor, input: CreateOrderInput): Promise<OrderAggregate> {
     if (actor.role !== 'buyer')
       throw new DomainError('Solo el rol buyer puede crear pedidos.', 'invalid_role');
+    assertNoDuplicateLotLines(input.lines);
     this.rateLimit.consume(actor.sub, 'create_order');
 
     const orderId = input.id;
@@ -101,14 +108,11 @@ export class OrderingService {
     const existing = await this.orderRepository.findById(orderId);
     if (existing) {
       if (existing.order.buyerId !== actor.sub)
-        throw new DomainError(
-          'La clave de pedido ya fue usada por otro comprador.',
-          'idempotency_conflict',
-        );
+        throw new DomainError('El pedido ya existe.', 'idempotency_conflict');
       if (existing.order.requestHash !== requestHash)
         throw new DomainError(
           'El pedido ya existe con contenido distinto.',
-          'idempotency_conflict',
+          'idempotency_content_mismatch',
         );
       return existing;
     }
@@ -154,9 +158,6 @@ export class OrderingService {
 
       const quoteAmounts = this.pricingPort.calculate(pricingLines);
       const validUntil = new Date(now.getTime() + this.quoteTtlHours * 60 * 60 * 1000);
-      const reservationExpiresAt = new Date(
-        now.getTime() + this.reservationTtlHours * 60 * 60 * 1000,
-      );
       const quoteId = createId();
       const quote: QuoteProps = {
         id: quoteId,
@@ -191,8 +192,7 @@ export class OrderingService {
         lines: lineProps,
         quote: Quote.create(quote).props,
       };
-      await this.orderRepository.create(aggregate);
-      await this.lotReservationPort.reserve(orderId, input.lines, reservationExpiresAt);
+      await this.orderRepository.create(aggregate, orderEvents);
       await this.recordOrderEvents(orderEvents);
 
       return aggregate;
@@ -233,6 +233,17 @@ export class OrderingService {
         lines: aggregate.lines,
         quote: { ...quote, status: 'accepted' },
       };
+      const reservationExpiresAt = new Date(
+        now.getTime() + this.reservationTtlHours * 60 * 60 * 1000,
+      );
+      await this.lotReservationPort.reserve(
+        input.orderId,
+        aggregate.lines.map((line) => ({
+          lotId: line.lotId,
+          quantityMilli: line.quantityMilli,
+        })),
+        reservationExpiresAt,
+      );
       await this.orderRepository.save(updatedAggregate, enrichedEvents);
       await this.recordOrderEvents(orderEvents);
 

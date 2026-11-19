@@ -8,6 +8,7 @@ import type { QuoteProps } from '../../domain/quote.js';
 import { createId } from '../../../../shared/kernel/ids.js';
 import { orders, orderLines, quotes, orderEvents } from './drizzle-schema.js';
 import { calculateQuoteAmounts } from '../../domain/pricing.js';
+import { hashOrderEvent } from '../../domain/order-events.js';
 
 const toOrderProps = (row: typeof orders.$inferSelect): OrderProps => ({
   id: row.id,
@@ -26,9 +27,9 @@ const toOrderProps = (row: typeof orders.$inferSelect): OrderProps => ({
 
 const parseMilli = (value: string): bigint => {
   // numeric(12,3) from PostgreSQL comes as string like "1000.000"
-  // Convert to millis by removing decimal point
   const [whole, frac] = value.split('.');
   const fraction = (frac ?? '').padEnd(3, '0').slice(0, 3);
+  if (fraction === '000') return BigInt(whole ?? '0');
   return BigInt(whole ?? '0') * 1000n + BigInt(fraction);
 };
 
@@ -74,7 +75,7 @@ export class DrizzleOrderRepository implements OrderRepository {
     };
   }
 
-  async create(aggregate: OrderAggregate): Promise<void> {
+  async create(aggregate: OrderAggregate, events: readonly OrderEvent[]): Promise<void> {
     const db = this.database.current();
     await db.insert(orders).values({
       id: aggregate.order.id,
@@ -117,6 +118,27 @@ export class DrizzleOrderRepository implements OrderRepository {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
+    }
+    if (events.length) {
+      let previousHash: string | null = null;
+      await db.insert(orderEvents).values(
+        events.map((event) => {
+          const hash = hashOrderEvent(previousHash, event.payload);
+          const payload = { ...event.payload, prevHash: previousHash, hash };
+          const row = {
+            id: createId(),
+            orderId: event.orderId,
+            type: event.type,
+            payload: JSON.stringify(payload),
+            actorId: aggregate.order.buyerId,
+            occurredAt: new Date(event.occurredAt),
+            prevHash: previousHash,
+            hash,
+          };
+          previousHash = hash;
+          return row;
+        }),
+      );
     }
   }
 

@@ -10,6 +10,11 @@ import { describePostgres, resetPostgresFixtures } from './postgres-suite.js';
 import pg from 'pg';
 import { v7 as uuidv7 } from 'uuid';
 import { OrderingService } from '../src/modules/ordering/application/ordering-service.js';
+import {
+  ORDER_REPOSITORY,
+  type OrderRepository,
+} from '../src/modules/ordering/ports/ordering-ports.js';
+import { CATALOG_ORDERING_API, type CatalogOrderingApi } from '../src/modules/catalog/index.js';
 
 describePostgres('Catalog Ordering API integration', () => {
   let app: INestApplication;
@@ -218,7 +223,7 @@ describePostgres('Catalog Ordering API integration', () => {
     expect(await getOutboxEventCount(`lot:${lotId}`)).toBe(0);
     expect(await getReservationCount(lotId)).toBe(0);
 
-    // Create order that reserves the last unit
+    // Create a quoted order without reserving stock
     const buyer = await registerBuyer();
     const orderId = uuidv7();
 
@@ -227,6 +232,25 @@ describePostgres('Catalog Ordering API integration', () => {
       .set('Authorization', `Bearer ${buyer.token}`)
       .send({ id: orderId, lines: [{ lotId, quantityMilli: '1000' }], deliveryAddress: 'Addr 1' })
       .expect(201);
+    expect(await getReservationCount(lotId)).toBe(0);
+    lot = await getLotStatus(lotId);
+    expect(lot!.status).toBe('published');
+    expect(lot!.version).toBe(1);
+
+    const orderResult = await pool.query(
+      `SELECT version FROM ordering.orders WHERE id = $1::uuid`,
+      [orderId],
+    );
+    const catalogApi = app.get<CatalogOrderingApi>(CATALOG_ORDERING_API);
+    expect((await catalogApi.getLotQuote(lotId)).availableQuantityMilli).toBe(1000n);
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/accept`)
+      .set('Authorization', `Bearer ${buyer.token}`)
+      .send({ expectedVersion: orderResult.rows[0].version })
+      .expect((response) => {
+        if (response.status !== 200)
+          throw new Error(`accept failed ${response.status}: ${JSON.stringify(response.body)}`);
+      });
 
     // Verify lot state after reservation
     lot = await getLotStatus(lotId);
@@ -253,7 +277,7 @@ describePostgres('Catalog Ordering API integration', () => {
     const buyer = await registerBuyer();
     const orderId = uuidv7();
 
-    // Create order (reserves the lot)
+    // Create and accept the order
     await request(app.getHttpServer())
       .post('/orders')
       .set('Authorization', `Bearer ${buyer.token}`)
@@ -265,7 +289,16 @@ describePostgres('Catalog Ordering API integration', () => {
       `SELECT version FROM ordering.orders WHERE id = $1::uuid`,
       [orderId],
     );
-    const orderVersion = orderResult.rows[0].version;
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/accept`)
+      .set('Authorization', `Bearer ${buyer.token}`)
+      .send({ expectedVersion: orderResult.rows[0].version })
+      .expect(200);
+    const acceptedResult = await pool.query(
+      `SELECT version FROM ordering.orders WHERE id = $1::uuid`,
+      [orderId],
+    );
+    const orderVersion = acceptedResult.rows[0].version;
 
     // Verify reserved state
     let lot = await getLotStatus(lotId);
@@ -301,86 +334,65 @@ describePostgres('Catalog Ordering API integration', () => {
     expect(await getReservationCount(lotId)).toBe(0);
   });
 
-  it('order creation failure after reservation rolls back reservation, state, version, change_log, and outbox (via real ordering path)', async () => {
+  it('accept failure after reservation rolls back reservation, state, version, change_log, and outbox', async () => {
     const supplier = await registerSupplier();
     const prodId = (global as any).__TEST_PROD_ID__;
 
     const lotId = await createPublishedLot(supplier.userId, prodId, 1);
-
-    // Verify initial state
-    let lot = await getLotStatus(lotId);
-    expect(lot!.status).toBe('published');
-    expect(lot!.version).toBe(1);
     const initialChangeLog = await getChangeLogCount(lotId);
     const initialOutbox = await getOutboxEventCount(`lot:${lotId}`);
-    expect(await getReservationCount(lotId)).toBe(0);
 
     const buyer = await registerBuyer();
     const orderId = uuidv7();
 
-    // Create order via real HTTP endpoint (uses OrderingService.createOrder -> uow.run with reservation)
-    // This tests the FULL ordering path: create order + reserve lots in single transaction
     await request(app.getHttpServer())
       .post('/orders')
       .set('Authorization', `Bearer ${buyer.token}`)
       .send({ id: orderId, lines: [{ lotId, quantityMilli: '1000' }], deliveryAddress: 'Addr 1' })
       .expect(201);
 
-    // Verify lot state after successful order creation (which includes reservation)
-    lot = await getLotStatus(lotId);
-    expect(lot!.status).toBe('reserved');
-    expect(lot!.version).toBe(2);
-    expect(await getChangeLogCount(lotId)).toBe(initialChangeLog + 1);
-    expect(await getOutboxEventCount(`lot:${lotId}`)).toBe(initialOutbox + 1);
-    expect(await getReservationCount(lotId)).toBe(1);
-
-    // Now test rollback scenario: attempt to create a SECOND order with the SAME orderId
-    // (idempotency key). The ordering service checks for existing order FIRST (before reservation),
-    // so it returns the existing order without touching reservations.
-    // To test a failure AFTER reservation, we would need to inject a DB error in the middle of the
-    // uow.run transaction, which isn't feasible from an integration test.
-    // Instead, we verify the transactional boundary by checking that a FAILED reservation attempt
-    // (due to 0 available) does not leave side effects on the lot state.
-    const orderId2 = uuidv7();
-    const createRes2 = await request(app.getHttpServer())
-      .post('/orders')
-      .set('Authorization', `Bearer ${buyer.token}`)
-      .send({ id: orderId2, lines: [{ lotId, quantityMilli: '1000' }], deliveryAddress: 'Addr 2' });
-
-    // Should fail with insufficient_stock (availability checked BEFORE reservation in createOrder)
-    expect(createRes2.status).toBe(409);
-    expect(createRes2.body.code).toBe('insufficient_stock');
-
-    // Lot state unchanged - first reservation still intact, no extra change_log/outbox
-    lot = await getLotStatus(lotId);
-    expect(lot!.status).toBe('reserved');
-    expect(lot!.version).toBe(2);
-    expect(await getChangeLogCount(lotId)).toBe(initialChangeLog + 1);
-    expect(await getOutboxEventCount(`lot:${lotId}`)).toBe(initialOutbox + 1);
-    expect(await getReservationCount(lotId)).toBe(1);
-
-    // Now cancel the first order (releases reservation) - uses real ordering path
-    const orderResult = await pool.query(
+    const orderBeforeAccept = await pool.query(
       `SELECT version FROM ordering.orders WHERE id = $1::uuid`,
       [orderId],
     );
-    const orderVersion = orderResult.rows[0].version;
-
-    const orderingService = app.get(OrderingService);
-    await orderingService.cancelOrder({
-      actor: { sub: buyer.userId, role: 'buyer' },
-      orderId,
-      expectedVersion: orderVersion,
-      reason: 'buyer_cancelled',
-    });
-
-    // Verify release reverts lot to published with version+1, change_log+1, outbox+1
-    lot = await getLotStatus(lotId);
-    expect(lot!.status).toBe('published');
-    expect(lot!.version).toBe(3);
-    expect(await getChangeLogCount(lotId)).toBe(initialChangeLog + 2);
-    expect(await getOutboxEventCount(`lot:${lotId}`)).toBe(initialOutbox + 2);
+    expect(orderBeforeAccept.rows).toHaveLength(1);
     expect(await getReservationCount(lotId)).toBe(0);
+
+    const repository = app.get<OrderRepository>(ORDER_REPOSITORY);
+    const originalSave = repository.save.bind(repository);
+    const saveSpy = jest
+      .spyOn(repository, 'save')
+      .mockImplementationOnce(async (aggregate, events) => {
+        await originalSave(aggregate, events);
+        throw new Error('forced_save_failure');
+      });
+
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/accept`)
+      .set('Authorization', `Bearer ${buyer.token}`)
+      .send({ expectedVersion: orderBeforeAccept.rows[0].version })
+      .expect(500);
+
+    expect(saveSpy).toHaveBeenCalledTimes(1);
+    saveSpy.mockRestore();
+
+    const lot = await getLotStatus(lotId);
+    expect(lot).toEqual({ status: 'published', version: 1 });
+    expect(await getReservationCount(lotId)).toBe(0);
+    expect(await getChangeLogCount(lotId)).toBe(initialChangeLog);
+    expect(await getOutboxEventCount(`lot:${lotId}`)).toBe(initialOutbox);
+
+    const orderAfterFailure = await pool.query(
+      `SELECT id, status, version FROM ordering.orders WHERE id = $1::uuid`,
+      [orderId],
+    );
+    expect(orderAfterFailure.rows).toHaveLength(1);
+    expect(orderAfterFailure.rows[0]).toMatchObject({ status: 'quoted', version: 3 });
+    const orderEventsAfterFailure = await pool.query(
+      `SELECT id FROM ordering.order_events WHERE order_id = $1::uuid`,
+      [orderId],
+    );
+    expect(orderEventsAfterFailure.rows).toHaveLength(2);
   });
 
   it('deduplicates same-content order requests and rejects reused ids with different content or buyer', async () => {
@@ -408,14 +420,14 @@ describePostgres('Catalog Ordering API integration', () => {
       .send(body)
       .expect(201);
     expect(duplicate.body.id).toBe(orderId);
-    expect(await getReservationCount(lotId)).toBe(1);
+    expect(await getReservationCount(lotId)).toBe(0);
 
     await request(app.getHttpServer())
       .post('/orders')
       .set('Authorization', `Bearer ${buyer.token}`)
       .send({ ...body, deliveryAddress: 'Calle diferente 2' })
       .expect(409)
-      .expect(({ body }) => expect(body.code).toBe('idempotency_conflict'));
+      .expect(({ body }) => expect(body.code).toBe('idempotency_content_mismatch'));
 
     await request(app.getHttpServer())
       .post('/orders')
@@ -424,7 +436,7 @@ describePostgres('Catalog Ordering API integration', () => {
       .expect(409)
       .expect(({ body }) => expect(body.code).toBe('idempotency_conflict'));
 
-    expect(await getReservationCount(lotId)).toBe(1);
+    expect(await getReservationCount(lotId)).toBe(0);
   });
 
   it('rejects duplicate lot lines before reserving stock', async () => {

@@ -75,9 +75,13 @@ describe('Lot domain', () => {
     const reservable = Lot.create(props, 'kg', now, 90);
     reservable.transition('published', now);
     reservable.transition('reserved', now);
-    reservable.transition('published', now);
+    reservable.drainEvents();
+    reservable.transition('published', now, { previousStatus: 'reserved' });
     expect(reservable.props.status).toBe('published');
     expect(reservable.props.version).toBe(4);
+    expect(reservable.drainEvents().map((event) => event.type)).toEqual([
+      'LotAvailabilityRestored',
+    ]);
     expect(() => reservable.transition('cancelled', now)).not.toThrow();
   });
 });

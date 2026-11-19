@@ -47,6 +47,15 @@ export type OrderEvent = {
   readonly payload: Record<string, unknown>;
 };
 
+export const assertNoDuplicateLotLines = (lines: readonly { readonly lotId: string }[]): void => {
+  const lotIds = lines.map((line) => line.lotId);
+  if (new Set(lotIds).size !== lotIds.length)
+    throw new DomainError(
+      'El pedido contiene líneas duplicadas del mismo lote.',
+      'duplicate_lot_line',
+    );
+};
+
 const transitions: Readonly<Record<OrderStatus, readonly OrderStatus[]>> = {
   draft: ['requested', 'cancelled'],
   requested: ['quoted', 'cancelled'],

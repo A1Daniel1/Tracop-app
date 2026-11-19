@@ -21,13 +21,22 @@ import { OrderingService } from '../../application/ordering-service.js';
 import type { OrderAggregate } from '../../ports/ordering-ports.js';
 import { DomainError } from '../../../../shared/kernel/domain-error.js';
 import { AuthGuard, type AuthPrincipal } from '../../../../shared/auth/index.js';
+import { Inject } from '@nestjs/common';
+import {
+  ORDER_PROVIDER_DIRECTORY,
+  type ProviderDirectoryPort,
+} from '../../ports/ordering-ports.js';
 
 @ApiTags('ordering')
 @ApiBearerAuth()
 @UseGuards(AuthGuard)
 @Controller('orders')
 export class OrderingController {
-  constructor(private readonly ordering: OrderingService) {}
+  constructor(
+    private readonly ordering: OrderingService,
+    @Inject(ORDER_PROVIDER_DIRECTORY)
+    private readonly providerDirectory: ProviderDirectoryPort,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -62,7 +71,7 @@ export class OrderingController {
     const actor = req.identity;
     const result = await this.ordering.listMine(actor.sub, cursor, limit);
     return {
-      items: result.items.map((a) => this.serializeOrder(a, actor)),
+      items: await Promise.all(result.items.map((a) => this.serializeOrder(a, actor))),
       nextCursor: result.nextCursor,
     };
   }
@@ -77,7 +86,7 @@ export class OrderingController {
     const actor = req.identity;
     const result = await this.ordering.listIncoming(actor.sub, cursor, limit);
     return {
-      items: result.items.map((a) => this.serializeOrder(a, actor)),
+      items: await Promise.all(result.items.map((a) => this.serializeOrder(a, actor))),
       nextCursor: result.nextCursor,
     };
   }
@@ -144,12 +153,14 @@ export class OrderingController {
     return this.serializeOrder(aggregate, actor);
   }
 
-  private serializeOrder(aggregate: OrderAggregate, actor?: AuthPrincipal) {
+  private async serializeOrder(
+    aggregate: OrderAggregate,
+    actor?: AuthPrincipal,
+  ): Promise<Record<string, unknown>> {
     const isBuyer = actor?.sub === aggregate.order.buyerId;
     const base = {
       id: aggregate.order.id,
       status: aggregate.order.status,
-      providerId: aggregate.order.providerId,
       lines: aggregate.lines.map((l) => ({
         lotId: l.lotId,
         quantityMilli: l.quantityMilli.toString(),
@@ -166,8 +177,12 @@ export class OrderingController {
       quoteValidUntil: aggregate.quote.validUntil.toISOString(),
     };
     if (isBuyer) {
+      const summaries = await this.providerDirectory.getProviderPublicSummaries([
+        aggregate.order.providerId,
+      ]);
       return {
         ...base,
+        provider: summaries.get(aggregate.order.providerId) ?? null,
         deliveryAddress: aggregate.order.deliveryAddress,
         deliveryWindow: aggregate.order.deliveryWindow,
       };
