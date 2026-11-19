@@ -44,6 +44,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
     if (exception instanceof ZodError) {
+      const issue = exception.issues.find((item) => {
+        const params = (item as unknown as { params?: { code?: unknown } }).params;
+        return typeof params?.code === 'string';
+      });
+      const code = (issue as unknown as { params?: { code?: unknown } } | undefined)?.params?.code;
+      if (code === 'duplicate_lot_line') {
+        response.status(HttpStatus.BAD_REQUEST).json({
+          statusCode: HttpStatus.BAD_REQUEST,
+          code,
+          message: 'El pedido contiene líneas duplicadas del mismo lote.',
+        });
+        return;
+      }
       response
         .status(HttpStatus.BAD_REQUEST)
         .json({ statusCode: 400, message: 'Solicitud inválida.' });

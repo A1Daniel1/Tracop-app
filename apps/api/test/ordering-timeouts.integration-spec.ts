@@ -3,8 +3,33 @@ import pg from 'pg';
 import { DatabaseService } from '../src/shared/infra/database.js';
 import type { AppEnvironment } from '../src/shared/infra/env.js';
 import { describePostgres } from './postgres-suite.js';
+import { ArgumentsHost, HttpStatus } from '@nestjs/common';
+import { DomainError } from '../src/shared/kernel/domain-error.js';
+import { HttpExceptionFilter } from '../src/shared/infra/http-exception.filter.js';
 
 describePostgres('Ordering PostgreSQL timeout mappings', () => {
+  it.each([
+    ['lock_timeout', HttpStatus.SERVICE_UNAVAILABLE],
+    ['statement_timeout', HttpStatus.SERVICE_UNAVAILABLE],
+  ] as const)('maps %s to a 503 response without internal data', (code, status) => {
+    const json = jest.fn();
+    const setHeader = jest.fn();
+    const response = { status: jest.fn(() => ({ json })), setHeader };
+    const host = {
+      switchToHttp: () => ({
+        getResponse: () => response,
+      }),
+    } as unknown as ArgumentsHost;
+
+    new HttpExceptionFilter().catch(new DomainError(code, code), host);
+
+    expect(response.status).toHaveBeenCalledWith(status);
+    expect(json).toHaveBeenCalledWith({
+      statusCode: 503,
+      code,
+      message: expect.any(String),
+    });
+  });
   it('maps 55P03 to lock_timeout deterministically', async () => {
     const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
     const holder = await pool.connect();

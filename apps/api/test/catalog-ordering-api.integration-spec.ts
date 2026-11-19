@@ -360,20 +360,21 @@ describePostgres('Catalog Ordering API integration', () => {
       .expect(201);
 
     const orderBeforeAccept = await pool.query(
-      `SELECT version FROM ordering.orders WHERE id = $1::uuid`,
+      `SELECT status, version FROM ordering.orders WHERE id = $1::uuid`,
       [orderId],
     );
     expect(orderBeforeAccept.rows).toHaveLength(1);
+    const orderBefore = orderBeforeAccept.rows[0];
+    const orderEventsBefore = await pool.query(
+      `SELECT id FROM ordering.order_events WHERE order_id = $1::uuid`,
+      [orderId],
+    );
     expect(await getReservationCount(lotId)).toBe(0);
 
     const repository = app.get<OrderRepository>(ORDER_REPOSITORY);
-    const originalSave = repository.save.bind(repository);
-    const saveSpy = jest
-      .spyOn(repository, 'save')
-      .mockImplementationOnce(async (aggregate, events) => {
-        await originalSave(aggregate, events);
-        throw new Error('forced_save_failure');
-      });
+    const saveSpy = jest.spyOn(repository, 'save').mockImplementationOnce(async () => {
+      throw new Error('forced_save_failure');
+    });
 
     await request(app.getHttpServer())
       .post(`/orders/${orderId}/accept`)
@@ -395,12 +396,15 @@ describePostgres('Catalog Ordering API integration', () => {
       [orderId],
     );
     expect(orderAfterFailure.rows).toHaveLength(1);
-    expect(orderAfterFailure.rows[0]).toMatchObject({ status: 'quoted', version: 3 });
+    expect(orderAfterFailure.rows[0]).toMatchObject({
+      status: orderBefore.status,
+      version: orderBefore.version,
+    });
     const orderEventsAfterFailure = await pool.query(
       `SELECT id FROM ordering.order_events WHERE order_id = $1::uuid`,
       [orderId],
     );
-    expect(orderEventsAfterFailure.rows).toHaveLength(2);
+    expect(orderEventsAfterFailure.rows).toHaveLength(orderEventsBefore.rows.length);
   });
 
   it('deduplicates same-content order requests and rejects reused ids with different content or buyer', async () => {
@@ -442,7 +446,14 @@ describePostgres('Catalog Ordering API integration', () => {
       .set('Authorization', `Bearer ${otherBuyer.token}`)
       .send(body)
       .expect(409)
-      .expect(({ body }) => expect(body.code).toBe('idempotency_conflict'));
+      .expect(({ body }) => {
+        expect(body.code).toBe('idempotency_conflict');
+        expect(body).toMatchObject({
+          statusCode: 409,
+          code: 'idempotency_conflict',
+          message: 'El pedido ya existe.',
+        });
+      });
 
     expect(await getReservationCount(lotId)).toBe(0);
   });
@@ -463,9 +474,55 @@ describePostgres('Catalog Ordering API integration', () => {
         ],
         deliveryAddress: 'Calle sintética 1',
       })
-      .expect(400);
+      .expect(400)
+      .expect(({ body }) => expect(body.code).toBe('duplicate_lot_line'));
 
     expect(await getReservationCount(lotId)).toBe(0);
+  });
+
+  it('returns role-safe order DTOs for buyer, provider and third party', async () => {
+    const supplier = await registerSupplier();
+    const buyer = await registerBuyer();
+    const thirdParty = await registerBuyer();
+    const lotId = await createPublishedLot(supplier.userId, (global as any).__TEST_PROD_ID__, 10);
+    const orderId = uuidv7();
+
+    await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${buyer.token}`)
+      .send({
+        id: orderId,
+        lines: [{ lotId, quantityMilli: '1000' }],
+        deliveryAddress: 'Dirección privada sintética',
+        deliveryWindow: '2026-11-20T12:00:00.000Z',
+      })
+      .expect(201);
+
+    const buyerResponse = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${buyer.token}`)
+      .expect(200);
+    expect(buyerResponse.body.deliveryAddress).toBe('Dirección privada sintética');
+    expect(buyerResponse.body).not.toHaveProperty('providerId');
+    if (buyerResponse.body.provider !== null)
+      expect(buyerResponse.body.provider).not.toHaveProperty('userId');
+
+    const providerResponse = await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${supplier.token}`)
+      .expect(200);
+    expect(providerResponse.body).not.toHaveProperty('deliveryAddress');
+    expect(providerResponse.body).not.toHaveProperty('deliveryWindow');
+    expect(providerResponse.body).not.toHaveProperty('providerId');
+    expect(providerResponse.body).not.toHaveProperty('buyerId');
+    expect(providerResponse.body).not.toHaveProperty('buyer');
+    expect(providerResponse.body).not.toHaveProperty('buyerName');
+    expect(providerResponse.body).not.toHaveProperty('buyerPhone');
+
+    await request(app.getHttpServer())
+      .get(`/orders/${orderId}`)
+      .set('Authorization', `Bearer ${thirdParty.token}`)
+      .expect(404);
   });
 
   it('detects order_events payload manipulation in PostgreSQL', async () => {
