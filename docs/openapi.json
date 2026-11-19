@@ -4016,7 +4016,7 @@
             }
           },
           "503": {
-            "description": "El servicio de almacenamiento no está disponible temporalmente.",
+            "description": "La operación excedió el tiempo de bloqueo o de statement temporalmente.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4040,8 +4040,8 @@
                 },
                 "example": {
                   "statusCode": 503,
-                  "code": "storage_unavailable",
-                  "message": "No se pudo procesar la imagen."
+                  "code": "lock_timeout",
+                  "message": "La operación excedió el tiempo de espera del bloqueo."
                 }
               }
             }
@@ -4062,7 +4062,7 @@
         "operationId": "LotsController_confirmPhoto",
         "parameters": [
           {
-            "name": "photoId",
+            "name": "id",
             "required": true,
             "in": "path",
             "schema": {
@@ -4071,7 +4071,7 @@
             }
           },
           {
-            "name": "id",
+            "name": "photoId",
             "required": true,
             "in": "path",
             "schema": {
@@ -4309,7 +4309,7 @@
             }
           },
           "503": {
-            "description": "El servicio de almacenamiento no está disponible temporalmente.",
+            "description": "La operación excedió el tiempo de bloqueo o de statement temporalmente.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4333,8 +4333,8 @@
                 },
                 "example": {
                   "statusCode": 503,
-                  "code": "storage_unavailable",
-                  "message": "No se pudo procesar la imagen."
+                  "code": "lock_timeout",
+                  "message": "La operación excedió el tiempo de espera del bloqueo."
                 }
               }
             }
@@ -4355,7 +4355,7 @@
         "operationId": "LotsController_deletePhoto",
         "parameters": [
           {
-            "name": "photoId",
+            "name": "id",
             "required": true,
             "in": "path",
             "schema": {
@@ -4364,7 +4364,7 @@
             }
           },
           {
-            "name": "id",
+            "name": "photoId",
             "required": true,
             "in": "path",
             "schema": {
@@ -4518,7 +4518,7 @@
             }
           },
           "503": {
-            "description": "El servicio de almacenamiento no está disponible temporalmente.",
+            "description": "La operación excedió el tiempo de bloqueo o de statement temporalmente.",
             "content": {
               "application/json": {
                 "schema": {
@@ -4542,8 +4542,8 @@
                 },
                 "example": {
                   "statusCode": 503,
-                  "code": "storage_unavailable",
-                  "message": "No se pudo procesar la imagen."
+                  "code": "lock_timeout",
+                  "message": "La operación excedió el tiempo de espera del bloqueo."
                 }
               }
             }
@@ -5626,6 +5626,200 @@
         ],
         "summary": "Obtener cambios sincronizables",
         "tags": ["sync"]
+      }
+    },
+    "/orders": {
+      "post": {
+        "operationId": "OrderingController_create",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": "Pedido creado o recuperado por idempotencia"
+          },
+          "400": {
+            "description": "Entrada inválida"
+          },
+          "409": {
+            "description": "Conflicto de idempotencia con contenido distinto"
+          },
+          "503": {
+            "description": "Lock o statement timeout"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Crear pedido (solo compradores)",
+        "tags": ["ordering"]
+      }
+    },
+    "/orders/mine": {
+      "get": {
+        "operationId": "OrderingController_listMine",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado"
+          },
+          "403": {
+            "description": "Rol no autorizado"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar mis pedidos (comprador)",
+        "tags": ["ordering"]
+      }
+    },
+    "/orders/incoming": {
+      "get": {
+        "operationId": "OrderingController_listIncoming",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado"
+          },
+          "403": {
+            "description": "Rol no autorizado"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar pedidos entrantes (proveedor, solo accepted+)",
+        "tags": ["ordering"]
+      }
+    },
+    "/orders/{id}/accept": {
+      "post": {
+        "operationId": "OrderingController_accept",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cotización aceptada"
+          },
+          "409": {
+            "description": "quote_expired, lot_unavailable, insufficient_stock o conflicto de versión"
+          },
+          "503": {
+            "description": "Lock o statement timeout"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Aceptar cotización (comprador)",
+        "tags": ["ordering"]
+      }
+    },
+    "/orders/{id}/cancel": {
+      "post": {
+        "operationId": "OrderingController_cancel",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pedido cancelado"
+          },
+          "403": {
+            "description": "No autorizado"
+          },
+          "409": {
+            "description": "Estado no permite cancelación o versión obsoleta"
+          },
+          "503": {
+            "description": "Lock o statement timeout"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cancelar pedido (comprador o proveedor según estado)",
+        "tags": ["ordering"]
+      }
+    },
+    "/orders/{id}": {
+      "get": {
+        "operationId": "OrderingController_getById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detalle del pedido"
+          },
+          "401": {
+            "description": "No autenticado"
+          },
+          "403": {
+            "description": "No es participante del pedido"
+          },
+          "404": {
+            "description": "Pedido no encontrado"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Consultar pedido (comprador o proveedor del pedido)",
+        "tags": ["ordering"]
       }
     }
   },

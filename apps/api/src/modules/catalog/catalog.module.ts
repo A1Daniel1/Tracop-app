@@ -24,6 +24,7 @@ import {
   CATALOG_CLOCK,
   CATALOG_EVENT_WRITER,
   CATALOG_LOT_REPOSITORY,
+  CATALOG_ORDERING_API,
   CATALOG_PRODUCT_REPOSITORY,
   CATALOG_UNIT_OF_WORK,
   CHANGE_RECORDER,
@@ -131,8 +132,12 @@ import { STORAGE_PORT, type StoragePort } from './ports/storage-port.js';
         LOT_PHOTO_REPOSITORY,
       ],
     },
+    {
+      provide: CATALOG_ORDERING_API,
+      useExisting: CatalogService,
+    },
     DeleteLot,
   ],
-  exports: [CatalogService, DeleteLot],
+  exports: [CatalogService, DeleteLot, CATALOG_ORDERING_API],
 })
 export class CatalogModule {}

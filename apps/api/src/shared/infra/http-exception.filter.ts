@@ -19,6 +19,13 @@ const domainStatus: Record<string, number> = {
   forbidden: HttpStatus.FORBIDDEN,
   not_found: HttpStatus.NOT_FOUND,
   version_conflict: HttpStatus.CONFLICT,
+  idempotency_conflict: HttpStatus.CONFLICT,
+  idempotency_content_mismatch: HttpStatus.CONFLICT,
+  duplicate_lot_line: HttpStatus.BAD_REQUEST,
+  lock_timeout: HttpStatus.SERVICE_UNAVAILABLE,
+  statement_timeout: HttpStatus.SERVICE_UNAVAILABLE,
+  lot_has_active_reservations: HttpStatus.CONFLICT,
+  insufficient_stock: HttpStatus.CONFLICT,
   photo_limit: HttpStatus.CONFLICT,
   photo_not_pending: HttpStatus.CONFLICT,
   photo_order_invalid: HttpStatus.CONFLICT,
@@ -37,6 +44,19 @@ export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
     if (exception instanceof ZodError) {
+      const issue = exception.issues.find((item) => {
+        const params = (item as unknown as { params?: { code?: unknown } }).params;
+        return typeof params?.code === 'string';
+      });
+      const code = (issue as unknown as { params?: { code?: unknown } } | undefined)?.params?.code;
+      if (code === 'duplicate_lot_line') {
+        response.status(HttpStatus.BAD_REQUEST).json({
+          statusCode: HttpStatus.BAD_REQUEST,
+          code,
+          message: 'El pedido contiene líneas duplicadas del mismo lote.',
+        });
+        return;
+      }
       response
         .status(HttpStatus.BAD_REQUEST)
         .json({ statusCode: 400, message: 'Solicitud inválida.' });

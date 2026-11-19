@@ -18,8 +18,10 @@
     "catalog:expire-lots": "tsx scripts/expire-lots.ts",
     "catalog:backfill-changes": "tsx scripts/backfill-catalog-changes.ts",
     "catalog:purge-orphan-photos": "tsx scripts/purge-orphan-photos.ts",
-    "openapi:export": "pnpm --filter @tracop/contracts build && tsx scripts/export-openapi.ts",
-    "openapi:check": "pnpm --filter @tracop/contracts build && tsx scripts/export-openapi.ts --check"
+    "ordering:expire-reservations": "tsx scripts/expire-reservations.ts",
+    "db:check-migrations": "tsx scripts/check-migration-numbering.ts",
+    "openapi:export": "pnpm --filter @tracop/contracts build && OPENAPI_EXPORT=true jest --runInBand --coverage=false test/openapi-export.spec.ts",
+    "openapi:check": "pnpm --filter @tracop/contracts build && OPENAPI_CHECK=true jest --runInBand --coverage=false test/openapi-export.spec.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1161.0",

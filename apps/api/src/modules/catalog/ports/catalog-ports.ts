@@ -24,12 +24,24 @@ export interface LotRepository {
   findVisible(
     now: Date,
     bounds?: { minLat: number; maxLat: number; minLng: number; maxLng: number },
-  ): Promise<readonly LotProps[]>;
+  ): Promise<readonly (LotProps & { readonly availableQuantityMilli?: bigint })[]>;
   save(lot: LotProps): Promise<'created' | 'exists'>;
   update(lot: LotProps, expectedVersion: number): Promise<boolean>;
   findExpired(now: Date, limit: number): Promise<readonly LotProps[]>;
   findAllForChangeBackfill(): Promise<readonly LotProps[]>;
   softDelete(lot: LotProps, expectedVersion: number, deletedAt: Date): Promise<boolean>;
+  lockForReservation(lotIds: readonly string[]): Promise<readonly LotProps[]>;
+  getAvailableQuantity(lotId: string, now: Date): Promise<bigint>;
+  findOrderReservationLotIds(orderId: string): Promise<readonly string[]>;
+  reserveStock(input: {
+    lotId: string;
+    orderId: string;
+    quantityMilli: bigint;
+    expiresAt: Date;
+    now: Date;
+  }): Promise<'created' | 'exists'>;
+  releaseOrderReservations(orderId: string, now: Date): Promise<readonly string[]>;
+  findExpiredReservationOrderIds(now: Date, limit: number): Promise<readonly string[]>;
 }
 export interface CatalogUnitOfWork {
   run<T>(operation: () => Promise<T>): Promise<T>;
@@ -65,6 +77,30 @@ export interface ChangeRecorderPort {
     readonly occurredAt: Date;
   }): Promise<string | null>;
 }
+
+export interface LotQuoteSnapshot {
+  readonly id: string;
+  readonly providerId: string;
+  readonly unit: string;
+  readonly unitPrice: bigint;
+  readonly availableUntil: Date;
+  readonly status: string;
+  readonly availableQuantityMilli: bigint;
+}
+
+export interface CatalogOrderingApi {
+  getLotQuote(lotId: string): Promise<LotQuoteSnapshot>;
+  reserveLots(input: {
+    readonly orderId: string;
+    readonly lines: readonly { readonly lotId: string; readonly quantityMilli: bigint }[];
+    readonly expiresAt: Date;
+  }): Promise<void>;
+  releaseOrderReservations(orderId: string): Promise<void>;
+  findExpiredReservationOrderIds(now: Date, limit: number): Promise<readonly string[]>;
+}
+
+export const CATALOG_ORDERING_API = Symbol('CATALOG_ORDERING_API');
+
 export interface CatalogCursor {
   readonly version: 1;
   readonly sort: 'price' | 'distance' | 'availability' | 'recent';
@@ -87,7 +123,7 @@ export interface CatalogSearchCriteria {
   readonly radiusKm?: number;
 }
 export interface CatalogSearchItem {
-  readonly lot: LotProps;
+  readonly lot: LotProps & { readonly availableQuantityMilli?: bigint };
   readonly distanceKm?: number;
 }
 export interface CatalogSearchPage {

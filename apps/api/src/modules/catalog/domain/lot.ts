@@ -31,8 +31,14 @@ export const LOT_STATES = [
 export type LotStatus = (typeof LOT_STATES)[number];
 export type LotEvent =
   | { readonly type: 'LotPublished'; readonly lotId: string; readonly occurredAt: string }
+  | { readonly type: 'LotReserved'; readonly lotId: string; readonly occurredAt: string }
   | { readonly type: 'LotExpired'; readonly lotId: string; readonly occurredAt: string }
   | { readonly type: 'LotDeleted'; readonly lotId: string; readonly occurredAt: string }
+  | {
+      readonly type: 'LotAvailabilityRestored';
+      readonly lotId: string;
+      readonly occurredAt: string;
+    }
   | {
       readonly type: 'LotCancelled';
       readonly lotId: string;
@@ -59,7 +65,7 @@ export interface LotProps {
 const transitions: Readonly<Record<LotStatus, readonly LotStatus[]>> = {
   draft: ['published', 'cancelled'],
   published: ['reserved', 'expired', 'cancelled'],
-  reserved: ['sold_out', 'cancelled'],
+  reserved: ['published', 'expired', 'cancelled'],
   sold_out: [],
   expired: [],
   cancelled: [],
@@ -97,15 +103,30 @@ export class Lot {
     return new Lot({ ...props, status: 'draft', version: 1 });
   }
 
-  transition(next: LotStatus, occurredAt: Date): void {
+  transition(next: LotStatus, occurredAt: Date, details: Record<string, unknown> = {}): void {
     const previousStatus = this.props.status;
     if (!transitions[previousStatus].includes(next))
       throw new DomainError('Transición de lote inválida.', 'invalid_transition');
     (this.props as { status: LotStatus; version: number }).status = next;
     (this.props as { status: LotStatus; version: number }).version += 1;
-    if (next === 'published')
+    if (next === 'published') {
+      this.pendingEvents.push(
+        details.previousStatus === 'reserved'
+          ? {
+              type: 'LotAvailabilityRestored',
+              lotId: this.props.id,
+              occurredAt: occurredAt.toISOString(),
+            }
+          : {
+              type: 'LotPublished',
+              lotId: this.props.id,
+              occurredAt: occurredAt.toISOString(),
+            },
+      );
+    }
+    if (next === 'reserved')
       this.pendingEvents.push({
-        type: 'LotPublished',
+        type: 'LotReserved',
         lotId: this.props.id,
         occurredAt: occurredAt.toISOString(),
       });
@@ -139,6 +160,9 @@ export class Lot {
     return this.pendingEvents.splice(0);
   }
   static isVisibleNow(lot: LotProps, now: Date): boolean {
-    return lot.status === 'published' && lot.availableUntil.getTime() >= now.getTime();
+    return (
+      (lot.status === 'published' || lot.status === 'reserved') &&
+      lot.availableUntil.getTime() >= now.getTime()
+    );
   }
 }
