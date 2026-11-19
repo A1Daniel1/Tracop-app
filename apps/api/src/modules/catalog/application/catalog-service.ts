@@ -285,9 +285,9 @@ export class CatalogService {
       }
       const product = await this.products.findById(input.productId);
       if (!product) throw new DomainError('Producto no encontrado.', 'not_found');
-      if (product.status === 'pending_review' && product.proposedBy !== actor.sub)
+      if ((product.status ?? 'approved') === 'pending_review' && product.proposedBy !== actor.sub)
         throw new DomainError('El producto está pendiente de revisión.', 'product_pending_review');
-      if (product.status === 'rejected')
+      if ((product.status ?? 'approved') === 'rejected')
         throw new DomainError('El producto fue rechazado.', 'product_pending_review');
       const lot = Lot.create(
         { ...input, providerId: actor.sub, status: 'draft', version: 1 },
@@ -719,7 +719,7 @@ export class CatalogService {
         throw new DomainError('Conflicto de versión.', 'version_conflict');
       if (status === 'published') {
         const product = await this.products.findById(current.productId);
-        if (!product || product.status !== 'approved')
+        if (!product || (product.status ?? 'approved') !== 'approved')
           throw new DomainError('El producto no está aprobado.', 'product_pending_review');
       }
       if (
