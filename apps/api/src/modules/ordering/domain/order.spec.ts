@@ -1,4 +1,4 @@
-import { Order, type OrderProps } from './order.js';
+import { Order, assertNoDuplicateLotLines, type OrderProps } from './order.js';
 
 const now = new Date('2026-11-10T12:00:00.000Z');
 const props: OrderProps = {
@@ -42,5 +42,8 @@ describe('Order state machine', () => {
   );
   it('rejects invalid transitions', () => {
     expect(() => Order.create(props).transition('paid', now)).toThrow('Transición');
+  });
+  it('rejects duplicate lot lines in the domain', () => {
+    expect(() => assertNoDuplicateLotLines([{ lotId: 'lot-a' }, { lotId: 'lot-a' }])).toThrow();
   });
 });
