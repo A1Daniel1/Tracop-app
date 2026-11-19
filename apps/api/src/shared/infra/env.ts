@@ -19,6 +19,7 @@ const envSchema = z.object({
   RATE_LIMIT_HMAC_SECRET: z.string().min(32),
   PRIVACY_POLICY_VERSION: z.string().min(1).default('v0-draft'),
   ALLOWED_COUNTRY_CODES: z.string().default('57'),
+  CORS_ALLOWED_ORIGINS: z.string().default(''),
   SUPPORTED_LOCALES: z.string().default('es-CO,en'),
   TRUST_PROXY: z.union([booleanFromString, z.coerce.number().int().nonnegative()]).default(false),
   OTP_LENGTH: z.coerce.number().int().min(4).max(10).default(6),
@@ -157,6 +158,54 @@ const parsedEnvironmentSchema = envSchema.superRefine((value, ctx) => {
       message: 'Required in production.',
     });
   }
+  const corsOrigins = value.CORS_ALLOWED_ORIGINS.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+  for (const origin of corsOrigins) {
+    let parsedOrigin: URL;
+    try {
+      parsedOrigin = new URL(origin);
+    } catch {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CORS_ALLOWED_ORIGINS'],
+        message: 'CORS_ALLOWED_ORIGINS contiene un origen inválido.',
+      });
+      continue;
+    }
+    if (origin !== parsedOrigin.origin) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CORS_ALLOWED_ORIGINS'],
+        message: 'CORS_ALLOWED_ORIGINS solo admite orígenes, sin ruta.',
+      });
+    }
+    if (origin.includes('*')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CORS_ALLOWED_ORIGINS'],
+        message: 'CORS_ALLOWED_ORIGINS no admite comodines.',
+      });
+    }
+    if (value.NODE_ENV === 'production' && parsedOrigin.protocol !== 'https:') {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CORS_ALLOWED_ORIGINS'],
+        message: 'Production requires HTTPS CORS origins.',
+      });
+    }
+    if (
+      value.NODE_ENV === 'development' &&
+      parsedOrigin.hostname !== 'localhost' &&
+      parsedOrigin.hostname !== '127.0.0.1'
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CORS_ALLOWED_ORIGINS'],
+        message: 'Development CORS origins must use localhost or 127.0.0.1.',
+      });
+    }
+  }
 });
 
 export type AppEnvironment = z.infer<typeof envSchema> & {
@@ -165,6 +214,7 @@ export type AppEnvironment = z.infer<typeof envSchema> & {
   S3_PUBLIC_ENDPOINT: string | undefined;
   allowedCountryCodes: readonly string[];
   supportedLocales: readonly string[];
+  allowedCorsOrigins: readonly string[];
   telegramBotLink: string;
 };
 
@@ -199,12 +249,16 @@ export const loadAppEnvironment = (cwd = process.cwd()): AppEnvironment => {
   ) {
     throw new Error('SUPPORTED_LOCALES must be a comma-separated list of locales like es-CO.');
   }
+  const allowedCorsOrigins = parsed.CORS_ALLOWED_ORIGINS.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
 
   return {
     ...parsed,
     TELEGRAM_BOT_USERNAME: telegramBotUsername,
     allowedCountryCodes,
     supportedLocales,
+    allowedCorsOrigins,
     telegramBotLink: `https://t.me/${telegramBotUsername}?start=link`,
     S3_PUBLIC_ENDPOINT: parsed.S3_PUBLIC_ENDPOINT ?? parsed.S3_ENDPOINT,
     S3_REGION: parsed.S3_REGION ?? 'us-east-1',

@@ -8,6 +8,7 @@ const environmentKeys = [
   'RATE_LIMIT_HMAC_SECRET',
   'PRIVACY_POLICY_VERSION',
   'ALLOWED_COUNTRY_CODES',
+  'CORS_ALLOWED_ORIGINS',
   'TRUST_PROXY',
   'OTP_SENDER',
   'TELEGRAM_MODE',
@@ -202,6 +203,36 @@ describe('runtime environment validation', () => {
     expect(loadAppEnvironment('/tmp/tracop-no-env').S3_PUBLIC_ENDPOINT).toBe(
       'https://files.example.test',
     );
+  });
+
+  it('accepts an empty CORS allowlist', () => {
+    Object.assign(process.env, {
+      NODE_ENV: 'test',
+      DATABASE_URL: 'postgres://localhost/test',
+      JWT_SECRET: 'j'.repeat(32),
+      OTP_HMAC_SECRET: 'o'.repeat(32),
+      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      OTP_SENDER: 'console',
+      CORS_ALLOWED_ORIGINS: '',
+    });
+    expect(loadAppEnvironment('/tmp/tracop-no-env').allowedCorsOrigins).toEqual([]);
+  });
+
+  it('rejects wildcard and non-HTTPS CORS origins in production', () => {
+    Object.assign(process.env, {
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgres://localhost/test',
+      JWT_SECRET: 'j'.repeat(32),
+      OTP_HMAC_SECRET: 'o'.repeat(32),
+      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      OTP_SENDER: 'telegram',
+      TELEGRAM_BOT_TOKEN: '123456:token',
+      TELEGRAM_WEBHOOK_SECRET: 'secret',
+      TELEGRAM_BOT_USERNAME: 'tracop_test_bot',
+      CORS_ALLOWED_ORIGINS: 'https://*.example.test',
+      ...productionS3,
+    });
+    expect(() => loadAppEnvironment('/tmp/tracop-no-env')).toThrow('CORS_ALLOWED_ORIGINS');
   });
 
   it('requires the complete S3 configuration in production', () => {

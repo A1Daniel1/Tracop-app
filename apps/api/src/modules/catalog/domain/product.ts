@@ -13,6 +13,7 @@ export const PRODUCT_UNITS = [
   'bulto',
 ] as const;
 export type ProductUnit = (typeof PRODUCT_UNITS)[number];
+export type ProductStatus = 'approved' | 'pending_review' | 'rejected';
 
 export interface ProductProps {
   readonly id: string;
@@ -20,6 +21,11 @@ export interface ProductProps {
   readonly name: string;
   readonly unit: ProductUnit;
   readonly attributes: Readonly<Record<string, string | number | boolean>>;
+  readonly status?: ProductStatus;
+  readonly proposedBy?: string | null;
+  readonly reviewedBy?: string | null;
+  readonly reviewedAt?: Date | null;
+  readonly rejectionReason?: string | null;
 }
 
 export class Product {
@@ -30,6 +36,14 @@ export class Product {
       throw new DomainError('Nombre de producto inválido.', 'invalid_product');
     if (!PRODUCT_UNITS.includes(props.unit))
       throw new DomainError('Unidad de producto no soportada.', 'invalid_unit');
-    return new Product({ ...props, name: props.name.trim() });
+    return new Product({ ...props, name: props.name.trim(), status: props.status ?? 'approved' });
   }
 }
+
+export const normalizeProductSearchText = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('es-CO')
+    .trim()
+    .replace(/\s+/g, ' ');

@@ -7,7 +7,7 @@ import type { OutboxWriter } from '../../../../shared/ports/outbox-writer.js';
 import type { UnitOfWork } from '../../../../shared/infra/unit-of-work.js';
 import type { CategoryProps } from '../../domain/category.js';
 import { quantityDecimalToMilli, quantityMilliToDecimal, type LotProps } from '../../domain/lot.js';
-import type { ProductProps } from '../../domain/product.js';
+import type { ProductProps, ProductStatus } from '../../domain/product.js';
 import type {
   CatalogClock,
   CatalogEventWriter,
@@ -36,6 +36,11 @@ const toProduct = (row: typeof products.$inferSelect): ProductProps => ({
   name: row.name,
   unit: row.unit as ProductProps['unit'],
   attributes: row.attributes as ProductProps['attributes'],
+  status: row.status as ProductStatus,
+  proposedBy: row.proposedBy,
+  reviewedBy: row.reviewedBy,
+  reviewedAt: row.reviewedAt,
+  rejectionReason: row.rejectionReason,
 });
 const toLot = (row: typeof lots.$inferSelect): LotProps => ({
   id: row.id,
@@ -114,7 +119,7 @@ export class DrizzleProductRepository implements ProductRepository {
   async findAll(
     filter: { categoryId?: string; q?: string } = {},
   ): Promise<readonly ProductProps[]> {
-    const clauses = [isNull(products.deletedAt)];
+    const clauses = [isNull(products.deletedAt), eq(products.status, 'approved')];
     if (filter.categoryId) clauses.push(eq(products.categoryId, filter.categoryId));
     if (filter.q) {
       const tokens = normalizeSearchText(filter.q).trim().split(/\s+/).filter(Boolean);
@@ -142,6 +147,11 @@ export class DrizzleProductRepository implements ProductRepository {
         ...product,
         attributes: { ...product.attributes },
         searchText,
+        status: product.status ?? 'approved',
+        proposedBy: product.proposedBy ?? null,
+        reviewedBy: product.reviewedBy ?? null,
+        reviewedAt: product.reviewedAt ?? null,
+        rejectionReason: product.rejectionReason ?? null,
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -154,6 +164,11 @@ export class DrizzleProductRepository implements ProductRepository {
           searchText,
           unit: product.unit,
           attributes: { ...product.attributes },
+          status: product.status ?? 'approved',
+          proposedBy: product.proposedBy ?? null,
+          reviewedBy: product.reviewedBy ?? null,
+          reviewedAt: product.reviewedAt ?? null,
+          rejectionReason: product.rejectionReason ?? null,
           updatedAt: now,
         },
       });
