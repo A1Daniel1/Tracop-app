@@ -15,6 +15,7 @@ import {
   type OrderRepository,
 } from '../src/modules/ordering/ports/ordering-ports.js';
 import { CATALOG_ORDERING_API, type CatalogOrderingApi } from '../src/modules/catalog/index.js';
+import { verifyOrderEventChain } from '../src/modules/ordering/domain/order-events.js';
 
 describePostgres('Catalog Ordering API integration', () => {
   let app: INestApplication;
@@ -458,6 +459,79 @@ describePostgres('Catalog Ordering API integration', () => {
       .expect(400);
 
     expect(await getReservationCount(lotId)).toBe(0);
+  });
+
+  it('detects order_events payload manipulation in PostgreSQL', async () => {
+    const supplier = await registerSupplier();
+    const buyer = await registerBuyer();
+    const lotId = await createPublishedLot(supplier.userId, (global as any).__TEST_PROD_ID__, 1);
+    const orderId = uuidv7();
+
+    await request(app.getHttpServer())
+      .post('/orders')
+      .set('Authorization', `Bearer ${buyer.token}`)
+      .send({
+        id: orderId,
+        lines: [{ lotId, quantityMilli: '1000' }],
+        deliveryAddress: 'Addr chain',
+      })
+      .expect(201);
+
+    const orderResult = await pool.query(
+      `SELECT version FROM ordering.orders WHERE id = $1::uuid`,
+      [orderId],
+    );
+    await request(app.getHttpServer())
+      .post(`/orders/${orderId}/accept`)
+      .set('Authorization', `Bearer ${buyer.token}`)
+      .send({ expectedVersion: orderResult.rows[0].version })
+      .expect(200);
+
+    const rows = await pool.query(
+      `SELECT prev_hash, hash, payload
+       FROM ordering.order_events
+       WHERE order_id = $1::uuid
+       ORDER BY occurred_at, id`,
+      [orderId],
+    );
+    const chain = rows.rows.map(
+      (row: { prev_hash: string | null; hash: string; payload: string }) => ({
+        prevHash: row.prev_hash,
+        hash: row.hash,
+        payload: JSON.parse(row.payload),
+      }),
+    );
+    expect(chain.length).toBeGreaterThanOrEqual(3);
+    expect(verifyOrderEventChain(chain)).toBe(true);
+
+    await pool.query(
+      `UPDATE ordering.order_events
+       SET payload = jsonb_build_object('status', 'cancelled')::text
+       WHERE id = (
+         SELECT id FROM ordering.order_events
+         WHERE order_id = $1::uuid
+         ORDER BY occurred_at, id
+         LIMIT 1
+       )`,
+      [orderId],
+    );
+
+    const mutated = await pool.query(
+      `SELECT prev_hash, hash, payload
+       FROM ordering.order_events
+       WHERE order_id = $1::uuid
+       ORDER BY occurred_at, id`,
+      [orderId],
+    );
+    expect(
+      verifyOrderEventChain(
+        mutated.rows.map((row: { prev_hash: string | null; hash: string; payload: string }) => ({
+          prevHash: row.prev_hash,
+          hash: row.hash,
+          payload: JSON.parse(row.payload),
+        })),
+      ),
+    ).toBe(false);
   });
 
   it('fails if ordering or bootstrap use catalog repository directly', async () => {

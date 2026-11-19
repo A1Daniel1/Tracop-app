@@ -155,17 +155,30 @@ export class DrizzleOrderRepository implements OrderRepository {
       })
       .where(eq(orders.id, aggregate.order.id));
     if (events.length) {
+      const [lastEvent] = await db
+        .select({ hash: orderEvents.hash })
+        .from(orderEvents)
+        .where(eq(orderEvents.orderId, aggregate.order.id))
+        .orderBy(desc(orderEvents.occurredAt), desc(orderEvents.id))
+        .limit(1);
+      let previousHash = lastEvent?.hash ?? null;
       await db.insert(orderEvents).values(
-        events.map((event) => ({
-          id: createId(),
-          orderId: event.orderId,
-          type: event.type,
-          payload: JSON.stringify(event.payload),
-          actorId: event.payload.actorId as string,
-          occurredAt: new Date(event.occurredAt),
-          prevHash: event.payload.prevHash as string | null,
-          hash: event.payload.hash as string,
-        })),
+        events.map((event) => {
+          const hash = hashOrderEvent(previousHash, event.payload);
+          const payload = { ...event.payload, prevHash: previousHash, hash };
+          const row = {
+            id: createId(),
+            orderId: event.orderId,
+            type: event.type,
+            payload: JSON.stringify(payload),
+            actorId: (event.payload.actorId as string | undefined) ?? aggregate.order.buyerId,
+            occurredAt: new Date(event.occurredAt),
+            prevHash: previousHash,
+            hash,
+          };
+          previousHash = hash;
+          return row;
+        }),
       );
     }
   }

@@ -42,10 +42,19 @@ export class DatabaseService implements OnApplicationShutdown {
         return this.transactions.run(transaction, operation);
       });
     } catch (error) {
-      const code =
-        typeof error === 'object' && error !== null && 'code' in error
-          ? String((error as { code: unknown }).code)
-          : '';
+      let code = '';
+      let current: unknown = error;
+      for (
+        let depth = 0;
+        depth < 4 && current !== null && typeof current === 'object';
+        depth += 1
+      ) {
+        if ('code' in current) {
+          code = String((current as { code: unknown }).code);
+          if (code) break;
+        }
+        current = 'cause' in current ? (current as { cause: unknown }).cause : null;
+      }
       if (code === '55P03')
         throw new DomainError(
           'La operación excedió el tiempo de espera del bloqueo.',

@@ -11,11 +11,20 @@ export const canonicalJson = (value: unknown): string => {
   return JSON.stringify(value);
 };
 
-export const hashOrderEvent = (previousHash: string | null, event: unknown): string =>
-  createHash('sha256')
+export const hashOrderEvent = (previousHash: string | null, event: unknown): string => {
+  const payload =
+    event !== null && typeof event === 'object' && !Array.isArray(event)
+      ? Object.fromEntries(
+          Object.entries(event as Record<string, unknown>).filter(
+            ([key]) => key !== 'prevHash' && key !== 'hash',
+          ),
+        )
+      : event;
+  return createHash('sha256')
     .update(previousHash ?? '')
-    .update(canonicalJson(event))
+    .update(canonicalJson(payload))
     .digest('hex');
+};
 
 export const verifyOrderEventChain = (
   events: readonly {
