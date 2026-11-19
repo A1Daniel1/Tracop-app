@@ -327,9 +327,16 @@ describePostgres('Catalog Ordering API integration', () => {
     const changeLogAfterRelease = await getChangeLogCount(lotId);
     expect(changeLogAfterRelease).toBe(changeLogAfterReserve + 1);
 
-    // One more outbox event (LotPublished)
+    // One more outbox event (LotAvailabilityRestored, not LotPublished)
     const outboxAfterRelease = await getOutboxEventCount(`lot:${lotId}`);
     expect(outboxAfterRelease).toBe(outboxAfterReserve + 1);
+    const restoredEvents = await pool.query(
+      `SELECT type FROM shared.outbox_events WHERE aggregate = $1::text ORDER BY created_at`,
+      [`lot:${lotId}`],
+    );
+    expect(restoredEvents.rows).toEqual(
+      expect.arrayContaining([expect.objectContaining({ type: 'LotAvailabilityRestored' })]),
+    );
 
     // No active reservations
     expect(await getReservationCount(lotId)).toBe(0);

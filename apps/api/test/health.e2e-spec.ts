@@ -5,6 +5,9 @@ import { AppModule } from '../src/bootstrap/app.module.js';
 import { describePostgres, resetPostgresFixtures } from './postgres-suite.js';
 import { DATABASE_POOL } from '../src/shared/infra/tokens.js';
 import pg from 'pg';
+import { LOT_QUOTE_PORT } from '../src/modules/ordering/ports/ordering-ports.js';
+import { CATALOG_ORDERING_API } from '../src/modules/catalog/index.js';
+import { CatalogLotReservationAdapter } from '../src/bootstrap/ordering-bridge.module.js';
 
 describePostgres('GET /health', () => {
   let app: INestApplication;
@@ -17,7 +20,32 @@ describePostgres('GET /health', () => {
     await resetPostgresFixtures(pool);
   });
   afterAll(async () => app.close());
-  it('returns the service health', async () => {
+  it('starts the real AppModule and returns the service health', async () => {
     await request(app.getHttpServer()).get('/health').expect(200).expect({ status: 'ok' });
+  });
+
+  it('fails the real bridge smoke if the catalog ordering dependency is broken', () => {
+    const quotePort = app.get(LOT_QUOTE_PORT);
+    expect(quotePort).toBeDefined();
+    expect(app.get(CATALOG_ORDERING_API)).toBeDefined();
+  });
+
+  it('propagates unknown reservation bridge failures without converting them', async () => {
+    const bridgeFailure = new Error('bridge_dependency_failure');
+    const adapter = new CatalogLotReservationAdapter({
+      getLotQuote: async () => {
+        throw bridgeFailure;
+      },
+      reserveLots: async () => {
+        throw bridgeFailure;
+      },
+      releaseOrderReservations: async () => {
+        throw bridgeFailure;
+      },
+      findExpiredReservationOrderIds: async () => [],
+    });
+    await expect(
+      adapter.reserve('018f47a2-8b45-7cc2-9a1e-123456789abc', [], new Date()),
+    ).rejects.toBe(bridgeFailure);
   });
 });
