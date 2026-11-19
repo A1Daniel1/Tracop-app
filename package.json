@@ -22,6 +22,7 @@
     "catalog:expire-lots": "pnpm --filter @tracop/api catalog:expire-lots",
     "catalog:backfill-changes": "pnpm --filter @tracop/api catalog:backfill-changes",
     "catalog:purge-orphan-photos": "pnpm --filter @tracop/api catalog:purge-orphan-photos",
+    "storage:configure-cors": "pnpm --filter @tracop/api storage:configure-cors",
     "openapi:export": "pnpm --filter @tracop/api openapi:export",
     "openapi:check": "pnpm --filter @tracop/api openapi:check",
     "build": "turbo run build",
