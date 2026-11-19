@@ -33,6 +33,7 @@ import {
 @Controller('orders')
 export class OrderingController {
   constructor(
+    @Inject('ORDERING_SERVICE')
     private readonly ordering: OrderingService,
     @Inject(ORDER_PROVIDER_DIRECTORY)
     private readonly providerDirectory: ProviderDirectoryPort,

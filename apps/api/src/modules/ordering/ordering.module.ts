@@ -18,6 +18,7 @@ import { APP_ENVIRONMENT } from '../../shared/infra/tokens.js';
   controllers: [OrderingController],
   providers: [
     OrderingService,
+    { provide: 'ORDERING_SERVICE', useExisting: OrderingService },
     { provide: ORDER_REPOSITORY, useClass: DrizzleOrderRepository },
     // LOT_QUOTE_PORT and LOT_RESERVATION_PORT provided by OrderingBridgeModule
     envPricingPortProvider,

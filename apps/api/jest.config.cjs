@@ -36,6 +36,14 @@ if (hasSourceInLayer('application')) {
   coverageThreshold['./src/modules/catalog/application/**/*.ts'] = {
     lines: 80,
   };
+  coverageThreshold['./src/modules/ordering/application/**/*.ts'] = {
+    lines: 80,
+  };
+}
+if (hasSourceInLayer('domain')) {
+  coverageThreshold['./src/modules/ordering/domain/**/*.ts'] = {
+    lines: 90,
+  };
 }
 coverageThreshold['./src/shared/auth/**/*.ts'] = { lines: 80 };
 coverageThreshold['./src/modules/identity/domain/provider-profile.ts'] = { lines: 90 };
@@ -64,6 +72,8 @@ module.exports = {
     'src/modules/identity/application/**/*.ts',
     'src/modules/catalog/domain/**/*.ts',
     'src/modules/catalog/application/**/*.ts',
+    'src/modules/ordering/domain/**/*.ts',
+    'src/modules/ordering/application/**/*.ts',
     'src/modules/messaging/application/**/*.ts',
     'src/modules/sync/application/**/*.ts',
     'src/shared/auth/**/*.ts',
