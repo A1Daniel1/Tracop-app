@@ -44,6 +44,7 @@ export class OrderingController {
   @ApiResponse({ status: 201, description: 'Pedido creado o recuperado por idempotencia' })
   @ApiResponse({ status: 400, description: 'Entrada inválida' })
   @ApiResponse({ status: 409, description: 'Conflicto de idempotencia con contenido distinto' })
+  @ApiResponse({ status: 503, description: 'Lock o statement timeout' })
   async create(@Req() req: { identity: AuthPrincipal }, @Body() body: unknown) {
     const input = createOrderSchema.parse(body);
     const actor = req.identity;
@@ -95,7 +96,11 @@ export class OrderingController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Aceptar cotización (comprador)' })
   @ApiResponse({ status: 200, description: 'Cotización aceptada' })
-  @ApiResponse({ status: 409, description: 'Versión obsoleta o cotización expirada' })
+  @ApiResponse({
+    status: 409,
+    description: 'quote_expired, lot_unavailable, insufficient_stock o conflicto de versión',
+  })
+  @ApiResponse({ status: 503, description: 'Lock o statement timeout' })
   async accept(
     @Req() req: { identity: AuthPrincipal },
     @Param('id') id: string,
@@ -117,6 +122,7 @@ export class OrderingController {
   @ApiResponse({ status: 200, description: 'Pedido cancelado' })
   @ApiResponse({ status: 403, description: 'No autorizado' })
   @ApiResponse({ status: 409, description: 'Estado no permite cancelación o versión obsoleta' })
+  @ApiResponse({ status: 503, description: 'Lock o statement timeout' })
   async cancel(
     @Req() req: { identity: AuthPrincipal },
     @Param('id') id: string,

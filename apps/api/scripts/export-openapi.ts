@@ -2,7 +2,6 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from '../src/bootstrap/app.module.js';
 import { createOpenApiDocument } from '../src/shared/infra/swagger.js';
 
 const outputPath = resolve(process.cwd(), '../../docs/openapi.json');
@@ -14,7 +13,20 @@ const exportOpenApi = async (): Promise<void> => {
   process.env.JWT_SECRET = 'openapi-export-only-jwt-secret-not-for-authentication';
   process.env.OTP_HMAC_SECRET = 'openapi-export-only-otp-hmac-secret';
   process.env.RATE_LIMIT_HMAC_SECRET = 'openapi-export-only-rate-limit-secret';
-  const app = await NestFactory.create(AppModule, { bodyParser: false, logger: false });
+  let AppModule: typeof import('../src/bootstrap/app.module.js').AppModule;
+  try {
+    ({ AppModule } = await import('../src/bootstrap/app.module.js'));
+  } catch (error) {
+    console.error('APP_IMPORT_FAILED', error);
+    throw error;
+  }
+  let app;
+  try {
+    app = await NestFactory.create(AppModule, { bodyParser: false, logger: false });
+  } catch (error) {
+    console.error(error);
+    throw error;
+  }
   try {
     const document = createOpenApiDocument(app);
     const generated = `${JSON.stringify(document, null, 2)}\n`;

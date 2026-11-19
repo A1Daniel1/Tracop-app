@@ -55,11 +55,11 @@ const errorResponses: Record<number, { description: string; example: Record<stri
     example: { statusCode: 422, code: 'photo_format_invalid', message: 'La imagen no es válida.' },
   },
   503: {
-    description: 'El servicio de almacenamiento no está disponible temporalmente.',
+    description: 'La operación excedió el tiempo de bloqueo o de statement temporalmente.',
     example: {
       statusCode: 503,
-      code: 'storage_unavailable',
-      message: 'No se pudo procesar la imagen.',
+      code: 'lock_timeout',
+      message: 'La operación excedió el tiempo de espera del bloqueo.',
     },
   },
   500: {
