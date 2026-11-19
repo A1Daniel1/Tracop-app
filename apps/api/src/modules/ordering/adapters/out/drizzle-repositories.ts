@@ -75,24 +75,29 @@ export class DrizzleOrderRepository implements OrderRepository {
     };
   }
 
-  async create(aggregate: OrderAggregate, events: readonly OrderEvent[]): Promise<void> {
+  async create(aggregate: OrderAggregate, events: readonly OrderEvent[]): Promise<boolean> {
     const db = this.database.current();
-    await db.insert(orders).values({
-      id: aggregate.order.id,
-      buyerId: aggregate.order.buyerId,
-      providerId: aggregate.order.providerId,
-      status: aggregate.order.status,
-      deliveryAddress: aggregate.order.deliveryAddress,
-      deliveryWindow: aggregate.order.deliveryWindow
-        ? new Date(aggregate.order.deliveryWindow)
-        : null,
-      requestHash: aggregate.order.requestHash,
-      createdAt: aggregate.order.createdAt,
-      updatedAt: aggregate.order.updatedAt,
-      version: aggregate.order.version,
-      acceptedAt: aggregate.order.acceptedAt ? new Date(aggregate.order.acceptedAt) : null,
-      cancelReason: aggregate.order.cancelReason,
-    });
+    const [inserted] = await db
+      .insert(orders)
+      .values({
+        id: aggregate.order.id,
+        buyerId: aggregate.order.buyerId,
+        providerId: aggregate.order.providerId,
+        status: aggregate.order.status,
+        deliveryAddress: aggregate.order.deliveryAddress,
+        deliveryWindow: aggregate.order.deliveryWindow
+          ? new Date(aggregate.order.deliveryWindow)
+          : null,
+        requestHash: aggregate.order.requestHash,
+        createdAt: aggregate.order.createdAt,
+        updatedAt: aggregate.order.updatedAt,
+        version: aggregate.order.version,
+        acceptedAt: aggregate.order.acceptedAt ? new Date(aggregate.order.acceptedAt) : null,
+        cancelReason: aggregate.order.cancelReason,
+      })
+      .onConflictDoNothing()
+      .returning({ id: orders.id });
+    if (!inserted) return false;
     await db.insert(orderLines).values(
       aggregate.lines.map((line) => ({
         id: line.id,
@@ -140,6 +145,7 @@ export class DrizzleOrderRepository implements OrderRepository {
         }),
       );
     }
+    return true;
   }
 
   async save(aggregate: OrderAggregate, events: readonly OrderEvent[]): Promise<void> {

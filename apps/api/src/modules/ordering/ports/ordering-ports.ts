@@ -38,7 +38,7 @@ export interface OrderAggregate {
 
 export interface OrderRepository {
   findById(id: string, lock?: boolean): Promise<OrderAggregate | null>;
-  create(aggregate: OrderAggregate, events: readonly OrderEvent[]): Promise<void>;
+  create(aggregate: OrderAggregate, events: readonly OrderEvent[]): Promise<boolean>;
   save(aggregate: OrderAggregate, events: readonly OrderEvent[]): Promise<void>;
   listMine(
     buyerId: string,

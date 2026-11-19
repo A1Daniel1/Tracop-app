@@ -118,6 +118,17 @@ export class OrderingService {
     }
 
     return this.uow.run(async () => {
+      const raced = await this.orderRepository.findById(orderId);
+      if (raced) {
+        if (raced.order.buyerId !== actor.sub)
+          throw new DomainError('El pedido ya existe.', 'idempotency_conflict');
+        if (raced.order.requestHash !== requestHash)
+          throw new DomainError(
+            'El pedido ya existe con contenido distinto.',
+            'idempotency_content_mismatch',
+          );
+        return raced;
+      }
       const now = this.clock.now();
       const lotQuotes = await Promise.all(
         input.lines.map(async (line) => {
@@ -192,7 +203,20 @@ export class OrderingService {
         lines: lineProps,
         quote: Quote.create(quote).props,
       };
-      await this.orderRepository.create(aggregate, orderEvents);
+      const created = await this.orderRepository.create(aggregate, orderEvents);
+      if (!created) {
+        const raced = await this.orderRepository.findById(orderId);
+        if (!raced)
+          throw new DomainError('No fue posible crear el pedido.', 'idempotency_conflict');
+        if (raced.order.buyerId !== actor.sub)
+          throw new DomainError('El pedido ya existe.', 'idempotency_conflict');
+        if (raced.order.requestHash !== requestHash)
+          throw new DomainError(
+            'El pedido ya existe con contenido distinto.',
+            'idempotency_content_mismatch',
+          );
+        return raced;
+      }
       await this.recordOrderEvents(orderEvents);
 
       return aggregate;
