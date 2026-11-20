@@ -218,6 +218,46 @@ export class DrizzleProductRepository implements ProductRepository {
     return row ? toProduct(row) : null;
   }
 
+  async findTokenExactVisible(
+    categoryId: string,
+    searchText: string,
+    viewerId: string,
+    viewerRole: string,
+  ): Promise<ProductProps | null> {
+    const visiblePending =
+      viewerRole === 'operator' || viewerRole === 'admin'
+        ? eq(products.status, 'pending_review')
+        : and(eq(products.status, 'pending_review'), eq(products.proposedBy, viewerId));
+    const rows = await this.database
+      .current()
+      .select()
+      .from(products)
+      .where(
+        and(
+          eq(products.categoryId, categoryId),
+          isNull(products.deletedAt),
+          or(eq(products.status, 'approved'), visiblePending),
+        ),
+      );
+    const queryTokens = new Set(searchText.split(/\s+/).filter(Boolean));
+    for (const row of rows) {
+      const candidateTokens = new Set(
+        normalizeProductSearchText(row.name).split(/\s+/).filter(Boolean),
+      );
+      if (queryTokens.size === candidateTokens.size) {
+        let match = true;
+        for (const token of queryTokens) {
+          if (!candidateTokens.has(token)) {
+            match = false;
+            break;
+          }
+        }
+        if (match) return toProduct(row);
+      }
+    }
+    return null;
+  }
+
   async findSimilarVisible(
     categoryId: string,
     searchText: string,

@@ -42,6 +42,7 @@ describe('catalog application', () => {
     lockForProductProposal: async () => undefined,
     lockPendingLimitByUser: async () => undefined,
     findExactVisible: async () => null,
+    findTokenExactVisible: async () => null,
     findSimilarVisible: async () => [],
     countPendingByUser: async () => 0,
     findPending: async () => [],

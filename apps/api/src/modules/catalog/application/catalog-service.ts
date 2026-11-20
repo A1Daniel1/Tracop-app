@@ -146,6 +146,14 @@ export class CatalogService {
       );
       if (exact) return { product: exact, created: false, suggestions: [] };
 
+      const tokenExact = await this.products.findTokenExactVisible(
+        input.categoryId,
+        searchText,
+        actor.sub,
+        actor.role,
+      );
+      if (tokenExact) return { product: tokenExact, created: false, suggestions: [] };
+
       const pendingCount = await this.products.countPendingByUser(actor.sub);
       if (pendingCount >= 5)
         throw new DomainError(

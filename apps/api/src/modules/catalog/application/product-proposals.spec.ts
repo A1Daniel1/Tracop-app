@@ -52,6 +52,7 @@ const createHarness = () => {
     lockForProductProposal: async () => undefined,
     lockPendingLimitByUser: async () => undefined,
     findExactVisible: async () => null,
+    findTokenExactVisible: async () => null,
     findSimilarVisible: async () => [],
     countPendingByUser: async () => 0,
     findPending: async () =>
@@ -212,5 +213,64 @@ describe('Catalog product proposals', () => {
     await expect(harness.service.publishLot(actor, lot.id, 1)).rejects.toMatchObject({
       code: 'product_pending_review',
     });
+  });
+
+  it('deduplicates by complete tokens without false positives (papa vs papaya)', async () => {
+    const harness = createHarness();
+    const papa: ProductProps = {
+      ...approved,
+      id: '018f47a2-8b45-7cc2-9a1e-123456789ac0',
+      name: 'Papa criolla',
+    };
+    harness.products.set(papa.id, papa);
+    harness.productRepository.findExactVisible = jest.fn(async () => null);
+    harness.productRepository.findTokenExactVisible = jest.fn(async () => papa);
+    harness.productRepository.findSimilarVisible = jest.fn(async () => [papa]);
+
+    // 'Papa' is a complete token match of 'Papa' in 'Papa criolla' -> should match
+    const resultPapa = await harness.service.createProductProposal(actor, {
+      id: '018f47a2-8b45-7cc2-9a1e-123456789ac1',
+      categoryId: approved.categoryId,
+      name: 'Papa',
+      unit: 'kg',
+      attributes: {},
+    });
+    expect(resultPapa.created).toBe(false);
+    expect(resultPapa.product.id).toBe(papa.id);
+
+    // 'Papaya' shares 'papa' as substring but not as complete token -> should NOT match
+    const papaya: ProductProps = {
+      ...approved,
+      id: '018f47a2-8b45-7cc2-9a1e-123456789ac2',
+      name: 'Papaya',
+    };
+    harness.products.set(papaya.id, papaya);
+    harness.productRepository.findTokenExactVisible = jest.fn(async () => null);
+    harness.productRepository.findSimilarVisible = jest.fn(async () => [papaya]);
+
+    const resultPapaya = await harness.service.createProductProposal(actor, {
+      id: '018f47a2-8b45-7cc2-9a1e-123456789ac3',
+      categoryId: approved.categoryId,
+      name: 'Papa',
+      unit: 'kg',
+      attributes: {},
+      confirm: true,
+    });
+    expect(resultPapaya.created).toBe(true);
+    expect(resultPapaya.product.name).toBe('Papa');
+  });
+
+  it('enforces rate limit 429 on proposal endpoint via rate limiter', async () => {
+    const mockEnv = {
+      CATALOG_PRODUCT_PROPOSAL_RATE_WINDOW_SECONDS: 60,
+      CATALOG_PRODUCT_PROPOSAL_RATE_LIMIT: 5,
+    } as any;
+    const rateLimiterModule = await import('../adapters/in/product-proposal-rate-limiter.js');
+    const { RateLimitExceeded } = await import('../../../shared/kernel/domain-error.js');
+    const rateLimiter = new rateLimiterModule.InMemoryProductProposalRateLimiter(mockEnv);
+    for (let i = 0; i < 5; i++) {
+      rateLimiter.consume(actor.sub);
+    }
+    expect(() => rateLimiter.consume(actor.sub)).toThrow(RateLimitExceeded);
   });
 });

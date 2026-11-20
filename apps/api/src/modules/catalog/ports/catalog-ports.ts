@@ -24,6 +24,12 @@ export interface ProductRepository {
     viewerId: string,
     viewerRole: string,
   ): Promise<ProductProps | null>;
+  findTokenExactVisible(
+    categoryId: string,
+    searchText: string,
+    viewerId: string,
+    viewerRole: string,
+  ): Promise<ProductProps | null>;
   findSimilarVisible(
     categoryId: string,
     searchText: string,
