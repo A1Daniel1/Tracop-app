@@ -168,6 +168,8 @@ export class OrderingController {
     const base = {
       id: aggregate.order.id,
       status: aggregate.order.status,
+      version: aggregate.order.version,
+      createdAt: aggregate.order.createdAt.toISOString(),
       lines: aggregate.lines.map((l) => ({
         lotId: l.lotId,
         quantityMilli: l.quantityMilli.toString(),
