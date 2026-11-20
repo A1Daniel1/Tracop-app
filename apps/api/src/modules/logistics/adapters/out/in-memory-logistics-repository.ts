@@ -124,4 +124,16 @@ export class InMemoryLogisticsRepository implements LogisticsRepository {
   async listIncidents(limit: number): Promise<readonly IncidentProps[]> {
     return [...this.incidents.values()].slice(0, limit);
   }
+
+  async listIncidentsForCarrier(
+    carrierId: string,
+    limit: number,
+  ): Promise<readonly IncidentProps[]> {
+    return [...this.incidents.values()]
+      .filter((incident) => {
+        if (incident.tripId === null) return false;
+        return this.trips.get(incident.tripId)?.carrierId === carrierId;
+      })
+      .slice(0, limit);
+  }
 }

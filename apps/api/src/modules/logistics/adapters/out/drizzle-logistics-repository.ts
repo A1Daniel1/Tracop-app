@@ -279,4 +279,19 @@ export class DrizzleLogisticsRepository implements LogisticsRepository {
     );
     return rows(result).map(toIncident);
   }
+
+  async listIncidentsForCarrier(
+    carrierId: string,
+    limit: number,
+  ): Promise<readonly IncidentProps[]> {
+    const result = await this.db.execute(sql`
+      SELECT i.* FROM logistics.incidents i
+      INNER JOIN logistics.trips t ON t.id = i.trip_id
+      WHERE i.deleted_at IS NULL AND t.deleted_at IS NULL
+        AND t.carrier_id = ${carrierId}::uuid
+      ORDER BY i.opened_at DESC
+      LIMIT ${limit}
+    `);
+    return rows(result).map(toIncident);
+  }
 }

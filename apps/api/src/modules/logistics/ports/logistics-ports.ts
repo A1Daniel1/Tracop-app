@@ -52,6 +52,7 @@ export interface LogisticsRepository {
   resolveIncident(incidentId: string, at: Date): Promise<IncidentProps | null>;
   findIncident(incidentId: string): Promise<IncidentProps | null>;
   listIncidents(limit: number): Promise<readonly IncidentProps[]>;
+  listIncidentsForCarrier(carrierId: string, limit: number): Promise<readonly IncidentProps[]>;
 }
 
 export interface LogisticsClock {

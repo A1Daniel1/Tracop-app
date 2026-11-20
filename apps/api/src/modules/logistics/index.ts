@@ -46,7 +46,10 @@ export {
   ORDERING_LOGISTICS_PORT,
   PROVIDER_ZONE_PORT,
 } from './ports/logistics-ports.js';
-export type { CreateTripInput } from './application/trip-planning.service.js';
+export type {
+  CreateTripInput,
+  LogisticsOrderCandidate,
+} from './application/trip-planning.service.js';
 export type { RecordCheckinInput } from './application/checkin.service.js';
 export type { UpsertCarrierInput } from './application/carrier-profile.service.js';
 export type { OpenIncidentInput } from './application/incident.service.js';

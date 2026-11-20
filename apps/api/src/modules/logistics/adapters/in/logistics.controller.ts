@@ -91,6 +91,19 @@ export class LogisticsController {
     return this.trips.recommend(req.identity, limit);
   }
 
+  @Get('orders/candidates')
+  @Roles('carrier', 'operator')
+  @ApiOperation({ summary: 'Listar pedidos pagados con datos mínimos para planear viajes' })
+  @ApiResponse({
+    status: 200,
+    description: 'Resumen logístico sin datos personales ni dirección completa.',
+  })
+  @ApiResponse({ status: 400, description: 'Solicitud inválida o no autorizada.' })
+  async listOrderCandidates(@Req() req: Request, @Query() query: unknown) {
+    const { limit } = logisticsLimitQuerySchema.parse(query);
+    return this.trips.listOrderCandidates(req.identity, limit);
+  }
+
   @Post('trips')
   @Roles('carrier')
   @HttpCode(HttpStatus.CREATED)

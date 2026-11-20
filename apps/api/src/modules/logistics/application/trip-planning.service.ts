@@ -35,6 +35,20 @@ export interface CreateTripInput {
   readonly orderIds: readonly string[];
 }
 
+export interface LogisticsOrderCandidate {
+  readonly orderId: string;
+  readonly status: 'paid';
+  readonly version: number;
+  readonly deliveryZone: string;
+  readonly deliveryWindow: string | null;
+  readonly pickupZones: readonly string[];
+  readonly lines: readonly {
+    readonly lotId: string;
+    readonly quantityMilli: string;
+    readonly unit: string;
+  }[];
+}
+
 @Injectable()
 export class TripPlanningService {
   constructor(
@@ -54,6 +68,39 @@ export class TripPlanningService {
       Math.min(Math.max(limit, 1), 200),
     );
     return this.buildRecommendation(candidates);
+  }
+
+  async listOrderCandidates(
+    actor: LogisticsActor,
+    limit = 50,
+  ): Promise<readonly LogisticsOrderCandidate[]> {
+    this.requireCarrierOrOperator(actor);
+    const candidates = await this.ordering.listPickupCandidates(
+      actor,
+      Math.min(Math.max(limit, 1), 200),
+    );
+    const providerIds = [
+      ...new Set(candidates.flatMap((candidate) => candidate.lines.map((line) => line.providerId))),
+    ];
+    const zones = await this.providerZones.getZones(providerIds);
+    return candidates.map((candidate) => {
+      const pickupZones = [
+        ...new Set(candidate.lines.map((line) => zones.get(line.providerId) ?? 'sin-zona')),
+      ];
+      return {
+        orderId: candidate.orderId,
+        status: 'paid',
+        version: candidate.version,
+        deliveryZone: zoneFromAddress(candidate.deliveryAddress),
+        deliveryWindow: candidate.deliveryWindow,
+        pickupZones,
+        lines: candidate.lines.map((line) => ({
+          lotId: line.lotId,
+          quantityMilli: line.quantityMilli.toString(),
+          unit: line.unit,
+        })),
+      };
+    });
   }
 
   async createTrip(actor: LogisticsActor, input: CreateTripInput): Promise<TripProps> {

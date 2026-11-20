@@ -5874,6 +5874,27 @@
         "tags": ["logistics"]
       }
     },
+    "/logistics/orders/candidates": {
+      "get": {
+        "operationId": "LogisticsController_listOrderCandidates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Resumen logístico sin datos personales ni dirección completa."
+          },
+          "400": {
+            "description": "Solicitud inválida o no autorizada."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Listar pedidos pagados con datos mínimos para planear viajes",
+        "tags": ["logistics"]
+      }
+    },
     "/logistics/trips/recommend": {
       "post": {
         "operationId": "LogisticsController_recommend",

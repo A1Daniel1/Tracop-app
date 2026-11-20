@@ -72,33 +72,36 @@ Ambas rutas devuelven HTTP 400 si falla la validación de la consulta o del cuer
 
 Todas las rutas `/logistics` exigen autenticación. El rol `carrier` gestiona su perfil, crea y opera **sus** viajes, registra check-ins y abre incidencias. El rol `operator` consulta transportistas y todos los viajes, detecta conflictos y reasigna; también puede cancelar viajes y resolver incidencias. Otros roles reciben HTTP 403.
 
-| Método y ruta                            | Rol                   | Resultado                                                                                                                                    |
-| ---------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `POST /logistics/carrier-profile`        | `carrier`             | 201. Cuerpo `{ vehicleType, capacityKg, plate }`; crea o actualiza el perfil propio.                                                         |
-| `GET /logistics/carrier-profile`         | `carrier`             | 200. Perfil propio.                                                                                                                          |
-| `GET /logistics/carriers?limit=`         | `operator`            | 200. Lista de transportistas (1–200, por defecto 50).                                                                                        |
-| `POST /logistics/trips/recommend?limit=` | `carrier`, `operator` | 200. `[{ orderId, kind, sequence, zone }]`. Recogidas antes que entregas, agrupadas por zona textual; sin coordenadas ni distancias.         |
-| `POST /logistics/trips`                  | `carrier`             | 201. Cuerpo `{ id: "<UUID v7>", orderIds: ["<UUID>", ...] }` (1–20 IDs únicos). Requiere perfil de transportista y pedidos en estado `paid`. |
-| `GET /logistics/trips/mine?limit=`       | `carrier`             | 200. Viajes propios.                                                                                                                         |
-| `GET /logistics/trips?limit=`            | `operator`            | 200. Todos los viajes.                                                                                                                       |
-| `GET /logistics/trips/:id`               | `carrier`, `operator` | 200. Detalle del viaje; el transportista solo ve los suyos.                                                                                  |
-| `GET /logistics/trips/:id/stops`         | `carrier`, `operator` | 200. Paradas `{ id, tripId, orderId, kind, sequence, zone, scheduledAt, completedAt }`.                                                      |
-| `POST /logistics/trips/:id/assign`       | `carrier`             | 200. `{ expectedVersion }`. Confirma la asignación; si ya está asignado al mismo transportista, no cambia nada.                              |
-| `POST /logistics/trips/:id/reassign`     | `operator`            | 200. `{ expectedVersion, carrierId }`. Reasigna para resolver conflictos.                                                                    |
-| `POST /logistics/trips/:id/start`        | `carrier`             | 200. `{ expectedVersion }`. Pasa a `in_progress`.                                                                                            |
-| `POST /logistics/trips/:id/complete`     | `carrier`             | 200. `{ expectedVersion }`. Pasa a `completed`.                                                                                              |
-| `POST /logistics/trips/:id/cancel`       | `carrier`, `operator` | 200. `{ expectedVersion, reason }`. Pasa a `cancelled`.                                                                                      |
-| `GET /logistics/conflicts`               | `operator`            | 200. `{ orderIds: [...] }` con pedidos presentes en más de un viaje activo.                                                                  |
-| `POST /logistics/stops/:id/checkins`     | `carrier`             | 201. Cuerpo `{ id, kind, clientAt, mediaRef?, baseVersion? }`. Devuelve el check-in persistido con `serverAt`.                               |
-| `POST /logistics/incidents`              | `carrier`, `operator` | 201. `{ id, orderId, tripId?, type, description }`. Abre una incidencia.                                                                     |
-| `POST /logistics/incidents/:id/resolve`  | `carrier`, `operator` | 200. Resuelve la incidencia.                                                                                                                 |
-| `GET /logistics/incidents?limit=`        | `carrier`, `operator` | 200. Lista de incidencias (1–200, por defecto 50).                                                                                           |
+| Método y ruta                             | Rol                   | Resultado                                                                                                                                    |
+| ----------------------------------------- | --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `POST /logistics/carrier-profile`         | `carrier`             | 201. Cuerpo `{ vehicleType, capacityKg, plate }`; crea o actualiza el perfil propio.                                                         |
+| `GET /logistics/carrier-profile`          | `carrier`             | 200. Perfil propio.                                                                                                                          |
+| `GET /logistics/carriers?limit=`          | `operator`            | 200. Lista de transportistas (1–200, por defecto 50).                                                                                        |
+| `GET /logistics/orders/candidates?limit=` | `carrier`, `operator` | 200. Pedidos pagados con zonas, cantidades, unidades y lot IDs; omite dirección completa, comprador, proveedor y precios.                    |
+| `POST /logistics/trips/recommend?limit=`  | `carrier`, `operator` | 200. `[{ orderId, kind, sequence, zone }]`. Recogidas antes que entregas, agrupadas por zona textual; sin coordenadas ni distancias.         |
+| `POST /logistics/trips`                   | `carrier`             | 201. Cuerpo `{ id: "<UUID v7>", orderIds: ["<UUID>", ...] }` (1–20 IDs únicos). Requiere perfil de transportista y pedidos en estado `paid`. |
+| `GET /logistics/trips/mine?limit=`        | `carrier`             | 200. Viajes propios.                                                                                                                         |
+| `GET /logistics/trips?limit=`             | `operator`            | 200. Todos los viajes.                                                                                                                       |
+| `GET /logistics/trips/:id`                | `carrier`, `operator` | 200. Detalle del viaje; el transportista solo ve los suyos.                                                                                  |
+| `GET /logistics/trips/:id/stops`          | `carrier`, `operator` | 200. Paradas `{ id, tripId, orderId, kind, sequence, zone, scheduledAt, completedAt }`.                                                      |
+| `POST /logistics/trips/:id/assign`        | `carrier`             | 200. `{ expectedVersion }`. Confirma la asignación; si ya está asignado al mismo transportista, no cambia nada.                              |
+| `POST /logistics/trips/:id/reassign`      | `operator`            | 200. `{ expectedVersion, carrierId }`. Reasigna para resolver conflictos.                                                                    |
+| `POST /logistics/trips/:id/start`         | `carrier`             | 200. `{ expectedVersion }`. Pasa a `in_progress`.                                                                                            |
+| `POST /logistics/trips/:id/complete`      | `carrier`             | 200. `{ expectedVersion }`. Pasa a `completed`.                                                                                              |
+| `POST /logistics/trips/:id/cancel`        | `carrier`, `operator` | 200. `{ expectedVersion, reason }`. Pasa a `cancelled`.                                                                                      |
+| `GET /logistics/conflicts`                | `operator`            | 200. `{ orderIds: [...] }` con pedidos presentes en más de un viaje activo.                                                                  |
+| `POST /logistics/stops/:id/checkins`      | `carrier`             | 201. Cuerpo `{ id, kind, clientAt, mediaRef?, baseVersion? }`. Devuelve el check-in persistido con `serverAt`.                               |
+| `POST /logistics/incidents`               | `carrier`, `operator` | 201. `{ id, orderId, tripId?, type, description }`. Abre una incidencia.                                                                     |
+| `POST /logistics/incidents/:id/resolve`   | `carrier`, `operator` | 200. Resuelve la incidencia.                                                                                                                 |
+| `GET /logistics/incidents?limit=`         | `carrier`, `operator` | 200. Operador ve todas; transportista solo las vinculadas a sus viajes (1–200, por defecto 50).                                              |
 
 Un viaje nace `planned` y, al crearlo desde pedidos `paid`, queda `assigned` en versión 2; cada pedido genera una parada `pickup` y una `delivery`, y pasa a `pickup_scheduled`. Las transiciones válidas son `planned → assigned → in_progress → completed`, más `cancelled` desde los estados activos. Todas las mutaciones de viaje usan `expectedVersion`: una versión desactualizada devuelve HTTP 409 con `code: "version_conflict"`.
 
 El check-in cierra la parada y mueve el pedido con la versión **vigente** de `ordering`: `pickup → in_transit` y `delivery → delivered`. `baseVersion`, si se envía por HTTP, debe coincidir con la versión actual del viaje; un check-in repetido o una parada ya completada devuelve HTTP 400 con `code: "invalid_transition"`. El check-in escribe eventos `PickupConfirmed`/`DeliveryConfirmed` y cambios `checkin` en sync; cuando todas las paradas se completan, el viaje pasa a `completed` automáticamente. El mismo caso de uso se usa desde `/sync/push` con `entity: "checkin"`, donde `baseVersion` es obligatorio.
 
 Ninguna solicitud ni respuesta de logística contiene latitud o longitud: la ubicación se representa como `zone` de texto y `mediaRef` es solo una referencia opcional a evidencia, no una carga de archivos. La decisión está en [ADR-013](adr/ADR-013.md).
+
+La lectura de candidatos para logística devuelve únicamente `orderId`, `status`, `version`, ventana de entrega, zona de entrega, zonas de recogida y líneas con `lotId`, cantidad y unidad. No devuelve nombre/teléfono del comprador, IDs de comprador/proveedor, precio ni dirección de entrega completa. Un transportista solo puede abrir una incidencia asociada a un viaje propio y a un pedido que tenga paradas en ese viaje; tampoco puede consultar ni resolver incidencias de otro transportista. El operador conserva lectura global y capacidad de resolución.
 
 ## IDs and idempotency
 

@@ -34,6 +34,7 @@ describePostgres('Logistics HTTP and sync (Nest + PostgreSQL Testcontainers)', (
   let ordering: OrderingService;
   let profiles: ProviderProfileService;
   let carrier: Account;
+  let otherCarrier: Account;
   let buyer: Account;
   let producer: Account;
   let operator: Account;
@@ -146,6 +147,7 @@ describePostgres('Logistics HTTP and sync (Nest + PostgreSQL Testcontainers)', (
     profiles = app.get(PROVIDER_PROFILE_SERVICE) as ProviderProfileService;
 
     carrier = await createAccount('carrier');
+    otherCarrier = await createAccount('carrier');
     buyer = await createAccount('buyer');
     producer = await createAccount('producer');
     operator = await createOperator();
@@ -240,6 +242,27 @@ describePostgres('Logistics HTTP and sync (Nest + PostgreSQL Testcontainers)', (
       { orderId, kind: 'delivery', sequence: 2, zone: 'carrera 7 # 1' },
     ]);
     expect(findCoordinateExposure(recommendation.body, coordinates)).toEqual([]);
+    const candidates = await request(app.getHttpServer())
+      .get('/logistics/orders/candidates')
+      .set('Authorization', auth(carrier))
+      .expect(200);
+    expect(candidates.body).toMatchObject([
+      {
+        orderId,
+        status: 'paid',
+        deliveryZone: 'carrera 7 # 1',
+        pickupZones: ['tunja'],
+        lines: [{ lotId: expect.any(String), quantityMilli: '1000', unit: 'kg' }],
+      },
+    ]);
+    expect(candidates.body[0]).not.toHaveProperty('deliveryAddress');
+    expect(candidates.body[0]).not.toHaveProperty('buyerId');
+    expect(candidates.body[0]).not.toHaveProperty('providerId');
+    expect(findCoordinateExposure(candidates.body, coordinates)).toEqual([]);
+    await request(app.getHttpServer())
+      .get('/logistics/orders/candidates')
+      .set('Authorization', auth(buyer))
+      .expect(403);
     expect(
       await request(app.getHttpServer())
         .get('/logistics/conflicts')
@@ -273,6 +296,42 @@ describePostgres('Logistics HTTP and sync (Nest + PostgreSQL Testcontainers)', (
     ) as { id: string };
     expect(stopsResponse.body).toHaveLength(2);
     expect(findCoordinateExposure(stopsResponse.body, coordinates)).toEqual([]);
+
+    const incident = await request(app.getHttpServer())
+      .post('/logistics/incidents')
+      .set('Authorization', auth(carrier))
+      .send({
+        id: createId(),
+        orderId,
+        tripId,
+        type: 'retraso',
+        description: 'Demora sintética',
+      })
+      .expect(201);
+    expect(incident.body.tripId).toBe(tripId);
+    await request(app.getHttpServer())
+      .get('/logistics/incidents')
+      .set('Authorization', auth(carrier))
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body.map((item: { id: string }) => item.id)).toContain(incident.body.id),
+      );
+    await request(app.getHttpServer())
+      .get('/logistics/incidents')
+      .set('Authorization', auth(otherCarrier))
+      .expect(200)
+      .expect(({ body }) => expect(body).toEqual([]));
+    await request(app.getHttpServer())
+      .get('/logistics/incidents')
+      .set('Authorization', auth(operator))
+      .expect(200)
+      .expect(({ body }) =>
+        expect(body.map((item: { id: string }) => item.id)).toContain(incident.body.id),
+      );
+    await request(app.getHttpServer())
+      .post(`/logistics/incidents/${incident.body.id}/resolve`)
+      .set('Authorization', auth(otherCarrier))
+      .expect(404);
 
     const checkin = await request(app.getHttpServer())
       .post(`/logistics/stops/${pickup.id}/checkins`)

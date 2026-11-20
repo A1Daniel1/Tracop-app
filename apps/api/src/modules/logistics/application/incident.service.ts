@@ -34,6 +34,22 @@ export class IncidentService {
   async open(actor: LogisticsActor, input: OpenIncidentInput): Promise<IncidentProps> {
     this.requireCarrierOrOperator(actor);
     return this.uow.run(async () => {
+      if (actor.role === 'carrier') {
+        if (!input.tripId) {
+          throw new DomainError(
+            'El transportista debe asociar la incidencia a un viaje.',
+            'not_found',
+          );
+        }
+        const trip = await this.repository.findTrip(input.tripId);
+        if (!trip || trip.carrierId !== actor.sub) {
+          throw new DomainError('Viaje no encontrado.', 'not_found');
+        }
+        const stops = await this.repository.findStopsByTrip(input.tripId);
+        if (!stops.some((stop) => stop.orderId === input.orderId)) {
+          throw new DomainError('Pedido no encontrado en el viaje.', 'not_found');
+        }
+      }
       const now = this.clock.now();
       const incident = await this.repository.createIncident(
         Incident.create({
@@ -64,9 +80,10 @@ export class IncidentService {
     return this.uow.run(async () => {
       const current = await this.repository.findIncident(incidentId);
       if (!current) throw new DomainError('Incidencia no encontrada.', 'not_found');
-      if (actor.role !== 'operator' && current.tripId) {
+      if (actor.role === 'carrier') {
+        if (!current.tripId) throw new DomainError('Incidencia no encontrada.', 'not_found');
         const trip = await this.repository.findTrip(current.tripId);
-        if (trip?.carrierId !== actor.sub)
+        if (!trip || trip.carrierId !== actor.sub)
           throw new DomainError('Incidencia no encontrada.', 'not_found');
       }
       const entity = Incident.reconstitute(current);
@@ -86,7 +103,10 @@ export class IncidentService {
 
   async list(actor: LogisticsActor, limit = 50): Promise<readonly IncidentProps[]> {
     this.requireCarrierOrOperator(actor);
-    return this.repository.listIncidents(Math.min(Math.max(limit, 1), 200));
+    const safeLimit = Math.min(Math.max(limit, 1), 200);
+    return actor.role === 'operator'
+      ? this.repository.listIncidents(safeLimit)
+      : this.repository.listIncidentsForCarrier(actor.sub, safeLimit);
   }
 
   private requireCarrierOrOperator(actor: LogisticsActor): void {

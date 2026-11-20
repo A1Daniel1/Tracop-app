@@ -11,6 +11,7 @@ import {
   checkinSyncPayloadSchema,
   createCheckinSchema,
   createTripSchema,
+  logisticsOrderCandidateSchema,
   openIncidentSchema,
   reassignTripSchema,
   recommendTripsQuerySchema,
@@ -45,6 +46,31 @@ describe('logistics contracts', () => {
     expect(cancelTripSchema.safeParse({ expectedVersion: 1, reason: 'lluvia' }).success).toBe(true);
     expect(recommendTripsQuerySchema.parse({}).limit).toBe(50);
     expect(recommendTripsQuerySchema.safeParse({ limit: 0 }).success).toBe(false);
+  });
+
+  it('valida la proyección mínima de pedidos para logística', () => {
+    const result = logisticsOrderCandidateSchema.safeParse({
+      orderId: createId(),
+      status: 'paid',
+      version: 1,
+      deliveryZone: 'bogota',
+      deliveryWindow: null,
+      pickupZones: ['tunja'],
+      lines: [{ lotId: createId(), quantityMilli: '1000', unit: 'kg' }],
+    });
+    expect(result.success).toBe(true);
+    expect(
+      logisticsOrderCandidateSchema.safeParse({
+        orderId: createId(),
+        status: 'paid',
+        version: 1,
+        deliveryZone: 'bogota',
+        deliveryWindow: null,
+        pickupZones: ['tunja'],
+        lines: [{ lotId: createId(), quantityMilli: '1000', unit: 'kg' }],
+        deliveryAddress: 'Dirección completa',
+      }).success,
+    ).toBe(false);
   });
 
   it('valida check-ins HTTP y de sync sin coordenadas', () => {

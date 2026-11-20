@@ -122,6 +122,22 @@ describe('logistics application', () => {
     expect(await h.trips.listStops(carrier, trip.id)).toHaveLength(4);
   });
 
+  it('expone candidatos pagados con solo los datos necesarios para planear', async () => {
+    const h = createHarness();
+    const [candidate] = await h.trips.listOrderCandidates(carrier);
+    expect(candidate).toMatchObject({
+      orderId: orderA,
+      status: 'paid',
+      deliveryZone: 'calle 1',
+      pickupZones: ['boyaca'],
+      lines: [{ quantityMilli: '1000', unit: 'kg' }],
+    });
+    expect(candidate).not.toHaveProperty('deliveryAddress');
+    expect(candidate).not.toHaveProperty('buyerId');
+    expect(candidate).not.toHaveProperty('providerId');
+    await expect(h.trips.listOrderCandidates(buyer)).rejects.toThrow('Rol');
+  });
+
   it('rechaza viajes inválidos y pedidos ya asignados', async () => {
     const h = createHarness();
     await expect(h.trips.createTrip(carrier, { id: createId(), orderIds: [] })).rejects.toThrow(
@@ -239,13 +255,35 @@ describe('logistics application', () => {
         description: 'x',
       }),
     ).rejects.toThrow('Rol');
-    const foreign = await h.incidents.open(carrier, {
+
+    const foreignTripId = createId();
+    const ownStops = await h.trips.listStops(carrier, trip.id);
+    const foreignStops = ownStops.map((stop) => ({
+      ...stop,
+      id: createId(),
+      tripId: foreignTripId,
+    }));
+    await h.repository.createTrip(
+      { ...trip, id: foreignTripId, carrierId: otherCarrier.sub },
+      foreignStops,
+    );
+    const foreign = await h.incidents.open(operator, {
       id: createId(),
       orderId: orderB,
-      tripId: createId(),
+      tripId: foreignTripId,
       type: 'retraso',
       description: 'x',
     });
-    await expect(h.incidents.resolve(otherCarrier, foreign.id)).rejects.toThrow('no encontrada');
+    expect((await h.incidents.list(carrier)).map((item) => item.id)).not.toContain(foreign.id);
+    expect((await h.incidents.list(otherCarrier)).map((item) => item.id)).toContain(foreign.id);
+    await expect(h.incidents.resolve(carrier, foreign.id)).rejects.toThrow('no encontrada');
+    await expect(
+      h.incidents.open(carrier, {
+        id: createId(),
+        orderId: orderA,
+        type: 'retraso',
+        description: 'sin viaje',
+      }),
+    ).rejects.toThrow('viaje');
   });
 });
