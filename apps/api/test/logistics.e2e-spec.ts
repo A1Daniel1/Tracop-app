@@ -208,10 +208,21 @@ describePostgres('Logistics HTTP and sync (Nest + PostgreSQL Testcontainers)', (
     );
 
     await request(app.getHttpServer())
-      .post('/logistics/carrier-profile')
+      .post('/sync/push')
       .set('Authorization', auth(carrier))
-      .send({ vehicleType: 'Camion', capacityKg: 2000, plate: 'ABC123' })
-      .expect(201);
+      .send({
+        operations: [
+          {
+            opId: createId(),
+            entity: 'carrier_profile',
+            entityId: carrier.userId,
+            type: 'create',
+            payload: { vehicleType: 'Camion', capacityKg: 2000, plate: 'ABC123' },
+          },
+        ],
+      })
+      .expect(201)
+      .expect(({ body }) => expect(body.results[0]).toMatchObject({ status: 'applied' }));
   });
 
   afterAll(async () => {
@@ -239,7 +250,7 @@ describePostgres('Logistics HTTP and sync (Nest + PostgreSQL Testcontainers)', (
       .expect(200);
     expect(recommendation.body).toEqual([
       { orderId, kind: 'pickup', sequence: 1, zone: 'tunja' },
-      { orderId, kind: 'delivery', sequence: 2, zone: 'carrera 7 # 1' },
+      { orderId, kind: 'delivery', sequence: 2, zone: 'bogotá' },
     ]);
     expect(findCoordinateExposure(recommendation.body, coordinates)).toEqual([]);
     const candidates = await request(app.getHttpServer())
@@ -250,7 +261,7 @@ describePostgres('Logistics HTTP and sync (Nest + PostgreSQL Testcontainers)', (
       {
         orderId,
         status: 'paid',
-        deliveryZone: 'carrera 7 # 1',
+        deliveryZone: 'bogotá',
         pickupZones: ['tunja'],
         lines: [{ lotId: expect.any(String), quantityMilli: '1000', unit: 'kg' }],
       },
@@ -274,14 +285,29 @@ describePostgres('Logistics HTTP and sync (Nest + PostgreSQL Testcontainers)', (
   });
 
   it('crea un viaje, registra check-in HTTP y sincroniza la entrega', async () => {
+    const tripId = createId();
     const created = await request(app.getHttpServer())
-      .post('/logistics/trips')
+      .post('/sync/push')
       .set('Authorization', auth(carrier))
-      .send({ id: createId(), orderIds: [orderId] })
+      .send({
+        operations: [
+          {
+            opId: tripId,
+            entity: 'trip',
+            entityId: tripId,
+            type: 'create',
+            payload: { orderIds: [orderId] },
+          },
+        ],
+      })
       .expect(201);
-    expect(created.body).toMatchObject({ status: 'assigned', version: 2 });
-    const tripId = created.body.id as string;
-    const tripVersion = created.body.version as number;
+    expect(created.body.results[0]).toMatchObject({ status: 'applied', serverVersion: 2 });
+    const createdTrip = await request(app.getHttpServer())
+      .get(`/logistics/trips/${tripId}`)
+      .set('Authorization', auth(carrier))
+      .expect(200);
+    expect(createdTrip.body).toMatchObject({ status: 'assigned', version: 2 });
+    const tripVersion = createdTrip.body.version as number;
     expect(findCoordinateExposure(created.body, coordinates)).toEqual([]);
 
     const stopsResponse = await request(app.getHttpServer())
@@ -297,25 +323,34 @@ describePostgres('Logistics HTTP and sync (Nest + PostgreSQL Testcontainers)', (
     expect(stopsResponse.body).toHaveLength(2);
     expect(findCoordinateExposure(stopsResponse.body, coordinates)).toEqual([]);
 
-    const incident = await request(app.getHttpServer())
-      .post('/logistics/incidents')
+    const incidentId = createId();
+    const incidentPush = await request(app.getHttpServer())
+      .post('/sync/push')
       .set('Authorization', auth(carrier))
       .send({
-        id: createId(),
-        orderId,
-        tripId,
-        type: 'retraso',
-        description: 'Demora sintética',
+        operations: [
+          {
+            opId: incidentId,
+            entity: 'incident',
+            entityId: incidentId,
+            type: 'create',
+            payload: {
+              orderId,
+              tripId,
+              type: 'retraso',
+              description: 'Demora sintética',
+            },
+          },
+        ],
       })
       .expect(201);
-    expect(incident.body.tripId).toBe(tripId);
-    await request(app.getHttpServer())
+    expect(incidentPush.body.results[0]).toMatchObject({ status: 'applied' });
+    const incidents = await request(app.getHttpServer())
       .get('/logistics/incidents')
       .set('Authorization', auth(carrier))
-      .expect(200)
-      .expect(({ body }) =>
-        expect(body.map((item: { id: string }) => item.id)).toContain(incident.body.id),
-      );
+      .expect(200);
+    const incident = incidents.body.find((item: { id: string }) => item.id === incidentId);
+    expect(incident.tripId).toBe(tripId);
     await request(app.getHttpServer())
       .get('/logistics/incidents')
       .set('Authorization', auth(otherCarrier))
@@ -326,10 +361,10 @@ describePostgres('Logistics HTTP and sync (Nest + PostgreSQL Testcontainers)', (
       .set('Authorization', auth(operator))
       .expect(200)
       .expect(({ body }) =>
-        expect(body.map((item: { id: string }) => item.id)).toContain(incident.body.id),
+        expect(body.map((item: { id: string }) => item.id)).toContain(incidentId),
       );
     await request(app.getHttpServer())
-      .post(`/logistics/incidents/${incident.body.id}/resolve`)
+      .post(`/logistics/incidents/${incidentId}/resolve`)
       .set('Authorization', auth(otherCarrier))
       .expect(404);
 

@@ -128,7 +128,7 @@ describe('logistics application', () => {
     expect(candidate).toMatchObject({
       orderId: orderA,
       status: 'paid',
-      deliveryZone: 'calle 1',
+      deliveryZone: 'bogotá',
       pickupZones: ['boyaca'],
       lines: [{ quantityMilli: '1000', unit: 'kg' }],
     });

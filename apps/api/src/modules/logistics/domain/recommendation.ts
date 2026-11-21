@@ -16,11 +16,19 @@ export interface RecommendedStop {
   readonly zone: string;
 }
 
-/** Normaliza una dirección de texto a una zona; nunca usa coordenadas. */
+/** Devuelve solo una referencia municipal; no expone la dirección del pedido. */
 export const zoneFromAddress = (address: string): string => {
-  const zone = address.split(',')[0]?.trim().toLowerCase().replace(/\s+/g, ' ');
-  if (!zone) throw new DomainError('La dirección de entrega no tiene zona.', 'invalid_address');
-  return zone;
+  const parts = address
+    .split(',')
+    .map((part) => part.trim().toLowerCase().replace(/\s+/g, ' '))
+    .filter(Boolean);
+  if (parts.length === 0)
+    throw new DomainError('La dirección de entrega no tiene zona.', 'invalid_address');
+
+  const streetAddressPattern =
+    /\d|#|\b(calle|cll|carrera|cra|avenida|av|diagonal|diag|transversal|tv|autopista|kil[oó]metro|km)\b/;
+  const municipality = [...parts].reverse().find((part) => !streetAddressPattern.test(part));
+  return municipality ?? 'zona de entrega';
 };
 
 /**

@@ -159,7 +159,8 @@ describe('logistics domain', () => {
   });
 
   it('recomienda recogidas agrupadas por zona y luego entregas', () => {
-    expect(zoneFromAddress(' Carrera 7 # 1, Bogotá ')).toBe('carrera 7 # 1');
+    expect(zoneFromAddress(' Carrera 7 # 1, Bogotá ')).toBe('bogotá');
+    expect(zoneFromAddress('Carrera 7 # 1')).toBe('zona de entrega');
     expect(() => zoneFromAddress('  ')).toThrow(DomainError);
     const result = recommendStops([
       {

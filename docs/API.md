@@ -48,7 +48,7 @@ El límite del cuerpo JSON de `POST /sync/push` es 256 KiB. Las demás rutas JSO
 }
 ```
 
-Cada operación tiene un `opId` UUID v7, una cadena `entity` recortada de 1 a 64 caracteres, un `entityId` UUID, un `type` con valor `create`, `update`, `transition` o `delete`, y un `payload` objeto. Si se incluye `baseVersion`, debe ser un entero positivo. Los manejadores push registrados son `lot` y `checkin`; otros nombres de entidad se rechazan en el nivel de la operación.
+Cada operación tiene un `opId` UUID v7, una cadena `entity` recortada de 1 a 64 caracteres, un `entityId` UUID, un `type` con valor `create`, `update`, `transition` o `delete`, y un `payload` objeto. Si se incluye `baseVersion`, debe ser un entero positivo. Los manejadores push registrados son `lot`, `checkin`, `carrier_profile`, `trip` e `incident`; otras entidades se rechazan en el nivel de la operación.
 
 Para `lot`, `create` debe omitir `baseVersion` y el `id` del payload debe coincidir con `entityId`. `update`, `transition` y `delete` de lotes requieren `baseVersion`, que debe coincidir con la versión actual del servidor. Para operaciones consecutivas sobre un lote, usa el `serverVersion` del resultado exitoso anterior como `baseVersion` de la siguiente operación.
 
@@ -100,6 +100,8 @@ Un viaje nace `planned` y, al crearlo desde pedidos `paid`, queda `assigned` en 
 El check-in cierra la parada y mueve el pedido con la versión **vigente** de `ordering`: `pickup → in_transit` y `delivery → delivered`. `baseVersion`, si se envía por HTTP, debe coincidir con la versión actual del viaje; un check-in repetido o una parada ya completada devuelve HTTP 400 con `code: "invalid_transition"`. El check-in escribe eventos `PickupConfirmed`/`DeliveryConfirmed` y cambios `checkin` en sync; cuando todas las paradas se completan, el viaje pasa a `completed` automáticamente. El mismo caso de uso se usa desde `/sync/push` con `entity: "checkin"`, donde `baseVersion` es obligatorio.
 
 Ninguna solicitud ni respuesta de logística contiene latitud o longitud: la ubicación se representa como `zone` de texto y `mediaRef` es solo una referencia opcional a evidencia, no una carga de archivos. La decisión está en [ADR-013](adr/ADR-013.md).
+
+El cliente móvil puede encolar el perfil (`carrier_profile`, `create`/`update`), la creación de viaje (`trip`, `create` con `orderIds`), el inicio (`trip`, `transition` con `payload.action: "start"` y `baseVersion`), check-ins (`checkin`, `create`) e incidencias (`incident`, `create` con `tripId` y `orderId`). Los handlers invocan los mismos servicios de logística que HTTP, por lo que se mantienen las verificaciones de rol, propiedad, estado y versión.
 
 La lectura de candidatos para logística devuelve únicamente `orderId`, `status`, `version`, ventana de entrega, zona de entrega, zonas de recogida y líneas con `lotId`, cantidad y unidad. No devuelve nombre/teléfono del comprador, IDs de comprador/proveedor, precio ni dirección de entrega completa. Un transportista solo puede abrir una incidencia asociada a un viaje propio y a un pedido que tenga paradas en ese viaje; tampoco puede consultar ni resolver incidencias de otro transportista. El operador conserva lectura global y capacidad de resolución.
 

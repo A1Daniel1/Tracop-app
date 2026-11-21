@@ -15,6 +15,12 @@ import {
 import {
   CheckinService,
   CheckinSyncHandler,
+  IncidentService,
+  TripSyncHandler,
+  TripPlanningService,
+  IncidentSyncHandler,
+  CarrierProfileSyncHandler,
+  CarrierProfileService,
   LogisticsModule,
   LOGISTICS_CHANGE_RECORDER,
   ORDERING_LOGISTICS_PORT,
@@ -106,6 +112,7 @@ export class LogisticsChangeRecorderAdapter implements LogisticsChangeRecorder {
 }
 
 const REGISTER_CHECKIN_SYNC_HANDLER = Symbol('REGISTER_CHECKIN_SYNC_HANDLER');
+const REGISTER_LOGISTICS_SYNC_HANDLERS = Symbol('REGISTER_LOGISTICS_SYNC_HANDLERS');
 
 @Global()
 @Module({
@@ -132,6 +139,26 @@ const REGISTER_CHECKIN_SYNC_HANDLER = Symbol('REGISTER_CHECKIN_SYNC_HANDLER');
       inject: [CheckinService, SyncOperationHandlerRegistry],
       useFactory: (checkins: CheckinService, registry: SyncOperationHandlerRegistry) => {
         registry.register(new CheckinSyncHandler(checkins));
+        return true;
+      },
+    },
+    {
+      provide: REGISTER_LOGISTICS_SYNC_HANDLERS,
+      inject: [
+        TripPlanningService,
+        IncidentService,
+        CarrierProfileService,
+        SyncOperationHandlerRegistry,
+      ],
+      useFactory: (
+        trips: TripPlanningService,
+        incidents: IncidentService,
+        profiles: CarrierProfileService,
+        registry: SyncOperationHandlerRegistry,
+      ) => {
+        registry.register(new TripSyncHandler(trips));
+        registry.register(new IncidentSyncHandler(incidents));
+        registry.register(new CarrierProfileSyncHandler(profiles));
         return true;
       },
     },
