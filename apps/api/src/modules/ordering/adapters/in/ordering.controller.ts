@@ -79,13 +79,16 @@ export class OrderingController {
   }
 
   @Get('incoming')
-  @ApiOperation({ summary: 'Listar pedidos entrantes (proveedor, solo accepted+)' })
+  @ApiOperation({ summary: 'Listar pedidos entrantes (productor/proveedor, solo accepted+)' })
   @ApiResponse({ status: 200, type: () => orderPageResponseSchema })
   @ApiResponse({ status: 401, description: 'No autenticado' })
   @ApiResponse({ status: 403, description: 'Rol no autorizado' })
   async listIncoming(@Req() req: { identity: AuthPrincipal }, @Query() query: unknown) {
-    const { cursor, limit } = orderCursorQuerySchema.parse(query);
     const actor = req.identity;
+    if (actor.role !== 'producer' && actor.role !== 'supplier') {
+      throw new DomainError('Rol no autorizado.', 'forbidden');
+    }
+    const { cursor, limit } = orderCursorQuerySchema.parse(query);
     const result = await this.ordering.listIncoming(actor.sub, cursor, limit);
     return {
       items: await Promise.all(result.items.map((a) => this.serializeOrder(a, actor))),

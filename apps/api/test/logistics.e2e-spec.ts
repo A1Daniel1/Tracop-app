@@ -307,7 +307,25 @@ describePostgres('Logistics HTTP and sync (Nest + PostgreSQL Testcontainers)', (
       .set('Authorization', auth(carrier))
       .expect(200);
     expect(createdTrip.body).toMatchObject({ status: 'assigned', version: 2 });
-    const tripVersion = createdTrip.body.version as number;
+    const startOperationId = createId();
+    const started = await request(app.getHttpServer())
+      .post('/sync/push')
+      .set('Authorization', auth(carrier))
+      .send({
+        operations: [
+          {
+            opId: startOperationId,
+            entity: 'trip',
+            entityId: tripId,
+            type: 'transition',
+            payload: { action: 'start' },
+            baseVersion: createdTrip.body.version,
+          },
+        ],
+      })
+      .expect(201);
+    expect(started.body.results[0]).toMatchObject({ status: 'applied', serverVersion: 3 });
+    const tripVersion = started.body.results[0].serverVersion as number;
     expect(findCoordinateExposure(created.body, coordinates)).toEqual([]);
 
     const stopsResponse = await request(app.getHttpServer())
