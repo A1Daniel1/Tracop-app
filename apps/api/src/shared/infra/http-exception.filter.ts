@@ -19,6 +19,8 @@ const domainStatus: Record<string, number> = {
   forbidden: HttpStatus.FORBIDDEN,
   not_found: HttpStatus.NOT_FOUND,
   version_conflict: HttpStatus.CONFLICT,
+  assignment_conflict: HttpStatus.CONFLICT,
+  invalid_order_status: HttpStatus.CONFLICT,
   idempotency_conflict: HttpStatus.CONFLICT,
   idempotency_content_mismatch: HttpStatus.CONFLICT,
   duplicate_lot_line: HttpStatus.BAD_REQUEST,

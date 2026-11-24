@@ -6537,6 +6537,9 @@
         "responses": {
           "400": {
             "description": "Solicitud inválida o no autorizada."
+          },
+          "409": {
+            "description": "El pedido no está pagado o ya está en otro viaje (invalid_order_status, assignment_conflict), o conflicto de versión."
           }
         },
         "security": [
@@ -6652,6 +6655,9 @@
         "responses": {
           "400": {
             "description": "Solicitud inválida o no autorizada."
+          },
+          "409": {
+            "description": "El pedido no está pagado o ya está en otro viaje (invalid_order_status, assignment_conflict), o conflicto de versión."
           }
         },
         "security": [
@@ -6679,6 +6685,9 @@
         "responses": {
           "400": {
             "description": "Solicitud inválida o no autorizada."
+          },
+          "409": {
+            "description": "El pedido no está pagado o ya está en otro viaje (invalid_order_status, assignment_conflict), o conflicto de versión."
           }
         },
         "security": [

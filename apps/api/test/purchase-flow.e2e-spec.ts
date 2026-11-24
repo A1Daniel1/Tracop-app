@@ -338,4 +338,59 @@ describePostgres('purchase flow over HTTP (Nest + PostgreSQL)', () => {
     },
     CONCURRENCY_TEST_TIMEOUT_MS,
   );
+
+  it('answers 409 with a stable code when a trip cannot take an order', async () => {
+    const supplier = await register('supplier');
+    const buyer = await register('buyer');
+    const [first, second] = [await register('carrier'), await register('carrier')];
+    await http()
+      .put('/me/provider-profile')
+      .set(bearer(supplier))
+      .send({
+        displayName: 'Finca sintética',
+        municipality: 'Tunja',
+        department: 'Boyacá',
+        lat: 5.53,
+        lng: -73.36,
+        description: 'Dato sintético',
+      })
+      .expect(200);
+    for (const [index, carrier] of [first, second].entries())
+      await http()
+        .post('/logistics/carrier-profile')
+        .set(bearer(carrier))
+        .send({ vehicleType: 'Camion', capacityKg: 2000, plate: `TRK10${index}` })
+        .expect(201);
+    const lotId = await publishLot(supplier, 10);
+    const order = await placeOrder(buyer, lotId, 1);
+    await accept(buyer, order.id, order.response.body.version).expect(200);
+    const createTrip = (carrier: Account) =>
+      http()
+        .post('/logistics/trips')
+        .set(bearer(carrier))
+        .send({ id: createId(), orderIds: [order.id] });
+
+    // Accepted but not paid yet.
+    const unpaid = await createTrip(first);
+    expect({ status: unpaid.status, code: unpaid.body.code }).toEqual({
+      status: 409,
+      code: 'invalid_order_status',
+    });
+
+    await pool.query(
+      `UPDATE ordering.orders SET status = 'paid', version = version + 1 WHERE id = $1`,
+      [order.id],
+    );
+    await createTrip(first).expect(201);
+    // The order already has stops in a trip; reported as such even if it reads as paid again.
+    await pool.query(
+      `UPDATE ordering.orders SET status = 'paid', version = version + 1 WHERE id = $1`,
+      [order.id],
+    );
+    const taken = await createTrip(second);
+    expect({ status: taken.status, code: taken.body.code }).toEqual({
+      status: 409,
+      code: 'assignment_conflict',
+    });
+  });
 });
