@@ -6351,6 +6351,9 @@
           "200": {
             "description": "Cotización aceptada"
           },
+          "404": {
+            "description": "Pedido inexistente o de otro comprador (not_found)"
+          },
           "409": {
             "description": "quote_expired, lot_unavailable, insufficient_stock o conflicto de versión"
           },
@@ -6384,8 +6387,8 @@
           "200": {
             "description": "Pedido cancelado"
           },
-          "403": {
-            "description": "No autorizado"
+          "404": {
+            "description": "Pedido inexistente o ajeno: ni comprador ni proveedor (not_found)"
           },
           "409": {
             "description": "Estado no permite cancelación o versión obsoleta"

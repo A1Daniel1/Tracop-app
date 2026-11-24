@@ -393,4 +393,52 @@ describePostgres('purchase flow over HTTP (Nest + PostgreSQL)', () => {
       code: 'assignment_conflict',
     });
   });
+
+  it("lets only the order's buyer accept its quote", async () => {
+    const supplier = await register('supplier');
+    const buyer = await register('buyer');
+    const otherBuyer = await register('buyer');
+    await http()
+      .put('/me/provider-profile')
+      .set(bearer(supplier))
+      .send({
+        displayName: 'Finca sintética',
+        municipality: 'Tunja',
+        department: 'Boyacá',
+        lat: 5.53,
+        lng: -73.36,
+        description: 'Dato sintético',
+      })
+      .expect(200);
+    const lotId = await publishLot(supplier, 10);
+    const order = await placeOrder(buyer, lotId, 4);
+    const version = order.response.body.version as number;
+
+    // A third party (another buyer) and the provider get 404 and change nothing.
+    for (const intruder of [otherBuyer, supplier]) {
+      const attempt = await accept(intruder, order.id, version);
+      expect({ status: attempt.status, code: attempt.body.code }).toEqual({
+        status: 404,
+        code: 'not_found',
+      });
+    }
+    expect(await reservationStatuses(order.id)).toEqual([]);
+    const unchanged = await http().get(`/orders/${order.id}`).set(bearer(buyer)).expect(200);
+    expect(unchanged.body).toMatchObject({ status: 'quoted', version });
+
+    // A third party cannot cancel either, and learns nothing even with a wrong version.
+    for (const expectedVersion of [version, version + 7]) {
+      const cancel = await http()
+        .post(`/orders/${order.id}/cancel`)
+        .set(bearer(otherBuyer))
+        .send({ expectedVersion });
+      expect({ status: cancel.status, code: cancel.body.code }).toEqual({
+        status: 404,
+        code: 'not_found',
+      });
+    }
+
+    await accept(buyer, order.id, version).expect(200);
+    expect(await reservationStatuses(order.id)).toEqual(['active']);
+  });
 });
