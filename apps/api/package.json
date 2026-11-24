@@ -22,7 +22,9 @@
     "storage:configure-cors": "tsx scripts/configure-storage-cors.ts",
     "db:check-migrations": "tsx scripts/check-migration-numbering.ts",
     "openapi:export": "pnpm --filter @tracop/contracts build && OPENAPI_EXPORT=true jest --runInBand --coverage=false test/openapi-export.spec.ts",
-    "openapi:check": "pnpm --filter @tracop/contracts build && OPENAPI_CHECK=true jest --runInBand --coverage=false test/openapi-export.spec.ts"
+    "openapi:check": "pnpm --filter @tracop/contracts build && OPENAPI_CHECK=true jest --runInBand --coverage=false test/openapi-export.spec.ts",
+    "worker": "tsx src/worker.ts",
+    "worker:start": "node dist/worker.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1161.0",
@@ -37,6 +39,7 @@
     "grammy": "^1.46.0",
     "jose": "^4.15.9",
     "pg": "^8.13.1",
+    "pg-boss": "12.38.1",
     "pino": "^9.6.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",

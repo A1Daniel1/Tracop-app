@@ -70,5 +70,20 @@ jobs:
           done
           cat /tmp/tracop-api.log
           exit 1
+      - name: Start built worker, check its jobs and graceful stop
+        run: |
+          node apps/api/dist/worker.js >/tmp/tracop-worker.log 2>&1 &
+          worker_pid=$!
+          ready=1
+          for attempt in $(seq 1 60); do
+            if grep -q '^Worker ready\. Registered jobs: .*shared\.dispatch-outbox' /tmp/tracop-worker.log; then ready=0; break; fi
+            if ! kill -0 "$worker_pid" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          if [ "$ready" -ne 0 ]; then cat /tmp/tracop-worker.log; kill "$worker_pid" 2>/dev/null || true; exit 1; fi
+          grep '^Worker ready' /tmp/tracop-worker.log
+          kill -TERM "$worker_pid"
+          wait "$worker_pid"
+          grep -q '^Worker stopped\.' /tmp/tracop-worker.log || { cat /tmp/tracop-worker.log; exit 1; }
       - run: pnpm test
       - run: pnpm audit --audit-level=high
