@@ -142,6 +142,14 @@ export class DrizzleLogisticsRepository implements LogisticsRepository {
     return row ? toTrip(row) : null;
   }
 
+  async findTripForUpdate(tripId: string): Promise<TripProps | null> {
+    const result = await this.db.execute(
+      sql`SELECT * FROM logistics.trips WHERE id = ${tripId}::uuid AND deleted_at IS NULL FOR UPDATE`,
+    );
+    const row = one(result);
+    return row ? toTrip(row) : null;
+  }
+
   async listTripsByCarrier(carrierId: string, limit: number): Promise<readonly TripProps[]> {
     const result = await this.db.execute(sql`
       SELECT * FROM logistics.trips

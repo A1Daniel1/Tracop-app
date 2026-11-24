@@ -55,9 +55,10 @@ export class CheckinService {
     return this.uow.run(async () => {
       const stop = await this.repository.findStop(input.stopId);
       if (!stop) throw new DomainError('Parada no encontrada.', 'not_found');
-      const trip = await this.repository.findTrip(stop.tripId);
-      if (!trip) throw new DomainError('Viaje no encontrado.', 'not_found');
-      if (trip.carrierId !== actor.sub) throw new DomainError('No autorizado.', 'forbidden');
+      // Locks the trip so check-ins and trip mutations on it are serialized.
+      const trip = await this.repository.findTripForUpdate(stop.tripId);
+      if (!trip || trip.carrierId !== actor.sub)
+        throw new DomainError('Parada no encontrada.', 'not_found');
       if (baseVersion !== undefined && baseVersion !== trip.version) {
         const conflict = new DomainError(
           'Conflicto de versión.',
@@ -68,6 +69,8 @@ export class CheckinService {
         conflict.serverVersion = trip.version;
         throw conflict;
       }
+      if (trip.status !== 'assigned' && trip.status !== 'in_progress')
+        throw new DomainError('El viaje no admite check-ins.', 'invalid_transition');
       const previous = await this.repository.findCheckinByStopAndKind(stop.id, input.kind);
       if (previous) throw new DomainError('Check-in ya registrado.', 'invalid_transition');
       if (stop.completedAt)
@@ -136,8 +139,8 @@ export class CheckinService {
     const stop = await this.repository.findStop(stopId);
     if (!stop) throw new DomainError('Parada no encontrada.', 'not_found');
     const trip = await this.repository.findTrip(stop.tripId);
-    if (!trip) throw new DomainError('Viaje no encontrado.', 'not_found');
-    if (trip.carrierId !== actor.sub) throw new DomainError('No autorizado.', 'forbidden');
+    if (!trip || trip.carrierId !== actor.sub)
+      throw new DomainError('Parada no encontrada.', 'not_found');
     return trip.version;
   }
 

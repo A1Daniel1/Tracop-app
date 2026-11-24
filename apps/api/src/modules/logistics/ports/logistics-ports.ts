@@ -31,6 +31,8 @@ export interface LogisticsRepository {
   listCarriers(limit: number): Promise<readonly CarrierProps[]>;
   createTrip(trip: TripProps, stops: readonly TripStopProps[]): Promise<TripProps>;
   findTrip(tripId: string): Promise<TripProps | null>;
+  /** Same as findTrip, locking the row until the current transaction ends. */
+  findTripForUpdate(tripId: string): Promise<TripProps | null>;
   listTripsByCarrier(carrierId: string, limit: number): Promise<readonly TripProps[]>;
   listTrips(limit: number): Promise<readonly TripProps[]>;
   saveTrip(trip: TripProps, route: readonly PlannedStopSnapshot[]): Promise<void>;

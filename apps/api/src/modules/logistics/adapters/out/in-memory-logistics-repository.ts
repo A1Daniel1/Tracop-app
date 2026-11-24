@@ -35,6 +35,10 @@ export class InMemoryLogisticsRepository implements LogisticsRepository {
     return this.trips.get(tripId) ?? null;
   }
 
+  async findTripForUpdate(tripId: string): Promise<TripProps | null> {
+    return this.findTrip(tripId);
+  }
+
   async listTripsByCarrier(carrierId: string, limit: number): Promise<readonly TripProps[]> {
     return [...this.trips.values()].filter((trip) => trip.carrierId === carrierId).slice(0, limit);
   }

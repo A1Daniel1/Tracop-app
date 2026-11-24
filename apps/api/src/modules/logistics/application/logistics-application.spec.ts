@@ -215,7 +215,10 @@ describe('logistics application', () => {
     const trip = await planTrip(h);
     const stop = (await h.trips.listStops(carrier, trip.id))[0]!;
     const input = { id: createId(), stopId: stop.id, kind: stop.kind, clientAt: now };
-    await expect(h.checkins.record(otherCarrier, input)).rejects.toThrow('No autorizado');
+    // A third party gets the same answer as for a missing stop (404, not 403).
+    await expect(h.checkins.record(otherCarrier, input)).rejects.toMatchObject({
+      code: 'not_found',
+    });
     await expect(h.checkins.record(buyer, input)).rejects.toThrow('transportista');
     await expect(h.checkins.record(carrier, input, 99)).rejects.toMatchObject({
       code: 'version_conflict',
@@ -285,5 +288,20 @@ describe('logistics application', () => {
         description: 'sin viaje',
       }),
     ).rejects.toThrow('viaje');
+  });
+
+  it('rechaza check-ins en un viaje cancelado', async () => {
+    const h = createHarness();
+    const trip = await planTrip(h);
+    const stop = (await h.trips.listStops(carrier, trip.id))[0]!;
+    await h.trips.cancel(carrier, trip.id, trip.version, 'lluvia');
+    await expect(
+      h.checkins.record(carrier, {
+        id: createId(),
+        stopId: stop.id,
+        kind: stop.kind,
+        clientAt: now,
+      }),
+    ).rejects.toMatchObject({ code: 'invalid_transition' });
   });
 });

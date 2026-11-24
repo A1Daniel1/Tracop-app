@@ -280,7 +280,8 @@ export class TripPlanningService {
   ): Promise<TripProps> {
     this.requireCarrierOrOperator(actor);
     return this.uow.run(async () => {
-      const current = await this.repository.findTrip(tripId);
+      // The row lock makes the version check and the write atomic for concurrent mutations.
+      const current = await this.repository.findTripForUpdate(tripId);
       if (!current) throw new DomainError('Viaje no encontrado.', 'not_found');
       if (actor.role !== 'operator' && current.carrierId !== actor.sub)
         throw new DomainError('Viaje no encontrado.', 'not_found');
