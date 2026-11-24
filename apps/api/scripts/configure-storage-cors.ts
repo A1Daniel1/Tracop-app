@@ -41,6 +41,16 @@ export const validateCorsOrigins = (
   }
 };
 
+export class StorageCorsNotSupportedError extends Error {
+  override readonly name = 'StorageCorsNotSupportedError';
+  constructor() {
+    super(
+      'El almacenamiento no admite CORS por bucket (MinIO). Configura los orígenes en el servidor con ' +
+        'MINIO_API_CORS_ALLOW_ORIGIN; en docker-compose se toma de MINIO_CORS_ALLOWED_ORIGINS.',
+    );
+  }
+}
+
 export const configureStorageCors = async (
   configuration: StorageCorsConfiguration,
 ): Promise<void> => {
@@ -54,23 +64,32 @@ export const configureStorageCors = async (
       secretAccessKey: configuration.secretAccessKey,
     },
   });
-  await client.send(
-    new PutBucketCorsCommand({
-      Bucket: configuration.bucket,
-      CORSConfiguration: {
-        CORSRules: [
-          {
-            AllowedOrigins: [...configuration.origins],
-            AllowedMethods: ['POST', 'GET', 'HEAD'],
-            AllowedHeaders: ['*'],
-            ExposeHeaders: ['ETag'],
-            MaxAgeSeconds: 600,
-          },
-        ],
-      },
-    }),
-  );
-  await client.send(new GetBucketCorsCommand({ Bucket: configuration.bucket }));
+  const rules = [
+    {
+      AllowedOrigins: [...configuration.origins],
+      AllowedMethods: ['POST', 'GET', 'HEAD'],
+      AllowedHeaders: ['*'],
+      ExposeHeaders: ['ETag'],
+      MaxAgeSeconds: 600,
+    },
+  ];
+  try {
+    await client.send(
+      new PutBucketCorsCommand({
+        Bucket: configuration.bucket,
+        CORSConfiguration: { CORSRules: rules },
+      }),
+    );
+  } catch (error) {
+    // MinIO does not implement per-bucket CORS: its CORS is a server setting.
+    if (error instanceof Error && error.name === 'NotImplemented')
+      throw new StorageCorsNotSupportedError();
+    throw error;
+  }
+  const stored = await client.send(new GetBucketCorsCommand({ Bucket: configuration.bucket }));
+  const storedOrigins = (stored.CORSRules ?? []).flatMap((rule) => rule.AllowedOrigins ?? []);
+  if ([...configuration.origins].sort().join(',') !== [...storedOrigins].sort().join(','))
+    throw new Error('El bucket no conservó los orígenes CORS configurados.');
 };
 
 const main = async (): Promise<void> => {
