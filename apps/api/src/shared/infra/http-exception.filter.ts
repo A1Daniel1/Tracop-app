@@ -21,6 +21,11 @@ const domainStatus: Record<string, number> = {
   version_conflict: HttpStatus.CONFLICT,
   assignment_conflict: HttpStatus.CONFLICT,
   invalid_order_status: HttpStatus.CONFLICT,
+  // Conflicts with the current state of the resource; the contract documents 409 for them.
+  invalid_transition: HttpStatus.CONFLICT,
+  quote_expired: HttpStatus.CONFLICT,
+  lot_unavailable: HttpStatus.CONFLICT,
+  reservation_conflict: HttpStatus.CONFLICT,
   idempotency_conflict: HttpStatus.CONFLICT,
   idempotency_content_mismatch: HttpStatus.CONFLICT,
   duplicate_lot_line: HttpStatus.BAD_REQUEST,

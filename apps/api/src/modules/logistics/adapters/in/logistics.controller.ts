@@ -190,6 +190,11 @@ export class LogisticsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Iniciar viaje' })
   @ApiResponse({ status: 400, description: 'Solicitud inválida o no autorizada.' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Conflicto con el estado actual (invalid_transition) o versión obsoleta (version_conflict).',
+  })
   async start(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
     const { expectedVersion } = tripTransitionSchema.parse(body);
     return serializeTrip(await this.trips.start(req.identity, id, expectedVersion));
@@ -200,6 +205,11 @@ export class LogisticsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Completar viaje manualmente' })
   @ApiResponse({ status: 400, description: 'Solicitud inválida o no autorizada.' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Conflicto con el estado actual (invalid_transition) o versión obsoleta (version_conflict).',
+  })
   async complete(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
     const { expectedVersion } = tripTransitionSchema.parse(body);
     return serializeTrip(await this.trips.complete(req.identity, id, expectedVersion));
@@ -210,6 +220,11 @@ export class LogisticsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancelar viaje' })
   @ApiResponse({ status: 400, description: 'Solicitud inválida o no autorizada.' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Conflicto con el estado actual (invalid_transition) o versión obsoleta (version_conflict).',
+  })
   async cancel(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
     const input = cancelTripSchema.parse(body);
     return serializeTrip(
@@ -230,6 +245,11 @@ export class LogisticsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Registrar check-in de recogida o entrega' })
   @ApiResponse({ status: 400, description: 'Solicitud inválida o no autorizada.' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Conflicto con el estado actual (invalid_transition) o versión obsoleta (version_conflict).',
+  })
   async recordCheckin(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
     const input = createCheckinSchema.parse({ ...(body as object), stopId: id });
     const checkin = await this.checkins.record(
@@ -269,6 +289,11 @@ export class LogisticsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Resolver incidencia' })
   @ApiResponse({ status: 400, description: 'Solicitud inválida o no autorizada.' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Conflicto con el estado actual (invalid_transition) o versión obsoleta (version_conflict).',
+  })
   async resolveIncident(@Req() req: Request, @Param('id') id: string) {
     return serializeIncident(await this.incidents.resolve(req.identity, id));
   }
