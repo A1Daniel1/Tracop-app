@@ -82,6 +82,14 @@ const enrichEventsWithHash = (events: readonly OrderEvent[]): readonly OrderEven
   });
 };
 
+/** Order states before payment, whose stock reservation can still lapse. */
+const RESERVATION_EXPIRABLE_STATUSES: readonly OrderProps['status'][] = [
+  'requested',
+  'quoted',
+  'accepted',
+  'payment_pending',
+];
+
 @Injectable()
 export class OrderingService {
   constructor(
@@ -343,7 +351,9 @@ export class OrderingService {
     return this.uow.run(async () => {
       const aggregate = await this.orderRepository.findById(input.orderId, true);
       if (!aggregate) return false;
-      if (!['requested', 'quoted'].includes(aggregate.order.status)) return false;
+      // Stock is reserved when the quote is accepted and held for ORDER_RESERVATION_TTL_HOURS;
+      // an order not paid by then gives the stock back. Paid orders keep their reservation.
+      if (!RESERVATION_EXPIRABLE_STATUSES.includes(aggregate.order.status)) return false;
 
       const orderEntity = Order.reconstitute(aggregate.order);
       orderEntity.transition('cancelled', input.now, { reason: 'reservation_expired' });
