@@ -367,28 +367,29 @@ PostgreSQL 16. **schema solo para módulos con datos propios.** Convenciones: `s
 **catalog**
 
 - `categories` (id uuid, name text, parent_id uuid nullable, depth integer, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, deleted_at timestamptz nullable). `depth` está entre 1 y 3; nombre no vacío y máximo 100 caracteres.
-- `products` (id uuid, category_id uuid, name text, search_text text, unit text, attributes jsonb, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, deleted_at timestamptz nullable). Nombre no vacío y máximo 120 caracteres; atributos es un objeto. `search_text` contiene el nombre normalizado para búsquedas.
+- `products` (id uuid, category_id uuid, name text, search_text text, unit text, attributes jsonb, status text NOT NULL DEFAULT 'approved', proposed_by uuid nullable, reviewed_by uuid nullable, reviewed_at timestamptz nullable, rejection_reason text nullable, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, deleted_at timestamptz nullable). Nombre no vacío y máximo 120 caracteres; atributos es un objeto. `search_text` contiene el nombre normalizado para búsquedas. `status` ∈ `approved`, `pending_review`, `rejected`; `products_proposal_review_check` exige proponente y sin revisión en pendientes, ni proponente ni revisor en aprobados curados, y proponente, revisor y fecha en propuestas revisadas; `rejection_reason` obligatorio en rechazados. Índice único parcial (`category_id`, `search_text`) para `approved` y `pending_review` no eliminados (ver [ADR-015](docs/adr/ADR-015.md)).
 - `lots` (id uuid, provider_id uuid, product_id uuid, quantity numeric(12,3), unit text, unit_price bigint, quality_grade text nullable, available_from timestamptz, available_until timestamptz, location_lat double precision, location_lng double precision, status text, version integer, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, deleted_at timestamptz nullable). La cantidad del dominio se representa como `quantityMilli: bigint` (milésimas) y se convierte a/desde `numeric(12,3)` al persistir. El precio unitario es entero positivo en COP; la unidad del lote debe coincidir con la del producto. Coordenadas se restringen a los límites de Colombia; `quality_grade` admite texto opcional de hasta 100 caracteres sin vocabulario cerrado.
 - `lot_photos` (id uuid, lot_id uuid, media_ref text, created_at timestamptz NOT NULL, state text NOT NULL, content_type text nullable, size_bytes integer nullable, position integer NOT NULL, expires_at timestamptz NOT NULL, lease_token text nullable, lease_expires_at timestamptz nullable, deleted_at timestamptz nullable). `state` puede ser `pending`, `processing` o `ready`; las filas `ready` requieren `content_type = 'image/webp'` y `size_bytes` no nulo. Índices: `lot_id`, vencimiento para filas que no estén `ready` y `(lot_id, position)` para filas no eliminadas.
+- `lot_reservations` (id uuid, lot_id uuid, order_id uuid, quantity_milli numeric(12,3) > 0, status text, expires_at timestamptz ≥ created_at, created_at, updated_at). `status` ∈ `active`, `released`, `consumed`. Solo las reservas `active` no vencidas restan cantidad disponible.
 
 Unidades actualmente aceptadas por el catálogo: `kg`, `g`, `lb`, `und`, `docena`, `arroba`, `quintal`, `caja`, `mano`, `bulto`. Esta lista es **provisional**; el vocabulario de unidades y el vocabulario para `quality_grade` siguen pendientes de decisión (§23).
 
 **ordering**
 
-- `orders` (id, buyer_id, status, delivery_address, delivery_window, created_at, version)
-- `order_items` (id, order_id, lot_id, provider_id, quantity, unit_price)
-- `quotes` (id, order_id, subtotal, freight, commission, total, valid_until, status)
-- `order_events` (id, order_id, type, payload jsonb, actor_id, occurred_at, prev_hash, hash) — **append-only, hash encadenado**
+- `orders` (id, buyer_id, provider_id, status, delivery_address, delivery_window, request_hash, created_at, updated_at, version, accepted_at, cancel_reason, deleted_at). `status` con CHECK de los 12 estados de §12. Un pedido tiene un solo proveedor.
+- `order_lines` (id, order_id, lot_id, provider_id, quantity_milli numeric(12,3), unit_price numeric(20,0), unit)
+- `quotes` (id, order_id, subtotal, freight, commission, total, provider_net — numeric(20,0) ≥ 0; valid_until, status, created_at, updated_at). `status` ∈ `active`, `accepted`, `expired`, `cancelled` y se persiste junto con el pedido.
+- `order_events` (id, order_id, type, payload, actor_id, occurred_at, prev_hash, hash) — **append-only, hash encadenado**; `type` ∈ `OrderRequested`, `OrderQuoted`, `OrderAccepted`, `OrderCancelled`, `OrderPickupScheduled`, `OrderInTransit`, `OrderDelivered`.
 
 **logistics**
 
-- `carriers` (user_id, vehicle_type, capacity_kg, plate)
-- `trips` (id, carrier_id, status, planned_at, route jsonb)
-- `trip_stops` (id, trip_id, order_id, kind, sequence, scheduled_at, completed_at)
-- `checkins` (id, stop_id, kind, lat, lng, media_ref, client_ts, server_seq)
-- `incidents` (id, order_id, trip_id, type, description, status, opened_at, closed_at)
+- `carriers` (user_id, vehicle_type, capacity_kg > 0, plate, created_at, updated_at, deleted_at); placa única entre activos.
+- `trips` (id, carrier_id, status, version, planned_at, route jsonb, created_at, updated_at, deleted_at); `status` ∈ `planned`, `assigned`, `in_progress`, `completed`, `cancelled`.
+- `trip_stops` (id, trip_id, order_id, order_version, kind, sequence, zone, scheduled_at, completed_at); `kind` ∈ `pickup`, `delivery`; únicos (trip_id, sequence) y (trip_id, order_id, kind).
+- `checkins` (id, stop_id, trip_id, order_id, carrier_id, kind, client_ts, media_ref, created_at); único (stop_id, kind). **Sin coordenadas** (ver [ADR-013](docs/adr/ADR-013.md)).
+- `incidents` (id, order_id, trip_id, type, description, status, opened_at, closed_at, deleted_at); `status` ∈ `open`, `resolved`.
 
-**payments**
+**payments** (planificado; aún no existe)
 
 - `payments` (id, order_id, method, amount, status, proof_media_ref, verified_by, verified_at)
 - `ledger_entries` (id, transaction_id, account, debit, credit, order_id, created_at) — **inmutable; por transacción suma débitos = créditos**
@@ -396,14 +397,14 @@ Unidades actualmente aceptadas por el catálogo: `kg`, `g`, `lb`, `und`, `docena
 - `commission_rules` (id, scope, rate_bps, valid_from, valid_to) — tasa en puntos básicos
 - `freight_rates` (id, corridor, rate_per_kg, min_charge, valid_from, valid_to)
 
-**notifications**
+**notifications** (planificado; aún no existe)
 
 - `templates` (id, event_type, channel, locale, body)
 - `preferences` (user_id, channel_order jsonb, quiet_hours jsonb)
 - `deliveries` (id, user_id, event_id, channel, status, attempts, last_error, sent_at, read_at)
 - `inbox` (id, user_id, title, body, read_at)
 
-**trust**
+**trust** (planificado; aún no existe)
 
 - `ratings` (id, order_id, rater_id, ratee_id, score, comment)
 - `verifications` (id, provider_id, status, documents jsonb, reviewed_by, reviewed_at)
@@ -412,23 +413,24 @@ Unidades actualmente aceptadas por el catálogo: `kg`, `g`, `lb`, `und`, `docena
 **sync**
 
 - `processed_operations` (`op_id uuid` PK, `device_id uuid` NOT NULL, `user_id uuid` NOT NULL, `entity text` NOT NULL, `entity_id uuid` NOT NULL, `result jsonb` NOT NULL, `error_code text` nullable, `payload_hash text` NOT NULL, `server_seq bigint` nullable, `processed_at timestamptz` NOT NULL). Restricciones: longitud de `entity` entre 1 y 64; longitud del código de error nullable ≤100; `payload_hash` contiene 64 caracteres hexadecimales en minúscula; `result` es un objeto JSON cuyo `status` es `applied`, `rejected` o `conflict`.
-- `change_log` (`server_seq bigint` PK, default from `sync.change_log_server_seq_seq`; `entity text` NOT NULL; `entity_id uuid` NOT NULL; `op text` NOT NULL; `payload jsonb` NOT NULL; `owner_user_id uuid` nullable; `occurred_at timestamptz` NOT NULL). Índice: `(owner_user_id, server_seq)`. Restricciones: longitud de `entity` entre 1 y 64 y valor en `category`, `product`, `lot`; longitud de `op` entre 1 y 32 y valor en `upsert`, `delete`, `cancel`; tamaño serializado de `payload` ≤262,144 bytes.
+- `change_log` (`server_seq bigint` PK, default from `sync.change_log_server_seq_seq`; `entity text` NOT NULL; `entity_id uuid` NOT NULL; `op text` NOT NULL; `payload jsonb` NOT NULL; `owner_user_id uuid` nullable; `occurred_at timestamptz` NOT NULL). Índice: `(owner_user_id, server_seq)`. Restricciones: longitud de `entity` entre 1 y 64 y valor en `category`, `product`, `lot`, `trip`, `checkin`, `incident`; longitud de `op` entre 1 y 32 y valor en `upsert`, `delete`, `cancel`; tamaño serializado de `payload` ≤262,144 bytes.
 
 Actualmente no hay implementada retención ni compactación para `sync.change_log` ni `sync.processed_operations`; se deben definir e implementar más adelante, sin asumir un periodo de retención.
 
-**backoffice**
+**backoffice** (planificado; aún no existe)
 
 - `audit_log` (id, actor_id, action, entity, entity_id, before jsonb, after jsonb, at, ip)
 - `parameters` (key, value jsonb, updated_by, updated_at)
 
 **shared**
 
-- `outbox_events` (id, aggregate, type, payload jsonb, created_at, published_at)
+- `outbox_events` (id, aggregate, type, payload jsonb, created_at, published_at, attempts, next_attempt_at, last_error, failed_at, locked_until, lease_token). `next_attempt_at` NULL significa «pendiente ya»; `failed_at` marca la cola de fallidos; `locked_until` y `lease_token` van juntos (lease del despachador).
+- `outbox_deliveries` (consumer, event_id → outbox_events, delivered_at); PK (consumer, event_id): idempotencia por consumidor (ver [ADR-016](docs/adr/ADR-016.md)).
 - `schema_migrations` (id, applied_at) — metadata técnica del runner de migraciones
 
 **messaging (datos técnicos de adaptador, no de negocio)**
 
-- `processed_updates` (update_id bigint pk) — idempotencia de updates de Telegram; no es dato de negocio del módulo.
+- `processed_updates` (update_id bigint pk, received_at) — idempotencia de updates de Telegram; no es dato de negocio del módulo. Se purgan tras `PROCESSED_UPDATES_RETENTION_DAYS`.
 
 ### Reglas de base de datos
 
