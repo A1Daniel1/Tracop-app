@@ -1,6 +1,11 @@
 import { Module } from '@nestjs/common';
 import { OrderingController } from './adapters/in/ordering.controller.js';
 import { OrderingService } from './application/ordering-service.js';
+import {
+  ORDERING_MAINTENANCE,
+  OrderingMaintenanceService,
+} from './application/ordering-maintenance-service.js';
+import type { OrderingClock } from './ports/ordering-ports.js';
 import { DrizzleOrderRepository } from './adapters/out/drizzle-repositories.js';
 import { envPricingPortProvider } from './adapters/out/drizzle-repositories.js';
 import { InMemoryOrderingRateLimit } from './adapters/in/rate-limiter.js';
@@ -51,7 +56,13 @@ import { APP_ENVIRONMENT } from '../../shared/infra/tokens.js';
         env.ORDER_SUBTOTAL_ROUNDING,
       inject: [APP_ENVIRONMENT],
     },
+    {
+      provide: ORDERING_MAINTENANCE,
+      inject: [OrderingService, ORDERING_CLOCK],
+      useFactory: (ordering: OrderingService, clock: OrderingClock) =>
+        new OrderingMaintenanceService(ordering, clock),
+    },
   ],
-  exports: [OrderingService, ORDER_REPOSITORY, PRICING_PORT],
+  exports: [OrderingService, ORDER_REPOSITORY, PRICING_PORT, ORDERING_MAINTENANCE],
 })
 export class OrderingModule {}

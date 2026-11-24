@@ -10,6 +10,10 @@ import { describePostgres, resetPostgresFixtures } from './postgres-suite.js';
 import pg from 'pg';
 import { v7 as uuidv7 } from 'uuid';
 import { OrderingService } from '../src/modules/ordering/application/ordering-service.js';
+import {
+  ORDERING_MAINTENANCE,
+  type OrderingMaintenanceApi,
+} from '../src/modules/ordering/index.js';
 
 describePostgres('Ordering concurrency (20 iterations each)', () => {
   let app: INestApplication;
@@ -446,5 +450,43 @@ describePostgres('Ordering concurrency (20 iterations each)', () => {
       .send({ expectedVersion: cancelled.version })
       .expect(200);
     expect(await quoteStatus(cancelled.orderId)).toBe('cancelled');
+  }, 120000);
+
+  it('expires each overdue quote once when two expiry jobs run in parallel', async () => {
+    const supplier = await registerSupplier();
+    const buyer = await registerBuyer();
+    const maintenance = app.get<OrderingMaintenanceApi>(ORDERING_MAINTENANCE);
+    for (let iteration = 0; iteration < 20; iteration += 1) {
+      const lotId = await createLot(supplier.userId, (global as any).__TEST_PROD_ID__, 1);
+      const orderId = uuidv7();
+      await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${buyer.token}`)
+        .send({ id: orderId, lines: [{ lotId, quantityMilli: '1000' }], deliveryAddress: 'Addr' })
+        .expect(201);
+      await pool.query(
+        `UPDATE ordering.quotes SET valid_until = NOW() - INTERVAL '1 minute' WHERE order_id = $1`,
+        [orderId],
+      );
+      const [first, second] = await Promise.all([
+        maintenance.expireReservationsAndQuotes(),
+        maintenance.expireReservationsAndQuotes(),
+      ]);
+      const state = await pool.query<{ status: string; quote: string; cancelled: string }>(
+        `SELECT o.status, q.status AS quote,
+                (SELECT count(*) FROM ordering.order_events e
+                 WHERE e.order_id = o.id AND e.type = 'OrderCancelled')::text AS cancelled
+         FROM ordering.orders o JOIN ordering.quotes q ON q.order_id = o.id
+         WHERE o.id = $1`,
+        [orderId],
+      );
+      expect({ iteration, expired: first.quotes + second.quotes, ...state.rows[0] }).toEqual({
+        iteration,
+        expired: 1,
+        status: 'cancelled',
+        quote: 'expired',
+        cancelled: '1',
+      });
+    }
   }, 120000);
 });

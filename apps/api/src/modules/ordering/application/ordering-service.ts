@@ -388,6 +388,11 @@ export class OrderingService {
     return count;
   }
 
+  /** Orders whose active quote is past its validity, for the expiry job. */
+  async getExpiredQuoteIds(now: Date, limit: number): Promise<readonly string[]> {
+    return this.orderRepository.findExpiredQuoteIds(now, limit);
+  }
+
   async getById(actor: Actor, orderId: string): Promise<OrderAggregate | null> {
     const aggregate = await this.orderRepository.findById(orderId);
     if (!aggregate) return null;

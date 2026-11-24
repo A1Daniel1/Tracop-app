@@ -9,6 +9,10 @@ import {
 } from './application/catalog-service.js';
 import { DeleteLot } from './application/delete-lot.js';
 import { LotPhotoService } from './application/lot-photo-service.js';
+import {
+  CATALOG_MAINTENANCE,
+  CatalogMaintenanceService,
+} from './application/catalog-maintenance-service.js';
 import { CatalogController, LotsController } from './adapters/in/catalog.controller.js';
 import {
   DrizzleCategoryRepository,
@@ -146,7 +150,13 @@ import { STORAGE_PORT, type StoragePort } from './ports/storage-port.js';
       useExisting: CatalogService,
     },
     DeleteLot,
+    {
+      provide: CATALOG_MAINTENANCE,
+      inject: [CatalogService, LotPhotoService],
+      useFactory: (catalog: CatalogService, photos: LotPhotoService) =>
+        new CatalogMaintenanceService(catalog, photos),
+    },
   ],
-  exports: [CatalogService, DeleteLot, CATALOG_ORDERING_API],
+  exports: [CatalogService, DeleteLot, CATALOG_ORDERING_API, CATALOG_MAINTENANCE],
 })
 export class CatalogModule {}
