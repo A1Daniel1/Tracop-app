@@ -28,6 +28,15 @@ export interface ProductProps {
   readonly rejectionReason?: string | null;
 }
 
+/** Review state of a product curated by staff: approved, never proposed, nothing to review. */
+export const CURATED_REVIEW_STATE = {
+  status: 'approved',
+  proposedBy: null,
+  reviewedBy: null,
+  reviewedAt: null,
+  rejectionReason: null,
+} as const satisfies Partial<ProductProps>;
+
 export class Product {
   private constructor(readonly props: ProductProps) {}
 

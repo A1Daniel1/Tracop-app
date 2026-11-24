@@ -68,7 +68,7 @@ export const products = catalog.table(
     ),
     check(
       'products_proposal_review_check',
-      sql`(${table.status} = 'approved' AND ${table.proposedBy} IS NULL AND ${table.reviewedBy} IS NOT NULL AND ${table.reviewedAt} IS NOT NULL) OR (${table.status} = 'rejected' AND ${table.reviewedBy} IS NOT NULL AND ${table.reviewedAt} IS NOT NULL) OR (${table.status} = 'pending_review')`,
+      sql`(${table.status} = 'pending_review' AND ${table.proposedBy} IS NOT NULL AND ${table.reviewedBy} IS NULL AND ${table.reviewedAt} IS NULL) OR (${table.status} = 'approved' AND ${table.proposedBy} IS NULL AND ${table.reviewedBy} IS NULL AND ${table.reviewedAt} IS NULL) OR (${table.status} IN ('approved', 'rejected') AND ${table.proposedBy} IS NOT NULL AND ${table.reviewedBy} IS NOT NULL AND ${table.reviewedAt} IS NOT NULL)`,
     ),
     check(
       'products_unit_check',

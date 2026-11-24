@@ -174,7 +174,11 @@ describe('Catalog product proposals', () => {
 
     const approvedProposal = await harness.service.approveProductProposal(staff, proposed.id);
     expect(approvedProposal.status).toBe('approved');
-    expect(approvedProposal.proposedBy).toBeNull();
+    expect(approvedProposal).toMatchObject({
+      proposedBy: actor.sub,
+      reviewedBy: staff.sub,
+      reviewedAt: new Date('2026-11-19T12:00:00.000Z'),
+    });
 
     harness.products.set(proposed.id, proposed);
     const rejected = await harness.service.rejectProductProposal(staff, proposed.id, 'Duplicado');
@@ -215,39 +219,44 @@ describe('Catalog product proposals', () => {
     });
   });
 
-  it('deduplicates by complete tokens without false positives (papa vs papaya)', async () => {
+  it('deduplicates by complete tokens: papa vs papa criolla returns 409 (similar, not exact)', async () => {
     const harness = createHarness();
-    const papa: ProductProps = {
+    const papaCriolla: ProductProps = {
       ...approved,
       id: '018f47a2-8b45-7cc2-9a1e-123456789ac0',
       name: 'Papa criolla',
     };
-    harness.products.set(papa.id, papa);
+    harness.products.set(papaCriolla.id, papaCriolla);
     harness.productRepository.findExactVisible = jest.fn(async () => null);
-    harness.productRepository.findTokenExactVisible = jest.fn(async () => papa);
-    harness.productRepository.findSimilarVisible = jest.fn(async () => [papa]);
+    // findTokenExactVisible should return null because token sets differ: {papa} vs {papa, criolla}
+    harness.productRepository.findTokenExactVisible = jest.fn(async () => null);
+    harness.productRepository.findSimilarVisible = jest.fn(async () => [papaCriolla]);
 
-    // 'Papa' is a complete token match of 'Papa' in 'Papa criolla' -> should match
-    const resultPapa = await harness.service.createProductProposal(actor, {
-      id: '018f47a2-8b45-7cc2-9a1e-123456789ac1',
-      categoryId: approved.categoryId,
-      name: 'Papa',
-      unit: 'kg',
-      attributes: {},
-    });
-    expect(resultPapa.created).toBe(false);
-    expect(resultPapa.product.id).toBe(papa.id);
+    // 'Papa' vs 'Papa criolla' - tokens of one contained in the other but sets differ -> 409 similar
+    await expect(
+      harness.service.createProductProposal(actor, {
+        id: '018f47a2-8b45-7cc2-9a1e-123456789ac1',
+        categoryId: approved.categoryId,
+        name: 'Papa',
+        unit: 'kg',
+        attributes: {},
+      }),
+    ).rejects.toMatchObject({ code: 'product_similar_exists' });
+  });
 
-    // 'Papaya' shares 'papa' as substring but not as complete token -> should NOT match
+  it('deduplicates by complete tokens: papa vs papaya creates new (no shared tokens)', async () => {
+    const harness = createHarness();
     const papaya: ProductProps = {
       ...approved,
       id: '018f47a2-8b45-7cc2-9a1e-123456789ac2',
       name: 'Papaya',
     };
     harness.products.set(papaya.id, papaya);
+    harness.productRepository.findExactVisible = jest.fn(async () => null);
     harness.productRepository.findTokenExactVisible = jest.fn(async () => null);
     harness.productRepository.findSimilarVisible = jest.fn(async () => [papaya]);
 
+    // 'Papa' vs 'Papaya' - 'papa' is substring but not a complete token -> creates new
     const resultPapaya = await harness.service.createProductProposal(actor, {
       id: '018f47a2-8b45-7cc2-9a1e-123456789ac3',
       categoryId: approved.categoryId,
@@ -258,6 +267,21 @@ describe('Catalog product proposals', () => {
     });
     expect(resultPapaya.created).toBe(true);
     expect(resultPapaya.product.name).toBe('Papa');
+  });
+
+  it('exact search_text match returns existing product with created:false', async () => {
+    const harness = createHarness();
+    harness.productRepository.findExactVisible = jest.fn(async () => approved);
+
+    const result = await harness.service.createProductProposal(actor, {
+      id: '018f47a2-8b45-7cc2-9a1e-123456789ab0',
+      categoryId: approved.categoryId,
+      name: 'Tomate chonto',
+      unit: 'kg',
+      attributes: {},
+    });
+    expect(result.created).toBe(false);
+    expect(result.product.id).toBe(approved.id);
   });
 
   it('enforces rate limit 429 on proposal endpoint via rate limiter', async () => {

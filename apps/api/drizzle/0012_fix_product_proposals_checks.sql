@@ -1,18 +1,20 @@
--- Fix CHECK constraints for product proposals
--- reviewed_by and reviewed_at required for both approved and rejected (after review)
--- Drop old unique index that blocks re-proposing rejected products
+-- Review consistency for product proposals.
+-- Curated products (staff-created or created before proposals existed) are approved with no
+-- proposer and need no reviewer. Proposals keep proposed_by for their whole life; once reviewed
+-- (approved or rejected) they must record who reviewed them and when.
 
 ALTER TABLE catalog.products
   DROP CONSTRAINT IF EXISTS products_proposal_review_check,
   ADD CONSTRAINT products_proposal_review_check
     CHECK (
-      (status = 'approved' AND proposed_by IS NULL AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL) OR
-      (status = 'rejected' AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL) OR
-      (status = 'pending_review')
+      (status = 'pending_review'
+        AND proposed_by IS NOT NULL AND reviewed_by IS NULL AND reviewed_at IS NULL) OR
+      (status = 'approved' AND proposed_by IS NULL
+        AND reviewed_by IS NULL AND reviewed_at IS NULL) OR
+      (status IN ('approved', 'rejected') AND proposed_by IS NOT NULL
+        AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL)
     );
 
--- Drop old unique index on (category_id, lower(name)) that doesn't respect status
+-- The 0005 index on (category_id, lower(name)) ignores status and blocks re-proposing a
+-- rejected product; products_category_search_text_active_unique (0011) replaces it.
 DROP INDEX IF EXISTS catalog.products_category_name_unique;
-
--- The replacement index products_category_search_text_active_unique already exists from 0011
--- It uses (category_id, search_text) WHERE deleted_at IS NULL AND status IN ('approved', 'pending_review')

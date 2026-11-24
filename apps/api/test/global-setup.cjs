@@ -1,5 +1,5 @@
 const { PostgreSqlContainer } = require('@testcontainers/postgresql');
-const { readFile, writeFile } = require('node:fs/promises');
+const { readFile, readdir, writeFile } = require('node:fs/promises');
 const { join, resolve } = require('node:path');
 const { tmpdir } = require('node:os');
 const { createHash } = require('node:crypto');
@@ -7,6 +7,39 @@ const { Pool } = require('pg');
 
 const worktreeId = createHash('sha256').update(resolve(__dirname, '..')).digest('hex').slice(0, 12);
 const statePath = join(tmpdir(), `tracop-${worktreeId}-test-container.json`);
+
+// A product curated before proposals existed must survive every later migration as approved.
+const LEGACY_PRODUCT_BEFORE = '0011_product_proposals.sql';
+const LEGACY_CATEGORY_ID = '0190f47a-8b45-7cc2-9a1e-000000000011';
+const LEGACY_PRODUCT_ID = '0190f47a-8b45-7cc2-9a1e-000000000012';
+const LEGACY_TIMESTAMP = '2026-01-01T00:00:00.000Z';
+
+async function insertLegacyProduct(pool) {
+  await pool.query(
+    `INSERT INTO catalog.categories (id, name, parent_id, depth, created_at, updated_at)
+     VALUES ($1, 'Synthetic legacy category', NULL, 1, $2, $2)`,
+    [LEGACY_CATEGORY_ID, LEGACY_TIMESTAMP],
+  );
+  await pool.query(
+    `INSERT INTO catalog.products (id, category_id, name, search_text, unit, attributes, created_at, updated_at)
+     VALUES ($1, $2, 'Synthetic legacy product', 'synthetic legacy product', 'kg', '{}', $3, $3)`,
+    [LEGACY_PRODUCT_ID, LEGACY_CATEGORY_ID, LEGACY_TIMESTAMP],
+  );
+}
+
+async function verifyAndRemoveLegacyProduct(pool) {
+  const { rows } = await pool.query(
+    `SELECT status, proposed_by, reviewed_by FROM catalog.products WHERE id = $1`,
+    [LEGACY_PRODUCT_ID],
+  );
+  const row = rows[0];
+  if (!row || row.status !== 'approved' || row.proposed_by !== null || row.reviewed_by !== null) {
+    throw new Error('Product migrations must keep pre-existing products approved and unreviewed.');
+  }
+  await pool.query('DELETE FROM catalog.products WHERE id = $1', [LEGACY_PRODUCT_ID]);
+  await pool.query('DELETE FROM catalog.categories WHERE id = $1', [LEGACY_CATEGORY_ID]);
+  console.log('Verified product migrations keep pre-existing products approved.');
+}
 
 module.exports = async () => {
   let container;
@@ -29,20 +62,12 @@ module.exports = async () => {
       id text PRIMARY KEY,
       applied_at timestamptz NOT NULL DEFAULT now()
     )`);
-    for (const filename of [
-      '0000_initial-schemas.sql',
-      '0001_identity.sql',
-      '0002_identity_integrity.sql',
-      '0003_identity_device_session_uniqueness.sql',
-      '0004_messaging.sql',
-      '0005_catalog.sql',
-      '0006_lot_photos.sql',
-      '0007_sync.sql',
-      '0008_sync_constraints.sql',
-      '0009_catalog_lot_reservations.sql',
-      '0010_ordering_schema.sql',
-      '0011_product_proposals.sql',
-    ]) {
+    // Same discovery as drizzle/migrate.ts so a new migration can never be skipped by tests.
+    const migrationFiles = (await readdir(resolve('drizzle')))
+      .filter((filename) => /^\d+.*\.sql$/.test(filename))
+      .sort();
+    for (const filename of migrationFiles) {
+      if (filename === LEGACY_PRODUCT_BEFORE) await insertLegacyProduct(pool);
       if (filename === '0006_lot_photos.sql') {
         const timestamp = new Date();
         await pool.query(
@@ -96,6 +121,7 @@ module.exports = async () => {
         console.log('Verified migration 0006 expires pre-existing lot photos.');
       }
     }
+    await verifyAndRemoveLegacyProduct(pool);
     await writeFile(
       statePath,
       JSON.stringify({

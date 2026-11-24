@@ -2,7 +2,12 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DomainError } from '../../../shared/kernel/domain-error.js';
 import { Category, type CategoryProps } from '../domain/category.js';
 import { Lot, type LotProps } from '../domain/lot.js';
-import { Product, normalizeProductSearchText, type ProductProps } from '../domain/product.js';
+import {
+  CURATED_REVIEW_STATE,
+  Product,
+  normalizeProductSearchText,
+  type ProductProps,
+} from '../domain/product.js';
 import {
   CATALOG_CATEGORY_REPOSITORY,
   CATALOG_CLOCK,
@@ -92,7 +97,7 @@ export class CatalogService {
     return this.uow.run(async () => {
       if (!(await this.categories.findById(input.categoryId)))
         throw new DomainError('Categoría no encontrada.', 'not_found');
-      const product = Product.create(input);
+      const product = Product.create({ ...input, ...CURATED_REVIEW_STATE });
       await this.products.save(product.props);
       await this.recordProduct(product.props);
       return product.props;
@@ -223,7 +228,6 @@ export class CatalogService {
       const approved = Product.create({
         ...current,
         status: 'approved',
-        proposedBy: null,
         reviewedBy: actor.sub,
         reviewedAt: this.clock.now(),
         rejectionReason: null,
