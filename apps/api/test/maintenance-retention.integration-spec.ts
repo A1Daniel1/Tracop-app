@@ -152,9 +152,15 @@ describePostgres('retention jobs keep what they must keep (PostgreSQL)', () => {
       .sort(),
   });
 
+  const purgeIdentity = async () => ({
+    otpCodes: await identity.purgeExpiredOtpCodes(),
+    sessions: await identity.purgeEndedSessions(),
+    rateLimitWindows: await identity.purgeRateLimitWindows(),
+  });
+
   it('deletes only expired identity data and is idempotent in series', async () => {
     const fixture = await seedIdentity();
-    expect(await identity.purgeExpired()).toEqual({
+    expect(await purgeIdentity()).toEqual({
       otpCodes: 2,
       sessions: 2,
       rateLimitWindows: 1,
@@ -165,7 +171,7 @@ describePostgres('retention jobs keep what they must keep (PostgreSQL)', () => {
       windows: [...fixture.kept.windows].sort(),
     };
     expect(await remaining()).toEqual(expected);
-    expect(await identity.purgeExpired()).toEqual({
+    expect(await purgeIdentity()).toEqual({
       otpCodes: 0,
       sessions: 0,
       rateLimitWindows: 0,
@@ -176,7 +182,7 @@ describePostgres('retention jobs keep what they must keep (PostgreSQL)', () => {
   it('gives the same result when two purges run in parallel', async () => {
     for (let iteration = 0; iteration < 20; iteration += 1) {
       const fixture = await seedIdentity();
-      const [first, second] = await Promise.all([identity.purgeExpired(), identity.purgeExpired()]);
+      const [first, second] = await Promise.all([purgeIdentity(), purgeIdentity()]);
       expect({
         iteration,
         otp: first.otpCodes + second.otpCodes,

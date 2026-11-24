@@ -21,5 +21,4 @@ export type {
   LinkChannelResult,
   OtpSenderPort,
   IdentityMaintenanceApi,
-  IdentityPurgeResult,
 } from './ports/identity-ports.js';

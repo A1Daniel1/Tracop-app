@@ -163,13 +163,9 @@ export interface IdentityRetentionRepository {
   deleteRateLimitWindowsBefore(cutoff: Date, limit: number): Promise<number>;
 }
 
-export interface IdentityPurgeResult {
-  readonly otpCodes: number;
-  readonly sessions: number;
-  readonly rateLimitWindows: number;
-}
-
-/** Public maintenance use case of identity, run by the worker. */
+/** Public maintenance use cases of identity, run by the worker as separate jobs. */
 export interface IdentityMaintenanceApi {
-  purgeExpired(): Promise<IdentityPurgeResult>;
+  purgeExpiredOtpCodes(): Promise<number>;
+  purgeEndedSessions(): Promise<number>;
+  purgeRateLimitWindows(): Promise<number>;
 }

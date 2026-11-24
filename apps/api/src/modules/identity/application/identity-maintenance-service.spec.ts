@@ -19,7 +19,10 @@ const repository = (batches: { otp?: number[]; sessions?: number[]; rate?: numbe
 describe('IdentityMaintenanceService', () => {
   it('derives every cutoff from the injected clock and the retention settings', async () => {
     const retention = repository();
-    await new IdentityMaintenanceService(retention, { now: () => now }, settings).purgeExpired();
+    const service = new IdentityMaintenanceService(retention, { now: () => now }, settings);
+    await service.purgeExpiredOtpCodes();
+    await service.purgeEndedSessions();
+    await service.purgeRateLimitWindows();
     expect(retention.deleteOtpCodesExpiredBefore).toHaveBeenCalledWith(
       new Date('2026-11-13T12:00:00.000Z'),
       1000,
@@ -36,23 +39,19 @@ describe('IdentityMaintenanceService', () => {
 
   it('keeps deleting full batches until a partial one and reports the totals', async () => {
     const retention = repository({ otp: [1000, 1000, 3], sessions: [10], rate: [0] });
-    const result = await new IdentityMaintenanceService(
-      retention,
-      { now: () => now },
-      settings,
-    ).purgeExpired();
-    expect(result).toEqual({ otpCodes: 2003, sessions: 10, rateLimitWindows: 0 });
+    const service = new IdentityMaintenanceService(retention, { now: () => now }, settings);
+    expect({
+      otpCodes: await service.purgeExpiredOtpCodes(),
+      sessions: await service.purgeEndedSessions(),
+      rateLimitWindows: await service.purgeRateLimitWindows(),
+    }).toEqual({ otpCodes: 2003, sessions: 10, rateLimitWindows: 0 });
     expect(retention.deleteOtpCodesExpiredBefore).toHaveBeenCalledTimes(3);
   });
 
   it('stops after a bounded number of batches', async () => {
     const retention = repository({ otp: Array.from({ length: 500 }, () => 1000) });
-    const result = await new IdentityMaintenanceService(
-      retention,
-      { now: () => now },
-      settings,
-    ).purgeExpired();
+    const service = new IdentityMaintenanceService(retention, { now: () => now }, settings);
+    expect(await service.purgeExpiredOtpCodes()).toBe(100_000);
     expect(retention.deleteOtpCodesExpiredBefore).toHaveBeenCalledTimes(100);
-    expect(result.otpCodes).toBe(100_000);
   });
 });

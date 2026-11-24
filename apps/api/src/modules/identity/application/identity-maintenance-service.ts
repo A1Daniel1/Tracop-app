@@ -1,7 +1,6 @@
 import type { Clock } from '../../../shared/kernel/clock.js';
 import type {
   IdentityMaintenanceApi,
-  IdentityPurgeResult,
   IdentityRetentionRepository,
 } from '../ports/identity-ports.js';
 
@@ -36,21 +35,22 @@ export class IdentityMaintenanceService implements IdentityMaintenanceApi {
     private readonly settings: IdentityRetentionSettings,
   ) {}
 
-  async purgeExpired(): Promise<IdentityPurgeResult> {
-    const now = this.clock.now().getTime();
-    const otpCutoff = new Date(now - this.settings.otpRetentionDays * DAY_MS);
-    const sessionCutoff = new Date(now - this.settings.sessionRetentionDays * DAY_MS);
-    const rateLimitCutoff = new Date(now - this.settings.rateLimitRetentionSeconds * 1000);
-    return {
-      otpCodes: await drain(() =>
-        this.retention.deleteOtpCodesExpiredBefore(otpCutoff, BATCH_SIZE),
-      ),
-      sessions: await drain(() =>
-        this.retention.deleteSessionsEndedBefore(sessionCutoff, BATCH_SIZE),
-      ),
-      rateLimitWindows: await drain(() =>
-        this.retention.deleteRateLimitWindowsBefore(rateLimitCutoff, BATCH_SIZE),
-      ),
-    };
+  purgeExpiredOtpCodes(): Promise<number> {
+    const cutoff = this.cutoff(this.settings.otpRetentionDays * DAY_MS);
+    return drain(() => this.retention.deleteOtpCodesExpiredBefore(cutoff, BATCH_SIZE));
+  }
+
+  purgeEndedSessions(): Promise<number> {
+    const cutoff = this.cutoff(this.settings.sessionRetentionDays * DAY_MS);
+    return drain(() => this.retention.deleteSessionsEndedBefore(cutoff, BATCH_SIZE));
+  }
+
+  purgeRateLimitWindows(): Promise<number> {
+    const cutoff = this.cutoff(this.settings.rateLimitRetentionSeconds * 1000);
+    return drain(() => this.retention.deleteRateLimitWindowsBefore(cutoff, BATCH_SIZE));
+  }
+
+  private cutoff(retentionMs: number): Date {
+    return new Date(this.clock.now().getTime() - retentionMs);
   }
 }
