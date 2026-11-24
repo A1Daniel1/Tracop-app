@@ -2,7 +2,11 @@ import { Module } from '@nestjs/common';
 import { SharedInfraModule } from '../../shared/infra/shared-infra.module.js';
 import { APP_ENVIRONMENT } from '../../shared/infra/tokens.js';
 import type { AppEnvironment } from '../../shared/infra/env.js';
-import { CatalogService, CATALOG_SETTINGS } from './application/catalog-service.js';
+import {
+  CatalogService,
+  CATALOG_SETTINGS,
+  type CatalogSettings,
+} from './application/catalog-service.js';
 import { DeleteLot } from './application/delete-lot.js';
 import { LotPhotoService } from './application/lot-photo-service.js';
 import { CatalogController, LotsController } from './adapters/in/catalog.controller.js';
@@ -18,6 +22,7 @@ import { DrizzleLotPhotoRepository } from './adapters/out/drizzle-lot-photo-repo
 import { InMemoryStorageAdapter } from './adapters/out/in-memory-storage.adapter.js';
 import { PhotoUploadRateLimiter } from './adapters/out/photo-upload-rate-limiter.js';
 import { S3StorageAdapter } from './adapters/out/s3-storage.adapter.js';
+import { InMemoryProductProposalRateLimiter } from './adapters/in/product-proposal-rate-limiter.js';
 import { SharpPhotoProcessorAdapter } from './adapters/out/sharp-photo-processor.adapter.js';
 import {
   CATALOG_CATEGORY_REPOSITORY,
@@ -49,6 +54,7 @@ import { STORAGE_PORT, type StoragePort } from './ports/storage-port.js';
     DrizzleLotRepository,
     DrizzleCatalogUnitOfWork,
     DrizzleLotPhotoRepository,
+    InMemoryProductProposalRateLimiter,
     SharedCatalogClock,
     SharedCatalogEventWriter,
     InMemoryStorageAdapter,
@@ -82,7 +88,10 @@ import { STORAGE_PORT, type StoragePort } from './ports/storage-port.js';
     {
       provide: CATALOG_SETTINGS,
       inject: [APP_ENVIRONMENT],
-      useFactory: (env: AppEnvironment) => ({ lotHorizonDays: env.CATALOG_LOT_MAX_HORIZON_DAYS }),
+      useFactory: (env: AppEnvironment): CatalogSettings => ({
+        lotHorizonDays: env.CATALOG_LOT_MAX_HORIZON_DAYS,
+        productProposalPendingLimit: env.CATALOG_PRODUCT_PROPOSAL_PENDING_LIMIT,
+      }),
     },
     {
       provide: LotPhotoService,

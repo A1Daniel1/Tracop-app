@@ -39,6 +39,13 @@ describe('catalog application', () => {
     save: async (item) => {
       products.set(item.id, item);
     },
+    lockForProductProposal: async () => undefined,
+    lockPendingLimitByUser: async () => undefined,
+    findExactVisible: async () => null,
+    findVisibleInCategory: async () => [],
+    existsActiveBySearchText: async () => false,
+    countPendingByUser: async () => 0,
+    findPending: async () => [],
   };
   const lotRepository: LotRepository = {
     findById: async (id) => lots.get(id) ?? null,
@@ -161,7 +168,7 @@ describe('catalog application', () => {
     eventWriter,
     clock,
     directory,
-    { lotHorizonDays: 90 },
+    { lotHorizonDays: 90, productProposalPendingLimit: 5 },
   );
   const actor = { sub: 'provider', role: 'producer' };
   const lotInput = {
@@ -236,7 +243,7 @@ describe('catalog application', () => {
       eventWriter,
       clock,
       directory,
-      { lotHorizonDays: 90 },
+      { lotHorizonDays: 90, productProposalPendingLimit: 5 },
       recorder,
     );
     await deletionService.createLot(actor, lotInput);
@@ -271,7 +278,7 @@ describe('catalog application', () => {
       eventWriter,
       clock,
       directory,
-      { lotHorizonDays: 90 },
+      { lotHorizonDays: 90, productProposalPendingLimit: 5 },
       recorder,
     );
     categories.set('existing-category', {
@@ -300,7 +307,7 @@ describe('catalog application', () => {
       eventWriter,
       clock,
       noProfile,
-      { lotHorizonDays: 90 },
+      { lotHorizonDays: 90, productProposalPendingLimit: 5 },
     );
     await serviceWithoutProfile.createLot(actor, lotInput);
     await expect(serviceWithoutProfile.publishLot(actor, lotInput.id, 1)).rejects.toMatchObject({

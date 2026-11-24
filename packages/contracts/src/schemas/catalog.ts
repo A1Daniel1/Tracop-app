@@ -41,6 +41,26 @@ export const createProductSchema = z
   })
   .strict();
 
+export const createProductProposalSchema = z
+  .object({
+    id: z
+      .string()
+      .uuid()
+      .refine((id) => id[14] === '7', 'El id debe ser UUID v7.'),
+    categoryId: z.string().uuid(),
+    name: z.string().trim().min(1).max(120),
+    unit: productUnitSchema,
+    attributes: productAttributesSchema,
+    confirm: z.boolean().optional(),
+  })
+  .strict();
+
+export const rejectProductProposalSchema = z
+  .object({
+    rejectionReason: z.string().trim().min(1).max(500),
+  })
+  .strict();
+
 export const createLotSchema = z
   .object({
     id: z

@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, asc, eq, gte, inArray, isNull, lte, lt, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lte, lt, or, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../../../shared/infra/database.js';
 import { APP_CLOCK, OUTBOX_WRITER, UNIT_OF_WORK } from '../../../../shared/infra/tokens.js';
 import type { Clock } from '../../../../shared/kernel/clock.js';
@@ -7,7 +7,7 @@ import type { OutboxWriter } from '../../../../shared/ports/outbox-writer.js';
 import type { UnitOfWork } from '../../../../shared/infra/unit-of-work.js';
 import type { CategoryProps } from '../../domain/category.js';
 import { quantityDecimalToMilli, quantityMilliToDecimal, type LotProps } from '../../domain/lot.js';
-import type { ProductProps } from '../../domain/product.js';
+import { type ProductProps, type ProductStatus } from '../../domain/product.js';
 import type {
   CatalogClock,
   CatalogEventWriter,
@@ -36,6 +36,11 @@ const toProduct = (row: typeof products.$inferSelect): ProductProps => ({
   name: row.name,
   unit: row.unit as ProductProps['unit'],
   attributes: row.attributes as ProductProps['attributes'],
+  status: row.status as ProductStatus,
+  proposedBy: row.proposedBy,
+  reviewedBy: row.reviewedBy,
+  reviewedAt: row.reviewedAt,
+  rejectionReason: row.rejectionReason,
 });
 const toLot = (row: typeof lots.$inferSelect): LotProps => ({
   id: row.id,
@@ -114,7 +119,7 @@ export class DrizzleProductRepository implements ProductRepository {
   async findAll(
     filter: { categoryId?: string; q?: string } = {},
   ): Promise<readonly ProductProps[]> {
-    const clauses = [isNull(products.deletedAt)];
+    const clauses = [isNull(products.deletedAt), eq(products.status, 'approved')];
     if (filter.categoryId) clauses.push(eq(products.categoryId, filter.categoryId));
     if (filter.q) {
       const tokens = normalizeSearchText(filter.q).trim().split(/\s+/).filter(Boolean);
@@ -142,6 +147,11 @@ export class DrizzleProductRepository implements ProductRepository {
         ...product,
         attributes: { ...product.attributes },
         searchText,
+        status: product.status ?? 'approved',
+        proposedBy: product.proposedBy ?? null,
+        reviewedBy: product.reviewedBy ?? null,
+        reviewedAt: product.reviewedAt ?? null,
+        rejectionReason: product.rejectionReason ?? null,
         createdAt: now,
         updatedAt: now,
         deletedAt: null,
@@ -154,9 +164,127 @@ export class DrizzleProductRepository implements ProductRepository {
           searchText,
           unit: product.unit,
           attributes: { ...product.attributes },
+          status: product.status ?? 'approved',
+          proposedBy: product.proposedBy ?? null,
+          reviewedBy: product.reviewedBy ?? null,
+          reviewedAt: product.reviewedAt ?? null,
+          rejectionReason: product.rejectionReason ?? null,
           updatedAt: now,
         },
       });
+  }
+
+  async lockForProductProposal(categoryId: string, searchText: string): Promise<void> {
+    await this.database
+      .current()
+      .execute(sql`SELECT pg_advisory_xact_lock(hashtext(${categoryId}), hashtext(${searchText}))`);
+  }
+
+  async lockPendingLimitByUser(userId: string): Promise<void> {
+    await this.database
+      .current()
+      .execute(
+        sql`SELECT pg_advisory_xact_lock(hashtext('catalog-product-proposals'), hashtext(${userId}))`,
+      );
+  }
+
+  async findExactVisible(
+    categoryId: string,
+    searchText: string,
+    viewerId: string,
+    viewerRole: string,
+  ): Promise<ProductProps | null> {
+    const visiblePending =
+      viewerRole === 'operator' || viewerRole === 'admin'
+        ? eq(products.status, 'pending_review')
+        : and(eq(products.status, 'pending_review'), eq(products.proposedBy, viewerId));
+    const [row] = await this.database
+      .current()
+      .select()
+      .from(products)
+      .where(
+        and(
+          eq(products.categoryId, categoryId),
+          eq(products.searchText, searchText),
+          isNull(products.deletedAt),
+          or(eq(products.status, 'approved'), visiblePending),
+        ),
+      )
+      .limit(1);
+    return row ? toProduct(row) : null;
+  }
+
+  async findVisibleInCategory(
+    categoryId: string,
+    viewerId: string,
+    viewerRole: string,
+  ): Promise<readonly ProductProps[]> {
+    const visiblePending =
+      viewerRole === 'operator' || viewerRole === 'admin'
+        ? eq(products.status, 'pending_review')
+        : and(eq(products.status, 'pending_review'), eq(products.proposedBy, viewerId));
+    return (
+      await this.database
+        .current()
+        .select()
+        .from(products)
+        .where(
+          and(
+            eq(products.categoryId, categoryId),
+            isNull(products.deletedAt),
+            or(eq(products.status, 'approved'), visiblePending),
+          ),
+        )
+        .orderBy(asc(products.name))
+    ).map(toProduct);
+  }
+
+  async existsActiveBySearchText(categoryId: string, searchText: string): Promise<boolean> {
+    const [row] = await this.database
+      .current()
+      .select({ id: products.id })
+      .from(products)
+      .where(
+        and(
+          eq(products.categoryId, categoryId),
+          eq(products.searchText, searchText),
+          isNull(products.deletedAt),
+          inArray(products.status, ['approved', 'pending_review']),
+        ),
+      )
+      .limit(1);
+    return row !== undefined;
+  }
+
+  async countPendingByUser(userId: string): Promise<number> {
+    const result = await this.database.current().execute(sql`
+      SELECT COUNT(*)::text AS count
+      FROM catalog.products
+      WHERE status = 'pending_review'
+        AND proposed_by = ${userId}::uuid
+        AND deleted_at IS NULL
+    `);
+    const row = result.rows[0] as { count: string } | undefined;
+    return row ? Number(row.count) : 0;
+  }
+
+  async findPending(viewerId: string, viewerRole: string): Promise<readonly ProductProps[]> {
+    const where =
+      viewerRole === 'operator' || viewerRole === 'admin'
+        ? and(eq(products.status, 'pending_review'), isNull(products.deletedAt))
+        : and(
+            eq(products.status, 'pending_review'),
+            eq(products.proposedBy, viewerId),
+            isNull(products.deletedAt),
+          );
+    return (
+      await this.database
+        .current()
+        .select()
+        .from(products)
+        .where(where)
+        .orderBy(asc(products.createdAt), asc(products.name))
+    ).map(toProduct);
   }
 }
 

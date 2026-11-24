@@ -66,7 +66,7 @@ describe('CatalogService search', () => {
       { append: jest.fn() } as never,
       { now: () => NOW },
       { getProviderPublicSummaries: jest.fn() },
-      { lotHorizonDays: 30 },
+      { lotHorizonDays: 30, productProposalPendingLimit: 5 },
     );
   });
 

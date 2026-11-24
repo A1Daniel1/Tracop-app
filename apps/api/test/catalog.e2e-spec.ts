@@ -327,4 +327,123 @@ describePostgres('catalog HTTP flow (Nest + PostgreSQL Testcontainers)', () => {
       .expect(409);
     expect(conflictFromForeignId.body).toEqual(conflictFromStaleVersion.body);
   });
+
+  it('serves product proposals over HTTP with role checks and public product fields', async () => {
+    // beforeEach resets the counter but not the OTP phone limits, so use a range of our own.
+    phoneCounter = 7100000;
+    const operator = await createOperator();
+    const producer = await register('producer');
+    const buyer = await register('buyer');
+    const server = app.getHttpServer();
+    const publicKeys = ['attributes', 'categoryId', 'id', 'name', 'status', 'unit'];
+
+    const categoryId = createId();
+    await request(server)
+      .post('/catalog/categories')
+      .set(actor(operator.token))
+      .send({ id: categoryId, name: 'Tubérculos', parentId: null })
+      .expect(201);
+    const proposal = (name: string, extra: Record<string, unknown> = {}) => ({
+      id: createId(),
+      categoryId,
+      name,
+      unit: 'kg',
+      attributes: {},
+      ...extra,
+    });
+
+    const created = await request(server)
+      .post('/catalog/product-proposals')
+      .set(actor(producer.token))
+      .send(proposal('Papa criolla'))
+      .expect(201);
+    expect(created.body).toMatchObject({ created: true, product: { status: 'pending_review' } });
+    expect(Object.keys(created.body.product).sort()).toEqual(publicKeys);
+    const proposalId = created.body.product.id as string;
+
+    const repeated = await request(server)
+      .post('/catalog/product-proposals')
+      .set(actor(producer.token))
+      .send(proposal('papa  CRIOLLA'))
+      .expect(200);
+    expect(repeated.body).toMatchObject({ created: false, product: { id: proposalId } });
+
+    await request(server)
+      .post('/catalog/product-proposals')
+      .set(actor(buyer.token))
+      .send(proposal('Yuca'))
+      .expect(403);
+    await request(server).get('/catalog/product-proposals').set(actor(buyer.token)).expect(403);
+    for (const token of [producer.token, buyer.token]) {
+      await request(server)
+        .post(`/catalog/product-proposals/${proposalId}/approve`)
+        .set(actor(token))
+        .expect(403);
+      await request(server)
+        .post(`/catalog/product-proposals/${proposalId}/reject`)
+        .set(actor(token))
+        .send({ rejectionReason: 'motivo' })
+        .expect(403);
+    }
+    await request(server)
+      .post(`/catalog/product-proposals/${proposalId}/reject`)
+      .set(actor(operator.token))
+      .send({})
+      .expect(400);
+
+    const staffList = await request(server)
+      .get('/catalog/product-proposals')
+      .set(actor(operator.token))
+      .expect(200);
+    expect(staffList.body).toEqual([
+      expect.objectContaining({ id: proposalId, proposedBy: producer.userId }),
+    ]);
+    await request(server)
+      .post(`/catalog/product-proposals/${proposalId}/approve`)
+      .set(actor(operator.token))
+      .expect(201);
+
+    const similar = await request(server)
+      .post('/catalog/product-proposals')
+      .set(actor(producer.token))
+      .send(proposal('Papa'))
+      .expect(409);
+    expect(similar.body.code).toBe('product_similar_exists');
+    expect(similar.body.suggestions.map((item: object) => Object.keys(item).sort())).toEqual([
+      publicKeys,
+    ]);
+    await request(server)
+      .post('/catalog/product-proposals')
+      .set(actor(producer.token))
+      .send(proposal('Papa', { confirm: true }))
+      .expect(201);
+
+    const listed = await request(server)
+      .get(`/catalog/products?categoryId=${categoryId}`)
+      .set(actor(buyer.token))
+      .expect(200);
+    expect(listed.body.map((item: { id: string }) => item.id)).toEqual([proposalId]);
+    for (const item of listed.body) expect(Object.keys(item).sort()).toEqual(publicKeys);
+  });
+
+  it('rate limits product proposals per user with Retry-After', async () => {
+    // beforeEach resets the counter but not the OTP phone limits, so use a range of our own.
+    phoneCounter = 7200000;
+    const producer = await register('producer');
+    const server = app.getHttpServer();
+    const limit = 10;
+    for (let attempt = 0; attempt < limit; attempt += 1) {
+      const response = await request(server)
+        .post('/catalog/product-proposals')
+        .set(actor(producer.token))
+        .send({ id: createId(), categoryId: createId(), name: 'Nada', unit: 'kg', attributes: {} });
+      expect(response.status).not.toBe(429);
+    }
+    const limited = await request(server)
+      .post('/catalog/product-proposals')
+      .set(actor(producer.token))
+      .send({ id: createId(), categoryId: createId(), name: 'Nada', unit: 'kg', attributes: {} })
+      .expect(429);
+    expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
+  });
 });
