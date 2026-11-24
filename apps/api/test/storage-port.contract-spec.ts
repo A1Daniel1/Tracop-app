@@ -1,4 +1,4 @@
-import { InMemoryStorageAdapter } from '../src/modules/catalog/adapters/out/in-memory-storage.adapter.js';
+import { InMemoryStorageAdapter } from '../src/shared/infra/storage/in-memory-storage.adapter.js';
 import { randomUUID } from 'node:crypto';
 import { storagePortContract } from './support/storage-port-contract.js';
 

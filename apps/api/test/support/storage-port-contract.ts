@@ -1,4 +1,4 @@
-import type { StoragePort } from '../../src/modules/catalog/ports/storage-port.js';
+import type { StoragePort } from '../../src/shared/ports/storage.js';
 
 export type StorageFixture = {
   readonly storage: StoragePort;

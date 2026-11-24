@@ -8,8 +8,8 @@ import {
 } from '@aws-sdk/client-s3';
 import { createPresignedPost } from '@aws-sdk/s3-presigned-post';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { AppEnvironment } from '../../../../shared/infra/env.js';
-import type { StorageObjectMetadata, StoragePort } from '../../ports/storage-port.js';
+import type { AppEnvironment } from '../env.js';
+import type { StorageObjectMetadata, StoragePort } from '../../ports/storage.js';
 
 export class S3StorageAdapter implements StoragePort {
   private readonly apiClient: S3Client;

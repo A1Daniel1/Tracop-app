@@ -5,7 +5,7 @@ import {
   createAnimatedWebp,
   createSyntheticJpeg,
   createSyntheticPng,
-} from '../../../../../test/helpers/synthetic-image.js';
+} from '../../../../test/helpers/synthetic-image.js';
 
 const processor = new SharpPhotoProcessorAdapter();
 const settings = {

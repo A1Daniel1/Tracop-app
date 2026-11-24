@@ -1,10 +1,10 @@
 import type { LotPhotoProps } from '../domain/lot-photo.js';
 import {
   type LotPhotoRepository,
-  type PhotoProcessorPort,
   type PhotoUploadRateLimitPort,
 } from '../ports/lot-photo-ports.js';
-import type { StoragePort } from '../ports/storage-port.js';
+import type { PhotoProcessorPort } from '../../../shared/ports/photo-processor.js';
+import type { StoragePort } from '../../../shared/ports/storage.js';
 import { LotPhotoService, type LotPhotoSettings } from './lot-photo-service.js';
 
 const now = new Date('2026-11-02T12:00:00.000Z');

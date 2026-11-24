@@ -1,5 +1,6 @@
 import type { LotPhotoProps } from '../domain/lot-photo.js';
-import type { StoragePort } from './storage-port.js';
+import type { PhotoProcessorPort } from '../../../shared/ports/photo-processor.js';
+import type { StoragePort } from '../../../shared/ports/storage.js';
 
 export type LotPhotoReservation =
   | { readonly kind: 'created'; readonly photo: LotPhotoProps }
@@ -54,22 +55,11 @@ export interface LotPhotoRepository {
   softDeleteForLot(lotId: string, now: Date): Promise<void>;
 }
 
-export interface PhotoProcessorPort {
-  process(input: {
-    readonly bytes: Uint8Array;
-    readonly maxInputPixels: number;
-    readonly maxInputDimension: number;
-    readonly maxOutputDimension: number;
-    readonly quality: number;
-  }): Promise<{ readonly bytes: Uint8Array; readonly width: number; readonly height: number }>;
-}
-
 export interface PhotoUploadRateLimitPort {
   consume(userId: string, now: Date): void;
 }
 
 export const LOT_PHOTO_REPOSITORY = Symbol('LOT_PHOTO_REPOSITORY');
-export const PHOTO_PROCESSOR_PORT = Symbol('PHOTO_PROCESSOR_PORT');
 export const PHOTO_UPLOAD_RATE_LIMIT_PORT = Symbol('PHOTO_UPLOAD_RATE_LIMIT_PORT');
 
 export type LotPhotoInfrastructure = {

@@ -1,4 +1,4 @@
-import type { StorageObjectMetadata, StoragePort } from '../../ports/storage-port.js';
+import type { StorageObjectMetadata, StoragePort } from '../../ports/storage.js';
 
 export class InMemoryStorageAdapter implements StoragePort {
   private readonly objects = new Map<
