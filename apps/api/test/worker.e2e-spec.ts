@@ -18,7 +18,9 @@ const EXPECTED_JOBS = [
 const startWorker = () =>
   new Promise<{ child: ChildProcessWithoutNullStreams; output: () => string; jobs: string[] }>(
     (resolveStart, rejectStart) => {
-      const child = spawn(resolve('node_modules/.bin/tsx'), ['src/worker.ts'], {
+      // Resolves @tracop/contracts from source, like Jest does, so no build is required.
+      const tsxArgs = ['--tsconfig', 'test/tsconfig.worker.json', 'src/worker.ts'];
+      const child = spawn(resolve('node_modules/.bin/tsx'), tsxArgs, {
         env: { ...process.env, NODE_ENV: 'test' },
         cwd: resolve('.'),
       });
