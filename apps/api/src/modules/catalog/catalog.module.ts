@@ -23,11 +23,8 @@ import {
   SharedCatalogEventWriter,
 } from './adapters/out/drizzle-repositories.js';
 import { DrizzleLotPhotoRepository } from './adapters/out/drizzle-lot-photo-repository.js';
-import { InMemoryStorageAdapter } from './adapters/out/in-memory-storage.adapter.js';
 import { PhotoUploadRateLimiter } from './adapters/out/photo-upload-rate-limiter.js';
-import { S3StorageAdapter } from './adapters/out/s3-storage.adapter.js';
 import { InMemoryProductProposalRateLimiter } from './adapters/in/product-proposal-rate-limiter.js';
-import { SharpPhotoProcessorAdapter } from './adapters/out/sharp-photo-processor.adapter.js';
 import {
   CATALOG_CATEGORY_REPOSITORY,
   CATALOG_CLOCK,
@@ -41,16 +38,19 @@ import {
 } from './ports/catalog-ports.js';
 import {
   LOT_PHOTO_REPOSITORY,
-  PHOTO_PROCESSOR_PORT,
   PHOTO_UPLOAD_RATE_LIMIT_PORT,
   type LotPhotoRepository,
-  type PhotoProcessorPort,
   type PhotoUploadRateLimitPort,
 } from './ports/lot-photo-ports.js';
-import { STORAGE_PORT, type StoragePort } from './ports/storage-port.js';
+import { StorageModule } from '../../shared/infra/storage/storage.module.js';
+import {
+  PHOTO_PROCESSOR_PORT,
+  type PhotoProcessorPort,
+} from '../../shared/ports/photo-processor.js';
+import { STORAGE_PORT, type StoragePort } from '../../shared/ports/storage.js';
 
 @Module({
-  imports: [SharedInfraModule],
+  imports: [SharedInfraModule, StorageModule],
   controllers: [CatalogController, LotsController],
   providers: [
     DrizzleCategoryRepository,
@@ -61,7 +61,6 @@ import { STORAGE_PORT, type StoragePort } from './ports/storage-port.js';
     InMemoryProductProposalRateLimiter,
     SharedCatalogClock,
     SharedCatalogEventWriter,
-    InMemoryStorageAdapter,
     { provide: CATALOG_CATEGORY_REPOSITORY, useExisting: DrizzleCategoryRepository },
     { provide: CATALOG_PRODUCT_REPOSITORY, useExisting: DrizzleProductRepository },
     { provide: CATALOG_LOT_REPOSITORY, useExisting: DrizzleLotRepository },
@@ -69,21 +68,6 @@ import { STORAGE_PORT, type StoragePort } from './ports/storage-port.js';
     { provide: CATALOG_CLOCK, useExisting: SharedCatalogClock },
     { provide: CATALOG_EVENT_WRITER, useExisting: SharedCatalogEventWriter },
     { provide: LOT_PHOTO_REPOSITORY, useExisting: DrizzleLotPhotoRepository },
-    {
-      provide: S3StorageAdapter,
-      inject: [APP_ENVIRONMENT],
-      useFactory: (env: AppEnvironment) => new S3StorageAdapter(env),
-    },
-    {
-      provide: STORAGE_PORT,
-      inject: [APP_ENVIRONMENT, S3StorageAdapter, InMemoryStorageAdapter],
-      useFactory: (env: AppEnvironment, s3: S3StorageAdapter, memory: InMemoryStorageAdapter) =>
-        env.NODE_ENV === 'test' || !env.S3_BUCKET ? memory : s3,
-    },
-    {
-      provide: PHOTO_PROCESSOR_PORT,
-      useFactory: () => new SharpPhotoProcessorAdapter(),
-    },
     {
       provide: PHOTO_UPLOAD_RATE_LIMIT_PORT,
       inject: [APP_ENVIRONMENT],

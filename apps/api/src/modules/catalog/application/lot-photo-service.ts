@@ -2,10 +2,10 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { DomainError } from '../../../shared/kernel/domain-error.js';
 import {
   type LotPhotoRepository,
-  type PhotoProcessorPort,
   type PhotoUploadRateLimitPort,
 } from '../ports/lot-photo-ports.js';
-import type { StoragePort } from '../ports/storage-port.js';
+import type { PhotoProcessorPort } from '../../../shared/ports/photo-processor.js';
+import type { StoragePort } from '../../../shared/ports/storage.js';
 
 type Actor = { readonly sub: string; readonly role: string };
 type ReservationResult = {

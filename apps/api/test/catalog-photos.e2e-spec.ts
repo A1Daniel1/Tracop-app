@@ -12,8 +12,8 @@ import {
   PASSWORDLESS_HASHER,
   TOKEN_SERVICE,
 } from '../src/modules/identity/ports/tokens.js';
-import { STORAGE_PORT } from '../src/modules/catalog/ports/storage-port.js';
-import { InMemoryStorageAdapter } from '../src/modules/catalog/adapters/out/in-memory-storage.adapter.js';
+import { STORAGE_PORT } from '../src/shared/ports/storage.js';
+import { InMemoryStorageAdapter } from '../src/shared/infra/storage/in-memory-storage.adapter.js';
 import { DATABASE_POOL } from '../src/shared/infra/tokens.js';
 import { createId } from '../src/shared/kernel/ids.js';
 import { describePostgres } from './postgres-suite.js';

@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import type { PhotoProcessorPort } from '../../ports/lot-photo-ports.js';
+import type { PhotoProcessorPort } from '../../ports/photo-processor.js';
 
 export class SharpPhotoProcessorAdapter implements PhotoProcessorPort {
   async process(input: {

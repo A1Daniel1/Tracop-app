@@ -2,7 +2,7 @@ import { CreateBucketCommand, S3Client } from '@aws-sdk/client-s3';
 import { MinioContainer } from '@testcontainers/minio';
 import { randomUUID } from 'node:crypto';
 import { loadAppEnvironment } from '../src/shared/infra/env.js';
-import { S3StorageAdapter } from '../src/modules/catalog/adapters/out/s3-storage.adapter.js';
+import { S3StorageAdapter } from '../src/shared/infra/storage/s3-storage.adapter.js';
 import { storagePortContract } from './support/storage-port-contract.js';
 import {
   StorageCorsNotSupportedError,
