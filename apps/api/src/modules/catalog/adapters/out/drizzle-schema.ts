@@ -41,13 +41,35 @@ export const products = catalog.table(
     searchText: text('search_text').notNull(),
     unit: text('unit').notNull(),
     attributes: jsonb('attributes').notNull().default({}),
+    status: text('status').notNull().default('approved'),
+    proposedBy: uuid('proposed_by'),
+    reviewedBy: uuid('reviewed_by'),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    rejectionReason: text('rejection_reason'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex('products_category_name_unique').on(table.categoryId, sql`lower(${table.name})`),
+    uniqueIndex('products_category_search_text_active_unique')
+      .on(table.categoryId, table.searchText)
+      .where(sql`${table.deletedAt} IS NULL AND ${table.status} IN ('approved', 'pending_review')`),
     index('products_category_idx').on(table.categoryId),
+    index('products_status_proposed_by_idx')
+      .on(table.status, table.proposedBy)
+      .where(sql`${table.deletedAt} IS NULL`),
+    check(
+      'products_status_check',
+      sql`${table.status} IN ('approved', 'pending_review', 'rejected')`,
+    ),
+    check(
+      'products_rejection_reason_check',
+      sql`(${table.status} = 'rejected' AND ${table.rejectionReason} IS NOT NULL) OR (${table.status} <> 'rejected')`,
+    ),
+    check(
+      'products_proposal_review_check',
+      sql`(${table.status} = 'pending_review' AND ${table.proposedBy} IS NOT NULL AND ${table.reviewedBy} IS NULL AND ${table.reviewedAt} IS NULL) OR (${table.status} = 'approved' AND ${table.proposedBy} IS NULL AND ${table.reviewedBy} IS NULL AND ${table.reviewedAt} IS NULL) OR (${table.status} IN ('approved', 'rejected') AND ${table.proposedBy} IS NOT NULL AND ${table.reviewedBy} IS NOT NULL AND ${table.reviewedAt} IS NOT NULL)`,
+    ),
     check(
       'products_unit_check',
       sql`${table.unit} IN ('kg','g','lb','und','docena','arroba','quintal','caja','mano','bulto')`,

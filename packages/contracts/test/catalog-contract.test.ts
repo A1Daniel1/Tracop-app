@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   createLotSchema,
+  createProductProposalSchema,
+  rejectProductProposalSchema,
   productAttributesSchema,
   searchLotsQuerySchema,
 } from '../src/schemas/catalog.js';
@@ -55,5 +57,27 @@ describe('catalog contracts', () => {
     expect(createLotSchema.safeParse({ ...lot, quantityMilli: '999999999999' }).success).toBe(true);
     for (const quantityMilli of ['0', '1000000000000', '1.5', '01', '-1'])
       expect(createLotSchema.safeParse({ ...lot, quantityMilli }).success).toBe(false);
+  });
+
+  it('validates product proposals and rejection reasons', () => {
+    const proposal = {
+      id: '018f47a2-8b45-7cc2-9a1e-123456789abc',
+      categoryId: '018f47a2-8b45-7cc2-9a1e-123456789abd',
+      name: 'Tomate cherry',
+      unit: 'kg',
+      attributes: { color: 'rojo' },
+      confirm: true,
+    };
+    expect(createProductProposalSchema.safeParse(proposal).success).toBe(true);
+    expect(
+      createProductProposalSchema.safeParse({
+        ...proposal,
+        id: '018f47a2-8b45-6cc2-9a1e-123456789abc',
+      }).success,
+    ).toBe(false);
+    expect(rejectProductProposalSchema.safeParse({ rejectionReason: 'Duplicado' }).success).toBe(
+      true,
+    );
+    expect(rejectProductProposalSchema.safeParse({ rejectionReason: ' ' }).success).toBe(false);
   });
 });

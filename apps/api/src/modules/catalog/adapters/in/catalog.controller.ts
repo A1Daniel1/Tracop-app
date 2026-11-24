@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpStatus,
+  Res,
   Inject,
   Param,
   Patch,
@@ -17,8 +19,10 @@ import {
   createCategorySchema,
   createLotSchema,
   createProductSchema,
+  createProductProposalSchema,
   lotCursorPayloadSchema,
   lotVersionSchema,
+  rejectProductProposalSchema,
   searchLotsQuerySchema,
   updateLotRequestSchema,
 } from '@tracop/contracts';
@@ -35,6 +39,8 @@ import { serializeLotForViewer } from './lot-response.js';
 import { ApiErrorResponses, ApiZodBody, ApiZodResponse } from '../../../../shared/infra/openapi.js';
 import { z } from 'zod';
 import { LotPhotoService } from '../../application/lot-photo-service.js';
+import { InMemoryProductProposalRateLimiter } from './product-proposal-rate-limiter.js';
+import type { Response as ExpressResponse } from 'express';
 
 const uuidV7Schema = z
   .string()
@@ -57,7 +63,67 @@ const photoUploadResponseSchema = z.object({
 @UseGuards(AuthGuard)
 @Controller('catalog')
 export class CatalogController {
-  constructor(@Inject(CatalogService) private readonly catalog: CatalogService) {}
+  constructor(
+    @Inject(CatalogService) private readonly catalog: CatalogService,
+    @Inject(InMemoryProductProposalRateLimiter)
+    private readonly proposalRateLimiter: InMemoryProductProposalRateLimiter,
+  ) {}
+
+  @Post('product-proposals')
+  @Roles('producer', 'supplier')
+  @ApiOperation({ summary: 'Proponer un producto al catálogo' })
+  @ApiZodBody(createProductProposalSchema, {
+    id: '018f47a2-8b45-7cc2-9a1e-123456789abd',
+    categoryId: '018f47a2-8b45-7cc2-9a1e-123456789abc',
+    name: 'Tomate cherry',
+    unit: 'kg',
+    attributes: { color: 'rojo' },
+  })
+  @ApiErrorResponses(400, 401, 403, 404, 409, 429)
+  async createProductProposal(
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+    @Res({ passthrough: true }) response: ExpressResponse,
+  ) {
+    this.proposalRateLimiter.consume(req.identity!.sub);
+    const input = createProductProposalSchema.parse(body);
+    const { confirm, ...proposal } = input;
+    const result = await this.catalog.createProductProposal(req.identity!, {
+      ...proposal,
+      ...(confirm !== undefined ? { confirm } : {}),
+    });
+    response.status(result.created ? HttpStatus.CREATED : HttpStatus.OK);
+    return result;
+  }
+
+  @Get('product-proposals')
+  @Roles('producer', 'supplier', 'operator', 'admin')
+  @ApiOperation({ summary: 'Listar propuestas visibles' })
+  @ApiErrorResponses(401, 403)
+  async listProductProposals(@Req() req: AuthenticatedRequest) {
+    return this.catalog.listProductProposals(req.identity!);
+  }
+
+  @Post('product-proposals/:id/approve')
+  @Roles('operator', 'admin')
+  @ApiOperation({ summary: 'Aprobar una propuesta de producto' })
+  @ApiErrorResponses(401, 403, 404)
+  async approveProductProposal(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.catalog.approveProductProposal(req.identity!, id);
+  }
+
+  @Post('product-proposals/:id/reject')
+  @Roles('operator', 'admin')
+  @ApiOperation({ summary: 'Rechazar una propuesta de producto' })
+  @ApiErrorResponses(400, 401, 403, 404)
+  async rejectProductProposal(
+    @Param('id') id: string,
+    @Body() body: unknown,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const input = rejectProductProposalSchema.parse(body);
+    return this.catalog.rejectProductProposal(req.identity!, id, input.rejectionReason);
+  }
 
   @Get('categories')
   @ApiOperation({
