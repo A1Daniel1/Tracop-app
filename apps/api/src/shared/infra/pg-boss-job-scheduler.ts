@@ -77,6 +77,6 @@ export class PgBossJobScheduler implements JobSchedulerPort {
   }
 
   registered(): readonly string[] {
-    return [...this.names].sort();
+    return [...this.names].sort((left, right) => left.localeCompare(right));
   }
 }
