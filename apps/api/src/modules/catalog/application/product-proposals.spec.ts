@@ -306,4 +306,141 @@ describe('Catalog product proposals', () => {
       code: 'product_pending_review',
     });
   });
+
+  describe('role-based product views', () => {
+    const PUBLIC_KEYS = ['attributes', 'categoryId', 'id', 'name', 'status', 'unit'];
+    const reviewedProposal = (harness: ReturnType<typeof createHarness>) =>
+      withProduct(harness, '018f47a2-8b45-7cc2-9a1e-123456789ad0', 'Uchuva', {
+        status: 'approved',
+        proposedBy: otherProducer.sub,
+        reviewedBy: staff.sub,
+        reviewedAt: new Date('2026-11-19T12:00:00.000Z'),
+      });
+    const recordedPayloads = (harness: ReturnType<typeof createHarness>) =>
+      (harness.changeRecorder.record as jest.Mock).mock.calls.map(
+        ([change]: [
+          { payload: Record<string, unknown>; ownerUserId: string | null; op: string },
+        ]) => change,
+      );
+
+    it('lists products without proposer or reviewer identifiers', async () => {
+      const harness = createHarness();
+      reviewedProposal(harness);
+      const listed = await harness.service.listProducts();
+      expect(listed.length).toBe(2);
+      for (const product of listed) expect(Object.keys(product).sort()).toEqual(PUBLIC_KEYS);
+    });
+
+    it('returns suggestions without proposer or reviewer identifiers', async () => {
+      const harness = createHarness();
+      reviewedProposal(harness);
+      const failure = (await harness.service
+        .createProductProposal(
+          actor,
+          proposalInput('018f47a2-8b45-7cc2-9a1e-123456789ad1', 'Uchuva dulce'),
+        )
+        .catch((error: unknown) => error)) as { details: { suggestions: object[] } };
+      expect(failure.details.suggestions.length).toBe(1);
+      for (const suggestion of failure.details.suggestions)
+        expect(Object.keys(suggestion).sort()).toEqual(PUBLIC_KEYS);
+    });
+
+    it('lists own proposals for providers without identifiers and full rows for staff', async () => {
+      const harness = createHarness();
+      withProduct(harness, '018f47a2-8b45-7cc2-9a1e-123456789ad2', 'Feijoa', {
+        status: 'pending_review',
+        proposedBy: actor.sub,
+      });
+      const own = await harness.service.listProductProposals(actor);
+      expect(own.map((product) => Object.keys(product).sort())).toEqual([
+        [...PUBLIC_KEYS, 'rejectionReason'].sort(),
+      ]);
+      const forStaff = await harness.service.listProductProposals(staff);
+      expect(forStaff[0]).toMatchObject({ proposedBy: actor.sub });
+      await expect(
+        harness.service.listProductProposals({ sub: actor.sub, role: 'buyer' }),
+      ).rejects.toMatchObject({ code: 'forbidden' });
+    });
+
+    it('publishes approved products to sync without identifiers and pending ones to their owner', async () => {
+      const harness = createHarness();
+      const pending = withProduct(harness, '018f47a2-8b45-7cc2-9a1e-123456789ad3', 'Borojó', {
+        status: 'pending_review',
+        proposedBy: actor.sub,
+      });
+      await harness.service.approveProductProposal(staff, pending.id);
+      await harness.service.createProductProposal(
+        actor,
+        proposalInput('018f47a2-8b45-7cc2-9a1e-123456789ad4', 'Arazá'),
+      );
+      const [approvedChange, pendingChange] = recordedPayloads(harness);
+      expect(approvedChange).toMatchObject({ op: 'upsert', ownerUserId: null });
+      expect(Object.keys(approvedChange!.payload).sort()).toEqual(PUBLIC_KEYS);
+      expect(pendingChange).toMatchObject({ op: 'upsert', ownerUserId: actor.sub });
+      expect(Object.keys(pendingChange!.payload).sort()).toEqual(
+        [...PUBLIC_KEYS, 'rejectionReason'].sort(),
+      );
+    });
+
+    it('sends the rejection reason only to the proposer as a tombstone', async () => {
+      const harness = createHarness();
+      const pending = withProduct(harness, '018f47a2-8b45-7cc2-9a1e-123456789ad5', 'Copoazú', {
+        status: 'pending_review',
+        proposedBy: actor.sub,
+      });
+      await harness.service.rejectProductProposal(staff, pending.id, 'Nombre ambiguo');
+      expect(recordedPayloads(harness)).toEqual([
+        expect.objectContaining({
+          op: 'delete',
+          ownerUserId: actor.sub,
+          payload: expect.objectContaining({ rejectionReason: 'Nombre ambiguo' }),
+        }),
+      ]);
+    });
+  });
+
+  describe('updateProduct', () => {
+    it('keeps the review state of a pending proposal and its owner-scoped visibility', async () => {
+      const harness = createHarness();
+      const pending = withProduct(harness, '018f47a2-8b45-7cc2-9a1e-123456789ae0', 'Curuba', {
+        status: 'pending_review',
+        proposedBy: actor.sub,
+        reviewedBy: null,
+        reviewedAt: null,
+        rejectionReason: null,
+      });
+      const updated = await harness.service.updateProduct(staff, pending.id, {
+        categoryId: approved.categoryId,
+        name: 'Curuba larga',
+        unit: 'kg',
+        attributes: {},
+      });
+      expect(updated).toMatchObject({
+        name: 'Curuba larga',
+        status: 'pending_review',
+        proposedBy: actor.sub,
+      });
+      expect(harness.changeRecorder.record).toHaveBeenCalledWith(
+        expect.objectContaining({ op: 'upsert', ownerUserId: actor.sub }),
+      );
+    });
+
+    it('keeps a rejected proposal rejected', async () => {
+      const harness = createHarness();
+      const rejected = withProduct(harness, '018f47a2-8b45-7cc2-9a1e-123456789ae1', 'Nombre malo', {
+        status: 'rejected',
+        proposedBy: actor.sub,
+        reviewedBy: staff.sub,
+        reviewedAt: new Date('2026-11-19T12:00:00.000Z'),
+        rejectionReason: 'Ambiguo',
+      });
+      const updated = await harness.service.updateProduct(staff, rejected.id, {
+        categoryId: approved.categoryId,
+        name: 'Nombre corregido',
+        unit: 'kg',
+        attributes: {},
+      });
+      expect(updated).toMatchObject({ status: 'rejected', rejectionReason: 'Ambiguo' });
+    });
+  });
 });

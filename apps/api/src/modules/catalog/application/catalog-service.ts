@@ -31,6 +31,12 @@ import {
   type ProviderDirectoryPort,
 } from '../ports/catalog-ports.js';
 import { LOT_PHOTO_REPOSITORY, type LotPhotoRepository } from '../ports/lot-photo-ports.js';
+import {
+  toProposerProductView,
+  toPublicProductView,
+  type ProposerProductView,
+  type PublicProductView,
+} from './product-views.js';
 
 export interface CatalogSettings {
   readonly lotHorizonDays: number;
@@ -103,7 +109,7 @@ export class CatalogService {
         throw new DomainError('Categoría no encontrada.', 'not_found');
       const product = Product.create({ ...input, ...CURATED_REVIEW_STATE });
       await this.products.save(product.props);
-      await this.recordProduct(product.props);
+      await this.recordProductChange(product.props);
       return product.props;
     });
   }
@@ -115,13 +121,25 @@ export class CatalogService {
   ): Promise<ProductProps> {
     this.requireRole(actor, STAFF);
     return this.uow.run(async () => {
-      if (!(await this.products.findById(id)))
-        throw new DomainError('Producto no encontrado.', 'not_found');
+      const current = await this.products.findById(id);
+      if (!current) throw new DomainError('Producto no encontrado.', 'not_found');
       if (!(await this.categories.findById(input.categoryId)))
         throw new DomainError('Categoría no encontrada.', 'not_found');
-      const product = Product.create({ ...input, id });
+      // Editing descriptive fields never changes the review state of a proposal.
+      const product = Product.create({
+        id,
+        categoryId: input.categoryId,
+        name: input.name,
+        unit: input.unit,
+        attributes: input.attributes,
+        status: current.status ?? 'approved',
+        proposedBy: current.proposedBy ?? null,
+        reviewedBy: current.reviewedBy ?? null,
+        reviewedAt: current.reviewedAt ?? null,
+        rejectionReason: current.rejectionReason ?? null,
+      });
       await this.products.save(product.props);
-      await this.recordProduct(product.props);
+      await this.recordProductChange(product.props);
       return product.props;
     });
   }
@@ -135,9 +153,9 @@ export class CatalogService {
       readonly confirm?: boolean;
     },
   ): Promise<{
-    readonly product: ProductProps;
+    readonly product: PublicProductView;
     readonly created: boolean;
-    readonly suggestions: readonly ProductProps[];
+    readonly suggestions: readonly PublicProductView[];
   }> {
     this.requireRole(actor, PROVIDERS);
     return this.uow.run(async () => {
@@ -153,7 +171,7 @@ export class CatalogService {
         actor.sub,
         actor.role,
       );
-      if (exact) return { product: exact, created: false, suggestions: [] };
+      if (exact) return { product: toPublicProductView(exact), created: false, suggestions: [] };
 
       // Same name, but invisible to this viewer: another provider's pending proposal.
       // The answer reveals only that the name is under review, never who proposed it.
@@ -177,7 +195,7 @@ export class CatalogService {
         .slice(0, MAX_PRODUCT_SUGGESTIONS);
       if (similar.length > 0 && input.confirm !== true) {
         throw new DomainError('Existe un producto similar.', 'product_similar_exists', {
-          suggestions: similar,
+          suggestions: similar.map(toPublicProductView),
         });
       }
 
@@ -194,7 +212,7 @@ export class CatalogService {
         rejectionReason: null,
       }).props;
       await this.products.save(proposal);
-      await this.recordProduct(proposal, 'upsert', actor.sub);
+      await this.recordProductChange(proposal);
       await this.events.append([
         {
           aggregate: `product:${proposal.id}`,
@@ -207,18 +225,23 @@ export class CatalogService {
           },
         },
       ]);
-      return { product: proposal, created: true, suggestions: [] };
+      return { product: toPublicProductView(proposal), created: true, suggestions: [] };
     });
   }
 
-  async listProductProposals(actor: Actor): Promise<readonly ProductProps[]> {
+  async listProductProposals(
+    actor: Actor,
+  ): Promise<readonly (ProductProps | ProposerProductView)[]> {
     if (
       actor.role !== 'operator' &&
       actor.role !== 'admin' &&
       !PROVIDERS.includes(actor.role as 'producer' | 'supplier')
     )
       throw new DomainError('No tienes permiso para listar propuestas.', 'forbidden');
-    return this.products.findPending(actor.sub, actor.role);
+    const pending = await this.products.findPending(actor.sub, actor.role);
+    return STAFF.includes(actor.role as 'operator' | 'admin')
+      ? pending
+      : pending.map(toProposerProductView);
   }
 
   async approveProductProposal(actor: Actor, id: string): Promise<ProductProps> {
@@ -235,7 +258,7 @@ export class CatalogService {
         rejectionReason: null,
       }).props;
       await this.products.save(approved);
-      await this.recordProduct(approved, 'upsert', null);
+      await this.recordProductChange(approved);
       await this.events.append([
         {
           aggregate: `product:${approved.id}`,
@@ -269,7 +292,7 @@ export class CatalogService {
         rejectionReason,
       }).props;
       await this.products.save(rejected);
-      await this.recordProduct(rejected, 'delete', current.proposedBy ?? null);
+      await this.recordProductChange(rejected);
       await this.events.append([
         {
           aggregate: `product:${rejected.id}`,
@@ -706,8 +729,8 @@ export class CatalogService {
   async listProducts(filter?: {
     categoryId?: string;
     q?: string;
-  }): Promise<readonly ProductProps[]> {
-    return this.products.findAll(filter);
+  }): Promise<readonly PublicProductView[]> {
+    return (await this.products.findAll(filter)).map(toPublicProductView);
   }
 
   private async lockOwnedLot(id: string, ownerId: string): Promise<LotProps> {
@@ -777,17 +800,18 @@ export class CatalogService {
     });
   }
 
-  private async recordProduct(
-    product: ProductProps,
-    op = 'upsert',
-    ownerUserId: string | null = null,
-  ): Promise<void> {
+  /**
+   * Records a product change for sync. Approved products are global; a pending proposal is
+   * visible only to its proposer, and a rejected one is a tombstone for that proposer.
+   */
+  private async recordProductChange(product: ProductProps): Promise<void> {
+    const status = product.status ?? 'approved';
     await this.changeRecorder.record({
       entity: 'product',
       entityId: product.id,
-      op,
+      op: status === 'rejected' ? 'delete' : 'upsert',
       payload: this.productPayload(product),
-      ownerUserId,
+      ownerUserId: status === 'approved' ? null : (product.proposedBy ?? null),
       occurredAt: this.clock.now(),
     });
   }
@@ -839,16 +863,9 @@ export class CatalogService {
 
   private productPayload(product: ProductProps): Record<string, unknown> {
     return {
-      id: product.id,
-      categoryId: product.categoryId,
-      name: product.name,
-      unit: product.unit,
-      attributes: product.attributes,
-      status: product.status ?? 'approved',
-      proposedBy: product.proposedBy ?? null,
-      reviewedBy: product.reviewedBy ?? null,
-      reviewedAt: product.reviewedAt?.toISOString() ?? null,
-      rejectionReason: product.rejectionReason ?? null,
+      ...((product.status ?? 'approved') === 'approved'
+        ? toPublicProductView(product)
+        : toProposerProductView(product)),
     };
   }
 
