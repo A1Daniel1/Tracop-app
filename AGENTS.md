@@ -260,7 +260,7 @@ DE SALIDA    ManualTransferAdapter → pasarela · AnthropicLLMAdapter · Drizzl
 | `PaymentPort`        | Registrar/verificar pagos                                 | `ManualTransferAdapter` (piloto), pasarela (futuro)                                        |
 | `LLMPort`            | Extraer datos estructurados de texto/audio/foto           | `AnthropicLLMAdapter`, `FakeLLMAdapter` (tests)                                            |
 | `PriceReferencePort` | Precios de referencia de mercado                          | adaptador de fuente de datos, `StaticPriceAdapter`                                         |
-| `StoragePort`        | Guardar fotos y comprobantes                              | `S3StorageAdapter`, `LocalStorageAdapter`                                                  |
+| `StoragePort`        | Guardar fotos y comprobantes                              | `S3StorageAdapter`, `InMemoryStorageAdapter` (tests); en `shared/`, vía `StorageModule`    |
 | `MapsPort`           | Distancias y geocodificación                              | adaptador de mapas, `FakeMapsAdapter`                                                      |
 
 ### `InboundMessage` (formato normalizado)

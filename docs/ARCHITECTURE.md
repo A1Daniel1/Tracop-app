@@ -36,7 +36,7 @@ Los cambios del catálogo y el registro de operaciones de sync comparten una tra
 
 ### Lot photos
 
-`LotPhotoService` reserves and processes photos through `StoragePort` and `PhotoProcessorPort`; `S3StorageAdapter` implements S3-compatible storage and `SharpPhotoProcessorAdapter` validates/normalizes images. Keys are random: uploads use `incoming/` and outputs use `photos/`.
+`LotPhotoService` reserves and processes photos through `StoragePort` and `PhotoProcessorPort` (shared ports in `shared/ports`, wired by `StorageModule` in `shared/infra/storage`, so other modules such as payments can store files); `S3StorageAdapter` implements S3-compatible storage and `SharpPhotoProcessorAdapter` validates/normalizes images. Keys are random: uploads use `incoming/` and outputs use `photos/`.
 
 1. An authorized provider calls `POST /lots/:id/photos` with a UUID v7 `photoId`. The API checks limits, lot state, and ownership; persists a `pending` reservation; and returns a presigned POST policy (URL, fields, expiry). The client uploads the file directly to the bucket, not through the API.
 2. `POST /lots/:id/photos/:photoId/confirm` claims the reservation by transitioning to `processing` with a lease token and expiry. The API checks size/format, processes JPEG/PNG/WebP, and writes a WebP output under `photos/`. Completion requires the lease token; an expired lease can be claimed again. The original and temporary objects are deleted on a best-effort basis; failures are left for orphan purging.
