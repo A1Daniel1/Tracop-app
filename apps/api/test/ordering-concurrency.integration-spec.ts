@@ -489,4 +489,87 @@ describePostgres('Ordering concurrency (20 iterations each)', () => {
       });
     }
   }, 120000);
+
+  it('cancels unpaid accepted orders once their reservation expires, never paid ones', async () => {
+    const supplier = await registerSupplier();
+    const buyer = await registerBuyer();
+    const ordering = app.get(OrderingService);
+    const acceptOrder = async () => {
+      const lotId = await createLot(supplier.userId, (global as any).__TEST_PROD_ID__, 5);
+      const orderId = uuidv7();
+      await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${buyer.token}`)
+        .send({ id: orderId, lines: [{ lotId, quantityMilli: '1000' }], deliveryAddress: 'Addr' })
+        .expect(201);
+      const { rows } = await pool.query<{ version: number }>(
+        `SELECT version FROM ordering.orders WHERE id = $1`,
+        [orderId],
+      );
+      await request(app.getHttpServer())
+        .post(`/orders/${orderId}/accept`)
+        .set('Authorization', `Bearer ${buyer.token}`)
+        .send({ expectedVersion: rows[0]!.version })
+        .expect(200);
+      await pool.query(
+        `UPDATE catalog.lot_reservations
+         SET created_at = NOW() - INTERVAL '2 hours', expires_at = NOW() - INTERVAL '1 minute'
+         WHERE order_id = $1`,
+        [orderId],
+      );
+      return orderId;
+    };
+    const state = async (orderId: string) =>
+      (
+        await pool.query<{
+          status: string;
+          reason: string | null;
+          reservations: string;
+          cancelled: string;
+        }>(
+          `SELECT o.status, o.cancel_reason AS reason,
+                  (SELECT string_agg(r.status, ',') FROM catalog.lot_reservations r
+                   WHERE r.order_id = o.id) AS reservations,
+                  (SELECT count(*) FROM ordering.order_events e
+                   WHERE e.order_id = o.id AND e.type = 'OrderCancelled')::text AS cancelled
+           FROM ordering.orders o WHERE o.id = $1`,
+          [orderId],
+        )
+      ).rows[0];
+
+    for (let iteration = 0; iteration < 20; iteration += 1) {
+      const orderId = await acceptOrder();
+      const [first, second] = await Promise.all([
+        ordering.expireReservations(new Date(), 100),
+        ordering.expireReservations(new Date(), 100),
+      ]);
+      expect({ iteration, expired: first + second, ...(await state(orderId)) }).toEqual({
+        iteration,
+        expired: 1,
+        status: 'cancelled',
+        reason: 'reservation_expired',
+        reservations: 'released',
+        cancelled: '1',
+      });
+    }
+
+    const pending = await acceptOrder();
+    await pool.query(`UPDATE ordering.orders SET status = 'payment_pending' WHERE id = $1`, [
+      pending,
+    ]);
+    expect(await ordering.expireReservations(new Date(), 100)).toBe(1);
+    expect(await state(pending)).toMatchObject({
+      status: 'cancelled',
+      reason: 'reservation_expired',
+    });
+
+    const paid = await acceptOrder();
+    await pool.query(`UPDATE ordering.orders SET status = 'paid' WHERE id = $1`, [paid]);
+    expect(await ordering.expireReservations(new Date(), 100)).toBe(0);
+    expect(await state(paid)).toMatchObject({
+      status: 'paid',
+      reservations: 'active',
+      cancelled: '0',
+    });
+  }, 180000);
 });
