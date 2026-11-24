@@ -100,6 +100,7 @@ export class OrderingController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Aceptar cotización (comprador)' })
   @ApiResponse({ status: 200, description: 'Cotización aceptada' })
+  @ApiResponse({ status: 404, description: 'Pedido inexistente o de otro comprador (not_found)' })
   @ApiResponse({
     status: 409,
     description: 'quote_expired, lot_unavailable, insufficient_stock o conflicto de versión',
@@ -124,7 +125,10 @@ export class OrderingController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Cancelar pedido (comprador o proveedor según estado)' })
   @ApiResponse({ status: 200, description: 'Pedido cancelado' })
-  @ApiResponse({ status: 403, description: 'No autorizado' })
+  @ApiResponse({
+    status: 404,
+    description: 'Pedido inexistente o ajeno: ni comprador ni proveedor (not_found)',
+  })
   @ApiResponse({ status: 409, description: 'Estado no permite cancelación o versión obsoleta' })
   @ApiResponse({ status: 503, description: 'Lock o statement timeout' })
   async cancel(

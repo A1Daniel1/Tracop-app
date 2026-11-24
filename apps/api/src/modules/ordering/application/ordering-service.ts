@@ -235,7 +235,10 @@ export class OrderingService {
     return this.uow.run(async () => {
       const now = this.clock.now();
       const aggregate = await this.orderRepository.findById(input.orderId, true);
-      if (!aggregate) throw new DomainError('Pedido no encontrado.', 'not_found');
+      // Only the buyer may accept; anyone else gets the same answer as for a missing order,
+      // before any version or state check can reveal details of someone else's order.
+      if (!aggregate || aggregate.order.buyerId !== input.actor.sub)
+        throw new DomainError('Pedido no encontrado.', 'not_found');
       if (aggregate.order.version !== input.expectedVersion)
         throw new DomainError('Conflicto de versión.', 'version_conflict');
       if (aggregate.order.status !== 'quoted')
@@ -287,7 +290,11 @@ export class OrderingService {
     return this.uow.run(async () => {
       const now = this.clock.now();
       const aggregate = await this.orderRepository.findById(input.orderId, true);
-      if (!aggregate) throw new DomainError('Pedido no encontrado.', 'not_found');
+      const isBuyer = aggregate?.order.buyerId === input.actor.sub;
+      const isProvider = aggregate?.order.providerId === input.actor.sub;
+      // A third party gets not_found before any version or state check (no information leak).
+      if (!aggregate || (!isBuyer && !isProvider))
+        throw new DomainError('Pedido no encontrado.', 'not_found');
       if (aggregate.order.version !== input.expectedVersion)
         throw new DomainError('Conflicto de versión.', 'version_conflict');
       if (!['requested', 'quoted', 'accepted', 'payment_pending'].includes(aggregate.order.status))
@@ -295,11 +302,6 @@ export class OrderingService {
           'El pedido no se puede cancelar en su estado actual.',
           'invalid_transition',
         );
-
-      const isBuyer = input.actor.sub === aggregate.order.buyerId;
-      const isProvider = input.actor.sub === aggregate.order.providerId;
-      if (!isBuyer && !isProvider)
-        throw new DomainError('No tiene permiso para cancelar este pedido.', 'access_denied');
 
       const orderEntity = Order.reconstitute(aggregate.order);
       orderEntity.transition('cancelled', now, {
