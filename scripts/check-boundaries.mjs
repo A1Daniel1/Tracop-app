@@ -86,6 +86,20 @@ async function main() {
     true,
   );
 
+  // Worker composition (F2): maintenance use cases are reached only through module index.ts.
+  await testFixture(
+    'bootstrap -> identity application (maintenance internals)',
+    'bootstrap',
+    '../modules/identity/application/identity-maintenance-service.ts',
+    true,
+  );
+  await testFixture(
+    'bootstrap -> messaging index.ts (public API)',
+    'bootstrap',
+    '../modules/messaging/index.ts',
+    false,
+  );
+
   // NEW: bootstrap -> catalog/index.ts must PASS
   await testFixture(
     'bootstrap -> catalog index.ts (public API)',
