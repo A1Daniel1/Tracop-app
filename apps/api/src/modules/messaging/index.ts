@@ -5,6 +5,7 @@ export { messagingMessages } from './i18n.js';
 export {
   CHANNEL_IDENTITY_PORT,
   MESSAGING_APPLICATION,
+  MESSAGING_MAINTENANCE,
   MESSAGING_PORT,
   PROCESSED_UPDATES_REPOSITORY,
 } from './ports/tokens.js';
@@ -12,6 +13,7 @@ export type {
   ChannelIdentityPort,
   LinkChannelOutcome,
   MessagingApplication,
+  MessagingMaintenanceApi,
   MessagingPort,
   MessagingUnitOfWork,
   ProcessedUpdatesRepository,

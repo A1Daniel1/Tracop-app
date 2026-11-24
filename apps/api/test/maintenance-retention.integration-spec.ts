@@ -6,6 +6,10 @@ import {
   IDENTITY_MAINTENANCE,
   type IdentityMaintenanceApi,
 } from '../src/modules/identity/index.js';
+import {
+  MESSAGING_MAINTENANCE,
+  type MessagingMaintenanceApi,
+} from '../src/modules/messaging/index.js';
 import { APP_CLOCK, APP_ENVIRONMENT, DATABASE_POOL } from '../src/shared/infra/tokens.js';
 import { loadAppEnvironment } from '../src/shared/infra/env.js';
 import { createId } from '../src/shared/kernel/ids.js';
@@ -20,6 +24,7 @@ describePostgres('retention jobs keep what they must keep (PostgreSQL)', () => {
   let app: INestApplicationContext;
   let pool: pg.Pool;
   let identity: IdentityMaintenanceApi;
+  let messaging: MessagingMaintenanceApi;
 
   beforeAll(async () => {
     app = await Test.createTestingModule({ imports: [AppModule] })
@@ -31,11 +36,13 @@ describePostgres('retention jobs keep what they must keep (PostgreSQL)', () => {
         OTP_RETENTION_DAYS: 7,
         SESSION_RETENTION_DAYS: 30,
         RATE_LIMIT_RETENTION_SECONDS: 86_400,
+        PROCESSED_UPDATES_RETENTION_DAYS: 7,
       })
       .compile();
     await app.init();
     pool = app.get(DATABASE_POOL) as pg.Pool;
     identity = app.get(IDENTITY_MAINTENANCE);
+    messaging = app.get(MESSAGING_MAINTENANCE);
   });
   afterAll(async () => app.close());
 
@@ -181,6 +188,44 @@ describePostgres('retention jobs keep what they must keep (PostgreSQL)', () => {
         sessions: [...fixture.kept.sessions].sort(),
         windows: [...fixture.kept.windows].sort(),
       });
+    }
+  });
+
+  const seedUpdates = async () => {
+    await resetPostgresFixtures(pool);
+    const rows: Array<[number, Date]> = [
+      [1, ago(30)],
+      [2, ago(8)],
+      [3, ago(6)],
+      [4, now],
+    ];
+    for (const [id, receivedAt] of rows)
+      await pool.query(
+        `INSERT INTO messaging.processed_updates (update_id, received_at) VALUES ($1, $2)`,
+        [id, receivedAt],
+      );
+  };
+  const remainingUpdates = async () =>
+    (
+      await pool.query<{ update_id: string }>(
+        'SELECT update_id::text FROM messaging.processed_updates ORDER BY update_id',
+      )
+    ).rows.map((row) => row.update_id);
+
+  it('purges only processed Telegram updates older than the retention', async () => {
+    await seedUpdates();
+    expect(await messaging.purgeProcessedUpdates()).toBe(2);
+    expect(await remainingUpdates()).toEqual(['3', '4']);
+    expect(await messaging.purgeProcessedUpdates()).toBe(0);
+
+    for (let iteration = 0; iteration < 20; iteration += 1) {
+      await seedUpdates();
+      const counts = await Promise.all([
+        messaging.purgeProcessedUpdates(),
+        messaging.purgeProcessedUpdates(),
+      ]);
+      expect({ iteration, deleted: counts[0] + counts[1] }).toEqual({ iteration, deleted: 2 });
+      expect(await remainingUpdates()).toEqual(['3', '4']);
     }
   });
 });

@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
-import { APP_ENVIRONMENT, UNIT_OF_WORK } from '../../shared/infra/tokens.js';
+import { APP_CLOCK, APP_ENVIRONMENT, UNIT_OF_WORK } from '../../shared/infra/tokens.js';
+import type { Clock } from '../../shared/kernel/clock.js';
+import { MessagingMaintenanceService } from './application/messaging-maintenance-service.js';
 import type { AppEnvironment } from '../../shared/infra/env.js';
 import { MessagingApplicationService } from './application/messaging-application-service.js';
 import { TelegramPollingRunner } from './adapters/in/telegram-polling.runner.js';
@@ -13,7 +15,9 @@ import {
   CHANNEL_IDENTITY_PORT,
   MESSAGING_APPLICATION,
   MESSAGING_PORT,
+  MESSAGING_MAINTENANCE,
   PROCESSED_UPDATES_REPOSITORY,
+  PROCESSED_UPDATES_RETENTION_REPOSITORY,
 } from './ports/tokens.js';
 
 @Module({
@@ -21,6 +25,24 @@ import {
   providers: [
     DrizzleProcessedUpdatesRepository,
     { provide: PROCESSED_UPDATES_REPOSITORY, useExisting: DrizzleProcessedUpdatesRepository },
+    {
+      provide: PROCESSED_UPDATES_RETENTION_REPOSITORY,
+      useExisting: DrizzleProcessedUpdatesRepository,
+    },
+    {
+      provide: MESSAGING_MAINTENANCE,
+      inject: [PROCESSED_UPDATES_RETENTION_REPOSITORY, APP_CLOCK, APP_ENVIRONMENT],
+      useFactory: (
+        retention: ConstructorParameters<typeof MessagingMaintenanceService>[0],
+        clock: Clock,
+        environment: AppEnvironment,
+      ) =>
+        new MessagingMaintenanceService(
+          retention,
+          clock,
+          environment.PROCESSED_UPDATES_RETENTION_DAYS,
+        ),
+    },
     {
       provide: MESSAGING_PORT,
       inject: [APP_ENVIRONMENT],
@@ -42,6 +64,6 @@ import {
     TelegramUpdateHandler,
     TelegramPollingRunner,
   ],
-  exports: [MESSAGING_PORT, MESSAGING_APPLICATION, TelegramPollingRunner],
+  exports: [MESSAGING_PORT, MESSAGING_APPLICATION, MESSAGING_MAINTENANCE, TelegramPollingRunner],
 })
 export class MessagingModule {}
