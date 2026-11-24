@@ -100,6 +100,32 @@ async function main() {
     false,
   );
 
+  // Application may inject shared ports, never shared infrastructure or adapters.
+  await testFixture(
+    'ordering application -> shared/infra',
+    'application',
+    '../../../../shared/infra/outbox-dispatcher.js',
+    true,
+  );
+  await testFixture(
+    'ordering application -> own adapters',
+    'application',
+    '../../adapters/out/drizzle-repositories.js',
+    true,
+  );
+  await testFixture(
+    'ordering application -> shared/ports',
+    'application',
+    '../../../../shared/ports/outbox-writer.js',
+    false,
+  );
+  await testFixture(
+    'ordering domain -> catalog ports (cross-module)',
+    'domain',
+    '../../../catalog/ports/catalog-ports.js',
+    true,
+  );
+
   // NEW: bootstrap -> catalog/index.ts must PASS
   await testFixture(
     'bootstrap -> catalog index.ts (public API)',

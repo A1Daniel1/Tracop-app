@@ -8,6 +8,58 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../apps/api/src');
 
+// ESLint flat config replaces a rule's options when several blocks match a file, so every block
+// that configures no-restricted-imports for module code must repeat the cross-module patterns.
+const CROSS_MODULE_IMPORTS = {
+  group: [
+    '**/catalog/adapters/**',
+    '**/catalog/ports/**',
+    '**/catalog/domain/**',
+    '**/catalog/application/**',
+    '**/identity/adapters/**',
+    '**/identity/ports/**',
+    '**/identity/domain/**',
+    '**/identity/application/**',
+    '**/ordering/adapters/**',
+    '**/ordering/ports/**',
+    '**/ordering/domain/**',
+    '**/ordering/application/**',
+    '**/sync/adapters/**',
+    '**/sync/ports/**',
+    '**/sync/domain/**',
+    '**/sync/application/**',
+    '**/messaging/adapters/**',
+    '**/messaging/ports/**',
+    '**/messaging/domain/**',
+    '**/messaging/application/**',
+    '**/notifications/adapters/**',
+    '**/notifications/ports/**',
+    '**/notifications/domain/**',
+    '**/notifications/application/**',
+    '**/payments/adapters/**',
+    '**/payments/ports/**',
+    '**/payments/domain/**',
+    '**/payments/application/**',
+    '**/logistics/adapters/**',
+    '**/logistics/ports/**',
+    '**/logistics/domain/**',
+    '**/logistics/application/**',
+    '**/trust/adapters/**',
+    '**/trust/ports/**',
+    '**/trust/domain/**',
+    '**/trust/application/**',
+    '**/ai-assistant/adapters/**',
+    '**/ai-assistant/ports/**',
+    '**/ai-assistant/domain/**',
+    '**/ai-assistant/application/**',
+    '**/backoffice/adapters/**',
+    '**/backoffice/ports/**',
+    '**/backoffice/domain/**',
+    '**/backoffice/application/**',
+  ],
+  message: 'Cross-module imports are only allowed via the module public API (modules/*/index.ts).',
+};
+
 export default [
   { ignores: ['**/dist/**', '**/coverage/**', '**/node_modules/**'] },
   eslint.configs.recommended,
@@ -93,58 +145,7 @@ export default [
       'no-restricted-imports': [
         'error',
         {
-          patterns: [
-            {
-              group: [
-                '**/catalog/adapters/**',
-                '**/catalog/ports/**',
-                '**/catalog/domain/**',
-                '**/catalog/application/**',
-                '**/identity/adapters/**',
-                '**/identity/ports/**',
-                '**/identity/domain/**',
-                '**/identity/application/**',
-                '**/ordering/adapters/**',
-                '**/ordering/ports/**',
-                '**/ordering/domain/**',
-                '**/ordering/application/**',
-                '**/sync/adapters/**',
-                '**/sync/ports/**',
-                '**/sync/domain/**',
-                '**/sync/application/**',
-                '**/messaging/adapters/**',
-                '**/messaging/ports/**',
-                '**/messaging/domain/**',
-                '**/messaging/application/**',
-                '**/notifications/adapters/**',
-                '**/notifications/ports/**',
-                '**/notifications/domain/**',
-                '**/notifications/application/**',
-                '**/payments/adapters/**',
-                '**/payments/ports/**',
-                '**/payments/domain/**',
-                '**/payments/application/**',
-                '**/logistics/adapters/**',
-                '**/logistics/ports/**',
-                '**/logistics/domain/**',
-                '**/logistics/application/**',
-                '**/trust/adapters/**',
-                '**/trust/ports/**',
-                '**/trust/domain/**',
-                '**/trust/application/**',
-                '**/ai-assistant/adapters/**',
-                '**/ai-assistant/ports/**',
-                '**/ai-assistant/domain/**',
-                '**/ai-assistant/application/**',
-                '**/backoffice/adapters/**',
-                '**/backoffice/ports/**',
-                '**/backoffice/domain/**',
-                '**/backoffice/application/**',
-              ],
-              message:
-                'Cross-module imports are only allowed via the module public API (modules/*/index.ts).',
-            },
-          ],
+          patterns: [CROSS_MODULE_IMPORTS],
         },
       ],
     },
@@ -226,6 +227,7 @@ export default [
         'error',
         {
           patterns: [
+            CROSS_MODULE_IMPORTS,
             {
               group: [
                 '**/shared/infra/**',
@@ -236,6 +238,25 @@ export default [
                 'pg',
               ],
               message: 'Domain can depend only on domain primitives and the shared kernel.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ['**/modules/*/application/**/*.ts'],
+    ignores: ['**/*.spec.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            CROSS_MODULE_IMPORTS,
+            {
+              group: ['**/shared/infra/**', '**/adapters/**'],
+              message:
+                'Application can depend only on domain, ports, shared ports and the shared kernel.',
             },
           ],
         },

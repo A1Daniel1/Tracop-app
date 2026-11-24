@@ -16,6 +16,10 @@ import type {
 import { createId } from '../src/shared/kernel/ids.js';
 import { describePostgres, resetPostgresFixtures } from './postgres-suite.js';
 
+// 20 iterations against PostgreSQL exceed Jest's 5 s default on a loaded machine; a timed-out
+// test keeps running in the background and corrupts the next one, so give it room.
+const CONCURRENCY_TEST_TIMEOUT_MS = 120_000;
+
 const settings: OutboxDispatcherSettings = {
   leaseSeconds: 60,
   maxAttempts: 5,
@@ -120,26 +124,30 @@ describePostgres('outbox dispatcher (PostgreSQL)', () => {
     expect(await dispatcher(clock, [orders, audit]).dispatch()).toMatchObject({ claimed: 0 });
   });
 
-  it('never delivers an event twice when two dispatchers run in parallel', async () => {
-    for (let iteration = 0; iteration < 20; iteration += 1) {
-      await resetPostgresFixtures(pool);
-      const clock = new TestClock(start);
-      const subscriber = new RecordingSubscriber('notifications.orders', '*', { delayMs: 1 });
-      const ids = await insertEvents('OrderAccepted', 30);
-      const [first, second] = await Promise.all([
-        dispatcher(clock, [subscriber]).dispatch(20),
-        dispatcher(clock, [subscriber]).dispatch(20),
-      ]);
-      expect({ iteration, claimed: first.claimed + second.claimed }).toEqual({
-        iteration,
-        claimed: 30,
-      });
-      expect({ iteration, calls: [...subscriber.calls].sort() }).toEqual({
-        iteration,
-        calls: [...ids].sort(),
-      });
-    }
-  });
+  it(
+    'never delivers an event twice when two dispatchers run in parallel',
+    async () => {
+      for (let iteration = 0; iteration < 20; iteration += 1) {
+        await resetPostgresFixtures(pool);
+        const clock = new TestClock(start);
+        const subscriber = new RecordingSubscriber('notifications.orders', '*', { delayMs: 1 });
+        const ids = await insertEvents('OrderAccepted', 30);
+        const [first, second] = await Promise.all([
+          dispatcher(clock, [subscriber]).dispatch(20),
+          dispatcher(clock, [subscriber]).dispatch(20),
+        ]);
+        expect({ iteration, claimed: first.claimed + second.claimed }).toEqual({
+          iteration,
+          claimed: 30,
+        });
+        expect({ iteration, calls: [...subscriber.calls].sort() }).toEqual({
+          iteration,
+          calls: [...ids].sort(),
+        });
+      }
+    },
+    CONCURRENCY_TEST_TIMEOUT_MS,
+  );
 
   it('retries with exponential backoff and dead-letters after the last attempt', async () => {
     const clock = new TestClock(start);

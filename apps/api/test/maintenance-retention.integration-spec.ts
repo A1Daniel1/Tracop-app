@@ -15,6 +15,10 @@ import { loadAppEnvironment } from '../src/shared/infra/env.js';
 import { createId } from '../src/shared/kernel/ids.js';
 import { describePostgres, resetPostgresFixtures } from './postgres-suite.js';
 
+// 20 iterations against PostgreSQL exceed Jest's 5 s default on a loaded machine; a timed-out
+// test keeps running in the background and corrupts the next one, so give it room.
+const CONCURRENCY_TEST_TIMEOUT_MS = 120_000;
+
 const DAY = 86_400_000;
 
 describePostgres('retention jobs keep what they must keep (PostgreSQL)', () => {
@@ -179,23 +183,27 @@ describePostgres('retention jobs keep what they must keep (PostgreSQL)', () => {
     expect(await remaining()).toEqual(expected);
   });
 
-  it('gives the same result when two purges run in parallel', async () => {
-    for (let iteration = 0; iteration < 20; iteration += 1) {
-      const fixture = await seedIdentity();
-      const [first, second] = await Promise.all([purgeIdentity(), purgeIdentity()]);
-      expect({
-        iteration,
-        otp: first.otpCodes + second.otpCodes,
-        sessions: first.sessions + second.sessions,
-        windows: first.rateLimitWindows + second.rateLimitWindows,
-      }).toEqual({ iteration, otp: 2, sessions: 2, windows: 1 });
-      expect(await remaining()).toEqual({
-        otp: [...fixture.kept.otp].sort(),
-        sessions: [...fixture.kept.sessions].sort(),
-        windows: [...fixture.kept.windows].sort(),
-      });
-    }
-  });
+  it(
+    'gives the same result when two purges run in parallel',
+    async () => {
+      for (let iteration = 0; iteration < 20; iteration += 1) {
+        const fixture = await seedIdentity();
+        const [first, second] = await Promise.all([purgeIdentity(), purgeIdentity()]);
+        expect({
+          iteration,
+          otp: first.otpCodes + second.otpCodes,
+          sessions: first.sessions + second.sessions,
+          windows: first.rateLimitWindows + second.rateLimitWindows,
+        }).toEqual({ iteration, otp: 2, sessions: 2, windows: 1 });
+        expect(await remaining()).toEqual({
+          otp: [...fixture.kept.otp].sort(),
+          sessions: [...fixture.kept.sessions].sort(),
+          windows: [...fixture.kept.windows].sort(),
+        });
+      }
+    },
+    CONCURRENCY_TEST_TIMEOUT_MS,
+  );
 
   const seedUpdates = async () => {
     await resetPostgresFixtures(pool);
@@ -218,20 +226,24 @@ describePostgres('retention jobs keep what they must keep (PostgreSQL)', () => {
       )
     ).rows.map((row) => row.update_id);
 
-  it('purges only processed Telegram updates older than the retention', async () => {
-    await seedUpdates();
-    expect(await messaging.purgeProcessedUpdates()).toBe(2);
-    expect(await remainingUpdates()).toEqual(['3', '4']);
-    expect(await messaging.purgeProcessedUpdates()).toBe(0);
-
-    for (let iteration = 0; iteration < 20; iteration += 1) {
+  it(
+    'purges only processed Telegram updates older than the retention',
+    async () => {
       await seedUpdates();
-      const counts = await Promise.all([
-        messaging.purgeProcessedUpdates(),
-        messaging.purgeProcessedUpdates(),
-      ]);
-      expect({ iteration, deleted: counts[0] + counts[1] }).toEqual({ iteration, deleted: 2 });
+      expect(await messaging.purgeProcessedUpdates()).toBe(2);
       expect(await remainingUpdates()).toEqual(['3', '4']);
-    }
-  });
+      expect(await messaging.purgeProcessedUpdates()).toBe(0);
+
+      for (let iteration = 0; iteration < 20; iteration += 1) {
+        await seedUpdates();
+        const counts = await Promise.all([
+          messaging.purgeProcessedUpdates(),
+          messaging.purgeProcessedUpdates(),
+        ]);
+        expect({ iteration, deleted: counts[0] + counts[1] }).toEqual({ iteration, deleted: 2 });
+        expect(await remainingUpdates()).toEqual(['3', '4']);
+      }
+    },
+    CONCURRENCY_TEST_TIMEOUT_MS,
+  );
 });

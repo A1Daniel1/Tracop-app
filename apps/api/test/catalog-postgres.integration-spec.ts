@@ -15,6 +15,10 @@ import { DatabaseService } from '../src/shared/infra/database.js';
 import { describePostgres } from './postgres-suite.js';
 import { SyncService } from '../src/modules/sync/index.js';
 
+// 20 iterations against PostgreSQL exceed Jest's 5 s default on a loaded machine; a timed-out
+// test keeps running in the background and corrupts the next one, so give it room.
+const CONCURRENCY_TEST_TIMEOUT_MS = 120_000;
+
 describePostgres('catalog repositories and use cases (shared PostgreSQL Testcontainers)', () => {
   let app: INestApplicationContext;
   let pool: pg.Pool;
@@ -960,44 +964,50 @@ describePostgres('catalog repositories and use cases (shared PostgreSQL Testcont
     ).toMatchObject({ status: 'published', version: 4 });
   });
 
-  it('expires each overdue lot once when two expiry runs overlap', async () => {
-    for (let iteration = 0; iteration < 20; iteration += 1) {
-      const lots = [await createLot(), await createLot(), await createLot()];
-      const kept = await createLot();
-      await pool.query(
-        `UPDATE catalog.lots SET available_from = $3, available_until = $2 WHERE id = ANY($1::uuid[])`,
-        [
-          lots.map((lot) => lot.id),
-          new Date(now.getTime() - 60_000),
-          new Date(now.getTime() - 7_200_000),
-        ],
-      );
-      const counts = await Promise.all([catalog.expireLots(100), catalog.expireLots(100)]);
-      const statuses = await pool.query<{ id: string; status: string }>(
-        `SELECT id, status FROM catalog.lots WHERE id = ANY($1::uuid[]) ORDER BY id`,
-        [[...lots.map((lot) => lot.id), kept.id]],
-      );
-      const events = await pool.query<{ count: string }>(
-        `SELECT count(*)::text FROM shared.outbox_events
+  it(
+    'expires each overdue lot once when two expiry runs overlap',
+    async () => {
+      for (let iteration = 0; iteration < 20; iteration += 1) {
+        const lots = [await createLot(), await createLot(), await createLot()];
+        const kept = await createLot();
+        await pool.query(
+          `UPDATE catalog.lots SET available_from = $3, available_until = $2 WHERE id = ANY($1::uuid[])`,
+          [
+            lots.map((lot) => lot.id),
+            new Date(now.getTime() - 60_000),
+            new Date(now.getTime() - 7_200_000),
+          ],
+        );
+        const counts = await Promise.all([catalog.expireLots(100), catalog.expireLots(100)]);
+        const statuses = await pool.query<{ id: string; status: string }>(
+          `SELECT id, status FROM catalog.lots WHERE id = ANY($1::uuid[]) ORDER BY id`,
+          [[...lots.map((lot) => lot.id), kept.id]],
+        );
+        const events = await pool.query<{ count: string }>(
+          `SELECT count(*)::text FROM shared.outbox_events
          WHERE type = 'LotExpired' AND payload->>'lotId' = ANY($1::text[])`,
-        [lots.map((lot) => lot.id)],
-      );
-      expect({
-        iteration,
-        expired: counts[0] + counts[1],
-        events: events.rows[0]?.count,
-        kept: statuses.rows.find((row) => row.id === kept.id)?.status,
-        expiredStatuses: statuses.rows.filter((row) => row.id !== kept.id).map((row) => row.status),
-      }).toEqual({
-        iteration,
-        expired: 3,
-        events: '3',
-        kept: 'published',
-        expiredStatuses: ['expired', 'expired', 'expired'],
-      });
-      await pool.query(`DELETE FROM catalog.lots WHERE id = ANY($1::uuid[])`, [
-        [...lots.map((lot) => lot.id), kept.id],
-      ]);
-    }
-  });
+          [lots.map((lot) => lot.id)],
+        );
+        expect({
+          iteration,
+          expired: counts[0] + counts[1],
+          events: events.rows[0]?.count,
+          kept: statuses.rows.find((row) => row.id === kept.id)?.status,
+          expiredStatuses: statuses.rows
+            .filter((row) => row.id !== kept.id)
+            .map((row) => row.status),
+        }).toEqual({
+          iteration,
+          expired: 3,
+          events: '3',
+          kept: 'published',
+          expiredStatuses: ['expired', 'expired', 'expired'],
+        });
+        await pool.query(`DELETE FROM catalog.lots WHERE id = ANY($1::uuid[])`, [
+          [...lots.map((lot) => lot.id), kept.id],
+        ]);
+      }
+    },
+    CONCURRENCY_TEST_TIMEOUT_MS,
+  );
 });

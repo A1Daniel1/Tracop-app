@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { OUTBOX_WRITER } from '../../../shared/infra/tokens.js';
+import { OUTBOX_WRITER } from '../../../shared/ports/outbox-writer.js';
 import type { OutboxWriter } from '../../../shared/ports/outbox-writer.js';
 import { DomainError } from '../../../shared/kernel/domain-error.js';
 import {
