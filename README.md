@@ -19,7 +19,16 @@ pnpm db:migrate
 pnpm dev
 ```
 
-La API queda disponible en `http://localhost:3000/health`; OpenAPI está en `/docs`. En desarrollo, OTP se imprime en la terminal con el teléfono enmascarado. MinIO es opcional: completa `MINIO_ROOT_USER` y `MINIO_ROOT_PASSWORD` y ejecuta `docker compose --profile storage up -d minio` solo cuando pruebes almacenamiento de objetos.
+La API queda disponible en `http://localhost:3000/health`; OpenAPI está en `/docs`. En desarrollo, OTP se imprime en la terminal con el teléfono enmascarado. MinIO es opcional: completa `MINIO_ROOT_USER` y `MINIO_ROOT_PASSWORD` y ejecuta `docker compose --profile storage up -d minio` solo cuando pruebes almacenamiento de objetos. MinIO no tiene CORS por bucket: los orígenes del navegador permitidos se fijan en el servidor con `MINIO_CORS_ALLOWED_ORIGINS` (por defecto `http://localhost:8081`); `pnpm storage:configure-cors` es para proveedores S3 con CORS por bucket.
+
+### Trabajador (tareas periódicas y outbox)
+
+```bash
+pnpm --filter @tracop/api worker        # desarrollo (tsx)
+pnpm --filter @tracop/api worker:start  # tras pnpm build (node dist/worker.js)
+```
+
+Imprime `Worker ready. Registered jobs: …` y se detiene limpio con `Ctrl+C`/`SIGTERM`. Expira lotes, reservas y cotizaciones, purga fotos huérfanas y datos vencidos (OTP, sesiones, ventanas de rate limit, updates de Telegram) y despacha el outbox. pg-boss crea su schema `pgboss` al arrancar. Crons y retenciones: variables `JOB_*`, `OUTBOX_*` y `*_RETENTION_*` ([ADR-016](docs/adr/ADR-016.md)).
 
 ## Bot de Telegram (creación y configuración)
 
@@ -161,7 +170,7 @@ pnpm test                       # todas las unidades y aplicaciones del monorepo
 pnpm --filter @tracop/api test  # solo la API, con cobertura
 ```
 
-Las pruebas de la API requieren Docker: Jest con `--coverage` levanta PostgreSQL 16 con Testcontainers. Las pruebas de identity son `apps/api/test/identity.e2e-spec.ts` (flujo, concurrencia y reuse detection), `identity-logging.e2e-spec.ts` (redacción de logs), `identity-application.spec.ts`, `identity-authorization.spec.ts` y `otp-sender.contract-spec.ts`. La cobertura se mide sobre dominio, aplicación, `app.module` y `shared/kernel`; umbrales: dominio 90 % de líneas, aplicación 80 %, global 75 %.
+Las pruebas de la API requieren Docker: Jest con `--coverage` levanta PostgreSQL 16 con Testcontainers. Las pruebas de identity son `apps/api/test/identity.e2e-spec.ts` (flujo, concurrencia y reuse detection), `identity-logging.e2e-spec.ts` (redacción de logs), `identity-application.spec.ts`, `identity-authorization.spec.ts` y `otp-sender.contract-spec.ts`. La cobertura se mide sobre dominio, aplicación, `app.module`, `worker-jobs`, `worker-lifecycle`, `shared/auth` y `shared/kernel`; umbrales: dominio 90 % de líneas, aplicación 80 %, global 75 %.
 
 ## Lot photos
 
@@ -215,5 +224,10 @@ El workflow ejecuta `pnpm test` antes del escaneo para generar los reportes LCOV
 - [Glosario](docs/GLOSSARY.md)
 - [ADR-008: autenticación por teléfono + OTP](docs/adr/ADR-008.md)
 - [ADR-009: mensajería con Telegram](docs/adr/ADR-009.md)
+- [Referencia de la API](docs/API.md) y [contrato OpenAPI](docs/openapi.json)
+- [Integración con la app móvil](docs/MOBILE-INTEGRATION.md)
 - [ADR-013: logística sin coordenadas y check-ins offline](docs/adr/ADR-013.md)
+- [ADR-014: pedidos, cotizaciones y reservas](docs/adr/ADR-014.md)
+- [ADR-015: propuestas de producto](docs/adr/ADR-015.md)
+- [ADR-016: trabajador y outbox](docs/adr/ADR-016.md)
 - [Aviso de privacidad (texto pendiente)](docs/PRIVACY_NOTICE.md)

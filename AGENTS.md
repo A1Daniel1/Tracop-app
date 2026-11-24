@@ -137,7 +137,7 @@ TRACOP es una plataforma móvil de abastecimiento agropecuario que conecta **pro
 | Monorepo                   | pnpm workspaces + Turborepo                                                                               |
 | Backend                    | Node.js 22 LTS + NestJS (módulos)                                                                         |
 | Base de datos              | PostgreSQL 16 (schema por módulo)                                                                         |
-| ORM / migraciones          | Drizzle ORM + drizzle-kit                                                                                 |
+| ORM / migraciones          | Drizzle ORM; migraciones SQL escritas a mano (`drizzle/migrate.ts`)                                       |
 | Jobs / colas               | pg-boss (sobre PostgreSQL, sin Redis en el piloto)                                                        |
 | Eventos internos           | `@nestjs/event-emitter` + tabla `outbox_events`                                                           |
 | Validación / contratos     | zod (paquete compartido `contracts`) + OpenAPI generado                                                   |
@@ -283,21 +283,23 @@ type InboundMessage = {
 
 ## 9. Módulos
 
-| Módulo          | Responsabilidad                                                                            | Publica eventos                                                                      | Offline                 |
-| --------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ | ----------------------- |
-| `identity`      | Registro, perfiles, roles, vinculación de canales, OTP, sesiones                           | `UserRegistered`, `ChannelLinked`                                                    | Parcial                 |
-| `catalog`       | Productos, categorías, lotes, disponibilidad, búsqueda y filtros                           | `LotPublished`, `LotReserved`, `LotExpired`, `LotCancelled`                          | Sí                      |
-| `ordering`      | Solicitudes, cotizaciones, pedidos y estados                                               | `OrderRequested`, `OrderQuoted`, `OrderAccepted`, `OrderDelivered`, `OrderCancelled` | Sí (eventos pendientes) |
-| `logistics`     | Agrupar lotes, camiones, rutas, check-ins, incidencias de transporte                       | `TripPlanned`, `PickupConfirmed`, `DeliveryConfirmed`                                | Sí (check-ins locales)  |
-| `payments`      | Cotización de costos, comprobantes, verificación, ledger, liquidación                      | `PaymentProofUploaded`, `PaymentVerified`, `SettlementIssued`, `PaymentDisputed`     | No                      |
-| `notifications` | Plantillas, preferencias, enrutamiento por canal, reintentos, estado de envío              | `NotificationSent`, `NotificationFailed`                                             | Bandeja local           |
-| `messaging`     | Webhooks y adaptadores de canal, normalización a `InboundMessage`, flujos conversacionales | —                                                                                    | No                      |
-| `ai-assistant`  | Extracción de borradores desde texto/audio/foto; sugerencia de precios                     | `DraftGenerated`                                                                     | No                      |
-| `trust`         | Calificaciones, reputación, verificación de proveedores                                    | `ProviderVerified`, `RatingSubmitted`                                                | Lectura                 |
-| `sync`          | Recepción idempotente de operaciones, cursores de pull, resolución de conflictos           | `SyncBatchApplied`                                                                   | Núcleo offline          |
-| `backoffice`    | Casos de uso de operación, métricas, parámetros, audit log                                 | —                                                                                    | No                      |
+| Módulo          | Responsabilidad                                                                                            | Publica eventos                                                                                                                                               | Offline                                       |
+| --------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `identity`      | Registro, perfiles, roles, vinculación de canales, OTP, sesiones                                           | `UserRegistered`, `UserVerified`, `SessionRevoked`, `ChannelLinked`                                                                                           | Parcial                                       |
+| `catalog`       | Productos, categorías, propuestas de producto, lotes, reservas de stock, fotos, búsqueda                   | `LotPublished`, `LotReserved`, `LotAvailabilityRestored`, `LotExpired`, `LotCancelled`, `LotDeleted`, `ProductProposed`, `ProductApproved`, `ProductRejected` | Sí                                            |
+| `ordering`      | Pedidos, cotizaciones, reservas al aceptar, estados                                                        | `OrderRequested`, `OrderQuoted`, `OrderAccepted`, `OrderCancelled`, `OrderPickupScheduled`, `OrderInTransit`, `OrderDelivered`                                | No (solo en línea)                            |
+| `logistics`     | Perfiles de transportista, viajes por pedido, paradas, check-ins, incidencias                              | `TripPlanned`, `TripAssigned`, `TripStarted`, `TripCompleted`, `TripCancelled`, `PickupConfirmed`, `DeliveryConfirmed`, `IncidentOpened`, `IncidentResolved`  | Sí (viajes, check-ins e incidencias por sync) |
+| `payments`      | Cotización de costos, comprobantes, verificación, ledger, liquidación (planificado; aún no existe)         | `PaymentProofUploaded`, `PaymentVerified`, `SettlementIssued`, `PaymentDisputed`                                                                              | No                                            |
+| `notifications` | Plantillas, preferencias, enrutamiento por canal, reintentos, estado de envío (planificado; aún no existe) | `NotificationSent`, `NotificationFailed`                                                                                                                      | Bandeja local                                 |
+| `messaging`     | Webhooks y adaptadores de canal, normalización a `InboundMessage`, flujos conversacionales                 | —                                                                                                                                                             | No                                            |
+| `ai-assistant`  | Extracción de borradores desde texto/audio/foto; sugerencia de precios (planificado; aún no existe)        | `DraftGenerated`                                                                                                                                              | No                                            |
+| `trust`         | Calificaciones, reputación, verificación de proveedores (planificado; aún no existe)                       | `ProviderVerified`, `RatingSubmitted`                                                                                                                         | Lectura                                       |
+| `sync`          | Recepción idempotente de operaciones, cursores de pull, resolución de conflictos                           | — (no emite eventos)                                                                                                                                          | Núcleo offline                                |
+| `backoffice`    | Casos de uso de operación, métricas, parámetros, audit log (planificado; aún no existe)                    | —                                                                                                                                                             | No                                            |
 
 **Regla:** si un módulo necesita datos de otro, usa su `index.ts` (consulta pública) o reacciona a su evento. Nunca su tabla.
+
+Los eventos se escriben en `shared.outbox_events` en la misma transacción que el cambio; el despachador del trabajador los entrega a los consumidores registrados ([ADR-016](docs/adr/ADR-016.md)). Hoy no hay consumidores: el primero será `notifications`.
 
 ---
 
@@ -367,28 +369,29 @@ PostgreSQL 16. **schema solo para módulos con datos propios.** Convenciones: `s
 **catalog**
 
 - `categories` (id uuid, name text, parent_id uuid nullable, depth integer, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, deleted_at timestamptz nullable). `depth` está entre 1 y 3; nombre no vacío y máximo 100 caracteres.
-- `products` (id uuid, category_id uuid, name text, search_text text, unit text, attributes jsonb, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, deleted_at timestamptz nullable). Nombre no vacío y máximo 120 caracteres; atributos es un objeto. `search_text` contiene el nombre normalizado para búsquedas.
+- `products` (id uuid, category_id uuid, name text, search_text text, unit text, attributes jsonb, status text NOT NULL DEFAULT 'approved', proposed_by uuid nullable, reviewed_by uuid nullable, reviewed_at timestamptz nullable, rejection_reason text nullable, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, deleted_at timestamptz nullable). Nombre no vacío y máximo 120 caracteres; atributos es un objeto. `search_text` contiene el nombre normalizado para búsquedas. `status` ∈ `approved`, `pending_review`, `rejected`; `products_proposal_review_check` exige proponente y sin revisión en pendientes, ni proponente ni revisor en aprobados curados, y proponente, revisor y fecha en propuestas revisadas; `rejection_reason` obligatorio en rechazados. Índice único parcial (`category_id`, `search_text`) para `approved` y `pending_review` no eliminados (ver [ADR-015](docs/adr/ADR-015.md)).
 - `lots` (id uuid, provider_id uuid, product_id uuid, quantity numeric(12,3), unit text, unit_price bigint, quality_grade text nullable, available_from timestamptz, available_until timestamptz, location_lat double precision, location_lng double precision, status text, version integer, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, deleted_at timestamptz nullable). La cantidad del dominio se representa como `quantityMilli: bigint` (milésimas) y se convierte a/desde `numeric(12,3)` al persistir. El precio unitario es entero positivo en COP; la unidad del lote debe coincidir con la del producto. Coordenadas se restringen a los límites de Colombia; `quality_grade` admite texto opcional de hasta 100 caracteres sin vocabulario cerrado.
 - `lot_photos` (id uuid, lot_id uuid, media_ref text, created_at timestamptz NOT NULL, state text NOT NULL, content_type text nullable, size_bytes integer nullable, position integer NOT NULL, expires_at timestamptz NOT NULL, lease_token text nullable, lease_expires_at timestamptz nullable, deleted_at timestamptz nullable). `state` puede ser `pending`, `processing` o `ready`; las filas `ready` requieren `content_type = 'image/webp'` y `size_bytes` no nulo. Índices: `lot_id`, vencimiento para filas que no estén `ready` y `(lot_id, position)` para filas no eliminadas.
+- `lot_reservations` (id uuid, lot_id uuid, order_id uuid, quantity_milli numeric(12,3) > 0, status text, expires_at timestamptz ≥ created_at, created_at, updated_at). `status` ∈ `active`, `released`, `consumed`. Solo las reservas `active` no vencidas restan cantidad disponible.
 
 Unidades actualmente aceptadas por el catálogo: `kg`, `g`, `lb`, `und`, `docena`, `arroba`, `quintal`, `caja`, `mano`, `bulto`. Esta lista es **provisional**; el vocabulario de unidades y el vocabulario para `quality_grade` siguen pendientes de decisión (§23).
 
 **ordering**
 
-- `orders` (id, buyer_id, status, delivery_address, delivery_window, created_at, version)
-- `order_items` (id, order_id, lot_id, provider_id, quantity, unit_price)
-- `quotes` (id, order_id, subtotal, freight, commission, total, valid_until, status)
-- `order_events` (id, order_id, type, payload jsonb, actor_id, occurred_at, prev_hash, hash) — **append-only, hash encadenado**
+- `orders` (id, buyer_id, provider_id, status, delivery_address, delivery_window, request_hash, created_at, updated_at, version, accepted_at, cancel_reason, deleted_at). `status` con CHECK de los 12 estados de §12. Un pedido tiene un solo proveedor.
+- `order_lines` (id, order_id, lot_id, provider_id, quantity_milli numeric(12,3), unit_price numeric(20,0), unit)
+- `quotes` (id, order_id, subtotal, freight, commission, total, provider_net — numeric(20,0) ≥ 0; valid_until, status, created_at, updated_at). `status` ∈ `active`, `accepted`, `expired`, `cancelled` y se persiste junto con el pedido.
+- `order_events` (id, order_id, type, payload, actor_id, occurred_at, prev_hash, hash) — **append-only, hash encadenado**; `type` ∈ `OrderRequested`, `OrderQuoted`, `OrderAccepted`, `OrderCancelled`, `OrderPickupScheduled`, `OrderInTransit`, `OrderDelivered`.
 
 **logistics**
 
-- `carriers` (user_id, vehicle_type, capacity_kg, plate)
-- `trips` (id, carrier_id, status, planned_at, route jsonb)
-- `trip_stops` (id, trip_id, order_id, kind, sequence, scheduled_at, completed_at)
-- `checkins` (id, stop_id, kind, lat, lng, media_ref, client_ts, server_seq)
-- `incidents` (id, order_id, trip_id, type, description, status, opened_at, closed_at)
+- `carriers` (user_id, vehicle_type, capacity_kg > 0, plate, created_at, updated_at, deleted_at); placa única entre activos.
+- `trips` (id, carrier_id, status, version, planned_at, route jsonb, created_at, updated_at, deleted_at); `status` ∈ `planned`, `assigned`, `in_progress`, `completed`, `cancelled`.
+- `trip_stops` (id, trip_id, order_id, order_version, kind, sequence, zone, scheduled_at, completed_at); `kind` ∈ `pickup`, `delivery`; únicos (trip_id, sequence) y (trip_id, order_id, kind).
+- `checkins` (id, stop_id, trip_id, order_id, carrier_id, kind, client_ts, media_ref, created_at); único (stop_id, kind). **Sin coordenadas** (ver [ADR-013](docs/adr/ADR-013.md)).
+- `incidents` (id, order_id, trip_id, type, description, status, opened_at, closed_at, deleted_at); `status` ∈ `open`, `resolved`.
 
-**payments**
+**payments** (planificado; aún no existe)
 
 - `payments` (id, order_id, method, amount, status, proof_media_ref, verified_by, verified_at)
 - `ledger_entries` (id, transaction_id, account, debit, credit, order_id, created_at) — **inmutable; por transacción suma débitos = créditos**
@@ -396,14 +399,14 @@ Unidades actualmente aceptadas por el catálogo: `kg`, `g`, `lb`, `und`, `docena
 - `commission_rules` (id, scope, rate_bps, valid_from, valid_to) — tasa en puntos básicos
 - `freight_rates` (id, corridor, rate_per_kg, min_charge, valid_from, valid_to)
 
-**notifications**
+**notifications** (planificado; aún no existe)
 
 - `templates` (id, event_type, channel, locale, body)
 - `preferences` (user_id, channel_order jsonb, quiet_hours jsonb)
 - `deliveries` (id, user_id, event_id, channel, status, attempts, last_error, sent_at, read_at)
 - `inbox` (id, user_id, title, body, read_at)
 
-**trust**
+**trust** (planificado; aún no existe)
 
 - `ratings` (id, order_id, rater_id, ratee_id, score, comment)
 - `verifications` (id, provider_id, status, documents jsonb, reviewed_by, reviewed_at)
@@ -412,27 +415,28 @@ Unidades actualmente aceptadas por el catálogo: `kg`, `g`, `lb`, `und`, `docena
 **sync**
 
 - `processed_operations` (`op_id uuid` PK, `device_id uuid` NOT NULL, `user_id uuid` NOT NULL, `entity text` NOT NULL, `entity_id uuid` NOT NULL, `result jsonb` NOT NULL, `error_code text` nullable, `payload_hash text` NOT NULL, `server_seq bigint` nullable, `processed_at timestamptz` NOT NULL). Restricciones: longitud de `entity` entre 1 y 64; longitud del código de error nullable ≤100; `payload_hash` contiene 64 caracteres hexadecimales en minúscula; `result` es un objeto JSON cuyo `status` es `applied`, `rejected` o `conflict`.
-- `change_log` (`server_seq bigint` PK, default from `sync.change_log_server_seq_seq`; `entity text` NOT NULL; `entity_id uuid` NOT NULL; `op text` NOT NULL; `payload jsonb` NOT NULL; `owner_user_id uuid` nullable; `occurred_at timestamptz` NOT NULL). Índice: `(owner_user_id, server_seq)`. Restricciones: longitud de `entity` entre 1 y 64 y valor en `category`, `product`, `lot`; longitud de `op` entre 1 y 32 y valor en `upsert`, `delete`, `cancel`; tamaño serializado de `payload` ≤262,144 bytes.
+- `change_log` (`server_seq bigint` PK, default from `sync.change_log_server_seq_seq`; `entity text` NOT NULL; `entity_id uuid` NOT NULL; `op text` NOT NULL; `payload jsonb` NOT NULL; `owner_user_id uuid` nullable; `occurred_at timestamptz` NOT NULL). Índice: `(owner_user_id, server_seq)`. Restricciones: longitud de `entity` entre 1 y 64 y valor en `category`, `product`, `lot`, `trip`, `checkin`, `incident`; longitud de `op` entre 1 y 32 y valor en `upsert`, `delete`, `cancel`; tamaño serializado de `payload` ≤262,144 bytes.
 
 Actualmente no hay implementada retención ni compactación para `sync.change_log` ni `sync.processed_operations`; se deben definir e implementar más adelante, sin asumir un periodo de retención.
 
-**backoffice**
+**backoffice** (planificado; aún no existe)
 
 - `audit_log` (id, actor_id, action, entity, entity_id, before jsonb, after jsonb, at, ip)
 - `parameters` (key, value jsonb, updated_by, updated_at)
 
 **shared**
 
-- `outbox_events` (id, aggregate, type, payload jsonb, created_at, published_at)
+- `outbox_events` (id, aggregate, type, payload jsonb, created_at, published_at, attempts, next_attempt_at, last_error, failed_at, locked_until, lease_token). `next_attempt_at` NULL significa «pendiente ya»; `failed_at` marca la cola de fallidos; `locked_until` y `lease_token` van juntos (lease del despachador).
+- `outbox_deliveries` (consumer, event_id → outbox_events, delivered_at); PK (consumer, event_id): idempotencia por consumidor (ver [ADR-016](docs/adr/ADR-016.md)).
 - `schema_migrations` (id, applied_at) — metadata técnica del runner de migraciones
 
 **messaging (datos técnicos de adaptador, no de negocio)**
 
-- `processed_updates` (update_id bigint pk) — idempotencia de updates de Telegram; no es dato de negocio del módulo.
+- `processed_updates` (update_id bigint pk, received_at) — idempotencia de updates de Telegram; no es dato de negocio del módulo. Se purgan tras `PROCESSED_UPDATES_RETENTION_DAYS`.
 
 ### Reglas de base de datos
 
-- Migraciones **solo hacia adelante** con drizzle-kit; nunca editar una migración ya aplicada.
+- Migraciones **solo hacia adelante**, escritas a mano en `apps/api/drizzle` y aplicadas con `drizzle/migrate.ts` (registra en `shared.schema_migrations`); nunca `drizzle-kit generate` ni editar una migración ya integrada. Numeración única y contigua (`pnpm db:check-migrations`).
 - Índices obligatorios: FK, `lots(product_id, status)`, `lots` geoespacial si se usa búsqueda por cercanía, `change_log(server_seq)`.
 - Integridad del ledger: restricción/trigger o prueba que verifique débitos = créditos por `transaction_id`.
 - Datos personales (teléfono, documentos) con acceso restringido; ver §16.
@@ -445,15 +449,15 @@ Actualmente no hay implementada retención ni compactación para `sync.change_lo
 
 Las transiciones se validan en el **dominio**; un estado inválido lanza error de dominio, nunca se "corrige" en silencio.
 
-**Lote:** `draft → published → reserved → sold_out` · `published → expired` · `draft|published|reserved → cancelled`
+**Lote:** `draft → published | cancelled` · `published → reserved | expired | cancelled` · `reserved → published | expired | cancelled`. Un lote pasa a `reserved` cuando las reservas activas agotan su cantidad y vuelve a `published` al liberarse una reserva (`LotAvailabilityRestored`); solo se borra (lógicamente) en `draft`. `sold_out` existe como estado pero **ninguna transición lo alcanza todavía**: llegará con payments, cuando las reservas pasen a `consumed`.
 
-**Pedido:**
-`draft → requested → quoted → accepted → payment_pending → paid → pickup_scheduled → in_transit → delivered → closed`
-Desde casi cualquier estado previo a `in_transit`: `→ cancelled`. Desde `delivered`: `→ disputed → closed`.
+**Pedido:** `draft → requested → quoted → accepted → payment_pending → paid → pickup_scheduled → in_transit → delivered → closed`. Solo se cancela **antes del pago** (`draft`, `requested`, `quoted`, `accepted`, `payment_pending` `→ cancelled`); desde `paid` hasta `delivered` la única salida alternativa es `→ disputed → closed`. Hoy ningún caso de uso alcanza `payment_pending`, `paid`, `disputed` ni `closed` (llegarán con payments).
 
-**Pago:** `pending → proof_uploaded → verified → held → settled` · `proof_uploaded → rejected` · `verified|held → disputed`
+**Cotización:** `active → accepted | expired | cancelled`. **Reserva de stock:** `active → released` (hoy) y `active → consumed` (definido, sin uso hasta payments).
 
-**Viaje:** `planned → assigned → in_progress → completed` · `→ cancelled`
+**Pago** (planificado): `pending → proof_uploaded → verified → held → settled` · `proof_uploaded → rejected` · `verified|held → disputed`
+
+**Viaje:** `planned → assigned → in_progress → completed`, y `planned | assigned | in_progress → cancelled`. Al crearlo, el viaje pasa de `planned` a `assigned` para su transportista en la misma operación.
 
 ---
 
@@ -611,82 +615,49 @@ neto productor  = subtotal − commission                      // propuesta por 
 ## 19. Comandos (convención de scripts en la raíz)
 
 ```bash
-cp .env.example .env       # completar credenciales locales antes de levantar servicios
-pnpm install              # dependencias
-docker compose up -d       # PostgreSQL 16; requiere variables configuradas en .env
-docker compose --profile storage up -d minio # MinIO opcional para pruebas de archivos
-pnpm db:migrate            # aplica migraciones usando DATABASE_URL
-pnpm dev                  # api + backoffice
-pnpm dev:mobile           # Expo
-pnpm lint                 # ESLint + límites de módulos
-pnpm typecheck            # tsc en todo el monorepo
-pnpm test                 # unitarias + aplicación
-pnpm test:integration     # Testcontainers (requiere Docker)
-pnpm test:e2e             # API e2e
-pnpm test:contract        # contratos de puertos
-pnpm db:generate          # drizzle-kit: generar migración
-pnpm db:migrate           # aplicar migraciones
-pnpm db:seed              # usuarios sintéticos; solo NODE_ENV=development
-pnpm identity:create-staff --phone "+57 300 000 0000" --name "Nombre" --role admin # CLI protegido
-pnpm build                # build de todo
+cp .env.example .env              # completar credenciales locales antes de levantar servicios
+pnpm install                      # dependencias
+docker compose up -d              # PostgreSQL 16; requiere variables configuradas en .env
+docker compose --profile storage up -d minio  # MinIO opcional (CORS del servidor: MINIO_CORS_ALLOWED_ORIGINS)
+pnpm db:migrate                   # aplica las migraciones escritas a mano (drizzle/migrate.ts)
+pnpm db:check-migrations          # numeración única y contigua (lo exige el CI)
+pnpm db:seed                      # datos sintéticos; solo NODE_ENV=development
+pnpm dev                          # API en modo watch
+pnpm --filter @tracop/api worker  # trabajador de tareas periódicas y outbox (dist: worker:start)
+pnpm lint                         # ESLint + check-boundaries
+pnpm typecheck                    # tsc en todo el monorepo
+pnpm test                         # todas las pruebas (Testcontainers si hay Docker)
+pnpm build                        # build de todo
+pnpm openapi:export               # regenera docs/openapi.json (luego: prettier --write docs/openapi.json)
+pnpm openapi:check                # comprueba que docs/openapi.json está al día
+pnpm identity:create-staff --phone "+57 300 000 0000" --name "Nombre" --role admin  # CLI protegido
+pnpm telegram:set-webhook         # registra el webhook de Telegram
+pnpm catalog:expire-lots          # expira lotes (manual; el trabajador lo hace cada 5 min)
+pnpm catalog:purge-orphan-photos  # purga fotos huérfanas (manual; el trabajador lo hace cada hora)
+pnpm catalog:backfill-changes     # registra la línea base de cambios del catálogo para sync
+pnpm storage:configure-cors       # CORS por bucket en S3; MinIO responde que no lo admite
 ```
+
+No existen todavía `dev:mobile`, `test:integration`, `test:e2e` ni `test:contract`. **No usar `db:generate`** (`drizzle-kit generate`): las migraciones se escriben a mano (ver «Reglas de trabajo»).
 
 ---
 
 ## 20. Variables de entorno (`.env.example`)
 
-```
-NODE_ENV=development
-DATABASE_URL=
-POSTGRES_USER=
-POSTGRES_PASSWORD=
-POSTGRES_DB=
-MINIO_ROOT_USER=
-MINIO_ROOT_PASSWORD=
-JWT_SECRET=
-OTP_HMAC_SECRET=
-RATE_LIMIT_HMAC_SECRET=
-PRIVACY_POLICY_VERSION=v0-draft
-ALLOWED_COUNTRY_CODES=57
-TRUST_PROXY=false
-OTP_LENGTH=6
-OTP_TTL_SECONDS=300
-OTP_MAX_ATTEMPTS=5
-OTP_PHONE_LIMIT=3
-OTP_PHONE_WINDOW_SECONDS=600
-OTP_PHONE_COOLDOWN_LIMIT=1
-OTP_PHONE_COOLDOWN_SECONDS=60
-OTP_IP_REQUEST_LIMIT=30
-OTP_IP_VERIFY_LIMIT=60
-OTP_IP_WINDOW_SECONDS=600
-ACCESS_TOKEN_TTL_SECONDS=900
-REFRESH_TOKEN_TTL_SECONDS=2592000
-OTP_SENDER=console
+La fuente de verdad es el esquema zod de `apps/api/src/shared/infra/env.ts` (validación al arrancar, con valores por defecto) y `.env.example`. Grupos actuales:
 
-# Mensajería
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_WEBHOOK_SECRET=
-WHATSAPP_ACCESS_TOKEN=            # futuro
-WHATSAPP_VERIFY_TOKEN=            # futuro
-
-# IA
-LLM_API_KEY=
-LLM_MODEL=                        # configurable, no hardcodear
-
-# Almacenamiento
-S3_ENDPOINT=
-S3_BUCKET=
-S3_ACCESS_KEY=
-S3_SECRET_KEY=
-
-# Notificaciones
-FCM_CREDENTIALS=
-SMS_API_KEY=
-
-# Otros
-PRICE_REFERENCE_SOURCE=
-MAPS_API_KEY=
-```
+| Grupo                         | Variables                                                                                                                                                                                                                                                                                                            |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Base                          | `NODE_ENV`, `PORT`, `DATABASE_URL`, `POSTGRES_*` (docker-compose), `SUPPORTED_LOCALES`, `TRUST_PROXY`, `CORS_ALLOWED_ORIGINS`                                                                                                                                                                                        |
+| Identidad                     | `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_CLOCK_TOLERANCE_SECONDS`, `OTP_HMAC_SECRET`, `RATE_LIMIT_HMAC_SECRET`, `PRIVACY_POLICY_VERSION`, `ALLOWED_COUNTRY_CODES`, `OTP_*` (longitud, vigencia, intentos y límites por teléfono e IP), `ACCESS_TOKEN_TTL_SECONDS`, `REFRESH_TOKEN_TTL_SECONDS`, `OTP_SENDER` |
+| Mensajería                    | `TELEGRAM_MODE`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_API_ROOT`, `TELEGRAM_WEBHOOK_PROCESS_TIMEOUT_MS`, `TELEGRAM_RATE_LIMIT_*`                                                                                                                                       |
+| Catálogo                      | `CATALOG_LOT_MAX_HORIZON_DAYS`, `CATALOG_SEARCH_*`, `CATALOG_PRODUCT_PROPOSAL_*` (pendientes y límite de frecuencia, PROVISIONALES), `CATALOG_PHOTO_*`                                                                                                                                                               |
+| Almacenamiento                | `S3_ENDPOINT`, `S3_PUBLIC_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_API_ACCESS_KEY`, `S3_API_SECRET_KEY`, `S3_POLICY_ACCESS_KEY`, `S3_POLICY_SECRET_KEY`; MinIO local: `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_CORS_ALLOWED_ORIGINS`                                                                         |
+| Sync                          | `SYNC_PUSH_MAX_BODY_BYTES`, `SYNC_PUSH_RATE_LIMIT`, `SYNC_PULL_RATE_LIMIT`, `SYNC_RATE_WINDOW_SECONDS`                                                                                                                                                                                                               |
+| Pedidos                       | `ORDER_QUOTE_TTL_HOURS`, `ORDER_RESERVATION_TTL_HOURS`, `ORDER_SUBTOTAL_ROUNDING`, `ORDER_COMMISSION_RATE_BPS`, `ORDER_FREIGHT_COP` (comisión y flete PROVISIONALES), `ORDER_RATE_LIMIT`, `ORDER_RATE_WINDOW_SECONDS`, `ORDER_LOCK_TIMEOUT_MS`, `ORDER_STATEMENT_TIMEOUT_MS`                                         |
+| Trabajador                    | `JOB_EXPIRE_LOTS_CRON`, `JOB_EXPIRE_ORDERS_CRON`, `JOB_PURGE_PHOTOS_CRON`, `JOB_RETENTION_CRON`, `JOB_OUTBOX_DISPATCH_CRON`, `OUTBOX_LEASE_SECONDS`, `OUTBOX_MAX_ATTEMPTS`, `OUTBOX_RETRY_BASE_SECONDS`, `OUTBOX_RETRY_MAX_SECONDS`                                                                                  |
+| Retención (PROVISIONAL)       | `OTP_RETENTION_DAYS`, `SESSION_RETENTION_DAYS`, `PROCESSED_UPDATES_RETENTION_DAYS`, `RATE_LIMIT_RETENTION_SECONDS`                                                                                                                                                                                                   |
+| Futuro (sin uso en el código) | `WHATSAPP_*`, `LLM_API_KEY`, `LLM_MODEL`, `FCM_CREDENTIALS`, `SMS_API_KEY`, `PRICE_REFERENCE_SOURCE`, `MAPS_API_KEY`                                                                                                                                                                                                 |
 
 > Nunca commitear `.env`. Solo `.env.example` sin valores.
 
@@ -732,17 +703,24 @@ MAPS_API_KEY=
 
 ## 22. Decisiones de arquitectura vigentes (ADR resumidas)
 
-| ADR | Decisión                                                     | Tradeoff aceptado                                                            |
-| --- | ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| 001 | Monolito modular hexagonal                                   | Menos escalado independiente; mucho menos complejidad operativa en el piloto |
-| 002 | Cliente grueso offline-first con outbox y sync               | Más complejidad de sync y pruebas, a cambio de funcionar sin señal           |
-| 003 | **Sin blockchain en el piloto**; eventos con hash encadenado | Sin "inmutabilidad total"; se puede anclar a una cadena después              |
-| 004 | **Telegram primero**, WhatsApp después vía el mismo puerto   | La demo valida el flujo pero no la adopción real                             |
-| 005 | LLM en el servidor con confirmación humana obligatoria       | Costo y latencia por uso; mitiga alucinaciones                               |
-| 006 | Pagos con conciliación manual en el piloto                   | Menos automatización, valida la transacción sin integrar pasarela            |
-| 007 | PostgreSQL con schema por módulo + pg-boss                   | Sin Redis ni broker; suficiente para el piloto                               |
-| 008 | Autenticación por teléfono + OTP con JWT y refresh rotativo  | `jose@4` fijado por dual CJS/ESM; ventana de gracia de refresh pendiente     |
-| 009 | Mensajería con Telegram (webhook/polling), puerto único      | Polling solo dev; OTP fire-and-forget; rate limit en memoria                 |
+| ADR | Decisión                                                      | Tradeoff aceptado                                                            |
+| --- | ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 001 | Monolito modular hexagonal                                    | Menos escalado independiente; mucho menos complejidad operativa en el piloto |
+| 002 | Cliente grueso offline-first con outbox y sync                | Más complejidad de sync y pruebas, a cambio de funcionar sin señal           |
+| 003 | **Sin blockchain en el piloto**; eventos con hash encadenado  | Sin "inmutabilidad total"; se puede anclar a una cadena después              |
+| 004 | **Telegram primero**, WhatsApp después vía el mismo puerto    | La demo valida el flujo pero no la adopción real                             |
+| 005 | LLM en el servidor con confirmación humana obligatoria        | Costo y latencia por uso; mitiga alucinaciones                               |
+| 006 | Pagos con conciliación manual en el piloto                    | Menos automatización, valida la transacción sin integrar pasarela            |
+| 007 | PostgreSQL con schema por módulo + pg-boss                    | Sin Redis ni broker; suficiente para el piloto                               |
+| 008 | Autenticación por teléfono + OTP con JWT y refresh rotativo   | `jose@4` fijado por dual CJS/ESM; ventana de gracia de refresh pendiente     |
+| 009 | Mensajería con Telegram (webhook/polling), puerto único       | Polling solo dev; OTP fire-and-forget; rate limit en memoria                 |
+| 010 | Núcleo de catálogo (taxonomía curada, lotes, búsqueda)        | Búsqueda filtra en memoria antes de paginar                                  |
+| 011 | Fotos de lote con POST prefirmado y re-codificación a WebP    | Dependencia de sharp (libvips, LGPL) aceptada provisionalmente               |
+| 012 | Idempotencia de sync y cursores serializados                  | Un lock global de secuencia serializa las escrituras del change log          |
+| 013 | Logística sin coordenadas; viaje creado por el transportista  | Zonas gruesas; ubicación exacta para el transportista pendiente              |
+| 014 | Pedidos de un proveedor; reserva al aceptar, vence a las 24 h | Sin pagos, un pedido aceptado se cancela al vencer la reserva                |
+| 015 | Propuestas de producto con revisión del personal              | Revisión manual; deduplicación por tokens con confirmación                   |
+| 016 | Trabajador con pg-boss y despachador del outbox con lease     | Entrega al menos una vez; consumidores idempotentes                          |
 
 ---
 
@@ -763,6 +741,9 @@ MAPS_API_KEY=
 10. Verify the adapter against a real S3 provider and confirm the minimum IAM permissions for `S3_API_*` and `S3_POLICY_*`.
 11. Define the bucket lifecycle policy for `incoming/`. The code only purges old orphan objects from `incoming/` and `photos/` when `catalog:purge-orphan-photos` is run; it does not automatically clean up the bucket.
 12. Definir e implementar la retención/compactación de `sync.change_log` y `sync.processed_operations`; actualmente ninguna de las dos tablas cuenta con un proceso automático de retención.
+13. Validar los valores PROVISIONALES de retención de datos personales (`OTP_RETENTION_DAYS` 7, `SESSION_RETENTION_DAYS` 30, `PROCESSED_UPDATES_RETENTION_DAYS` 7) con el equipo y la Ley 1581.
+14. Validar las vigencias PROVISIONALES de cotización y reserva (`ORDER_QUOTE_TTL_HOURS` y `ORDER_RESERVATION_TTL_HOURS`, 24 h) y el límite de propuestas pendientes (`CATALOG_PRODUCT_PROPOSAL_PENDING_LIMIT`, 5).
+15. Proveedor de almacenamiento de producción: con MinIO, el CORS es del servidor (`MINIO_API_CORS_ALLOW_ORIGIN`); `storage:configure-cors` solo sirve para proveedores con CORS por bucket y no se ha verificado contra un S3 real.
 
 ---
 
@@ -778,3 +759,28 @@ MAPS_API_KEY=
 8. Mantén `docs/ARCHITECTURE.md`, `docs/GLOSSARY.md` y las ADR sincronizados con los cambios.
 9. Prefiere cambios **pequeños, reversibles y probados** sobre refactors masivos.
 10. Al terminar, resume: qué cambió, qué pruebas se añadieron, qué decisiones quedaron abiertas.
+
+---
+
+## 25. Reglas de trabajo
+
+Cómo se trabaja en el repositorio (personas y agentes). Complementan §5, §18, §21 y §24.
+
+### Forma de trabajo
+
+- El usuario revisa los PR y hace los merges. El agente implementa y revisa, pero **no se autoaprueba**: entrega evidencia verificable para que el usuario decida.
+- Una carpeta, trabajo **secuencial**: una funcionalidad a la vez. Termina cuando su PR está integrado en `develop`; la siguiente empieza desde un `develop` actualizado.
+- Respuestas cortas y directas. Si algo es ambiguo, pregunta; **no lo reinterpretes**.
+
+### Reglas
+
+1. **Plan primero** en tareas nuevas: comprensión, archivos por capa, puertos y riesgos propios. Espera confirmación, salvo que el encargo diga que el diseño ya está decidido.
+2. **Un commit por bloque lógico**, con sus pruebas y Conventional Commits con los scopes de `.commitlintrc.json`. Nunca `--force`, `--no-verify` ni reescribir historia publicada. Comprueba `git status` antes de cambiar de rama; no uses `checkout`/`restore`/`reset` sobre rutas con trabajo sin confirmar. No apliques ni borres stashes sin autorización.
+3. **Antes de cada push**, verifica desde un clon limpio (sin `.env`, `node_modules` ni `dist`), con Node 22 y los pasos de `.github/workflows/ci.yml` en orden. La caché de Turbo y Node 24 no cuentan.
+4. **Informes con evidencia**: archivo, función, nombre de la prueba y salida literal. Marca «NO verificado» lo que no comprobaste. Las pruebas de otras funciones no son evidencia de esta.
+5. **Límites entre módulos**: solo se importa `modules/<otro>/index.ts`; `bootstrap/` solo adapta APIs públicas, sin SQL ni reglas de negocio; cada módulo es dueño de su schema; se exportan casos de uso, nunca repositorios.
+6. **Migraciones** solo hacia adelante, escritas a mano en `apps/api/drizzle` y aplicadas con `drizzle/migrate.ts` desde una base vacía. Nunca `drizzle-kit generate` ni tocar `meta/_journal.json`. Numeración única y contigua: no reserves números; quien se integra segundo renumera.
+7. **Pruebas**: concurrencia contra PostgreSQL real (Testcontainers), sin depender del reloj de pared ni de aserciones por subcadena sobre texto serializado. Cada bug corregido añade la prueba que lo reproduce.
+8. **Seguridad y privacidad**: sin PII, direcciones, tokens ni URLs firmadas en logs; autorización y propiedad en la capa de aplicación; respuestas por rol; un tercero recibe 404, no 403; dinero en enteros; UUID v7; UTC. Los valores de negocio de §23 son parámetros configurables marcados «PROVISIONAL», nunca inventados.
+9. **Dependencias** solo justificadas (tamaño, mantenimiento, licencia, alternativas). La documentación narrativa se escribe en commits `docs:` aparte al cierre de cada fase y solo describe lo que existe. Regenera `docs/openapi.json` con `pnpm openapi:export`.
+10. **PR normal hacia `develop`** con el checklist de §21, marcando lo verificado y lo NO verificado. Espera CI, SonarCloud, CodeQL y Snyk sobre el SHA final. No integres: lo hace el usuario.
