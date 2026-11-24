@@ -51,13 +51,13 @@ Limits, expiries, quality, concurrency, lease, and rate limits use `CATALOG_PHOT
 
 ### Capas
 
-| Capa            | Contenido                                                                                                                                                                                                        |
-| --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `domain/`       | `Carrier`, `Trip`, `TripStop`, `Checkin`, `Incident`, `TRIP_STATES`, `TRIP_TRANSITIONS`, `recommendStops` y `zoneFromAddress`. Reglas de transición y recomendación sin frameworks ni coordenadas.               |
-| `application/`  | `CarrierProfileService`, `TripPlanningService` (recomendar, crear, asignar/reasignar, iniciar, completar, cancelar, detectar conflictos), `CheckinService` (registrar check-in HTTP y sync) e `IncidentService`. |
-| `ports/`        | `LogisticsRepository`, `LogisticsUnitOfWork`, `LogisticsClock`, `LogisticsChangeRecorder`, `OrderingLogisticsPort` y `ProviderZonePort`, con sus tokens de inyección.                                            |
-| `adapters/in/`  | `LogisticsController` y `CheckinSyncHandler` (`entity = 'checkin'`). Ambos caminos de check-in llegan al mismo `CheckinService.record`.                                                                          |
-| `adapters/out/` | `DrizzleLogisticsRepository` y `InMemoryLogisticsRepository` (tests).                                                                                                                                            |
+| Capa            | Contenido                                                                                                                                                                                                                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `domain/`       | `Carrier`, `Trip`, `TripStop`, `Checkin`, `Incident`, `TRIP_STATES`, `TRIP_TRANSITIONS`, `recommendStops` y `zoneFromAddress`. Reglas de transición y recomendación sin frameworks ni coordenadas.                                                                                            |
+| `application/`  | `CarrierProfileService`, `TripPlanningService` (recomendar, crear, asignar/reasignar, iniciar, completar, cancelar, detectar conflictos), `CheckinService` (registrar check-in HTTP y sync) e `IncidentService`.                                                                              |
+| `ports/`        | `LogisticsRepository`, `LogisticsUnitOfWork`, `LogisticsClock`, `LogisticsChangeRecorder`, `OrderingLogisticsPort` y `ProviderZonePort`, con sus tokens de inyección.                                                                                                                         |
+| `adapters/in/`  | `LogisticsController` y los manejadores de sync `TripSyncHandler` (`trip`: `create` y la transición `start`), `CheckinSyncHandler` (`checkin`), `IncidentSyncHandler` (`incident`: `create`) y `CarrierProfileSyncHandler` (`carrier_profile`). HTTP y sync llegan a los mismos casos de uso. |
+| `adapters/out/` | `DrizzleLogisticsRepository` y `InMemoryLogisticsRepository` (tests).                                                                                                                                                                                                                         |
 
 ### Puertos
 
@@ -75,8 +75,29 @@ Limits, expiries, quality, concurrency, lease, and rate limits use `CATALOG_PHOT
 - Los estados son `planned → assigned → in_progress → completed`, más `cancelled`. Las transiciones se validan en el dominio y usan `expectedVersion`; el operador solo reasigna después de consultar `GET /logistics/conflicts`.
 - `CheckinService.record` verifica rol `carrier`, propiedad del viaje, `baseVersion` contra la versión del viaje, ausencia de check-in previo para la parada/tipo y que la parada no esté completada. Cierra la parada, transiciona el pedido con su versión vigente —obtenida de `ordering.getCandidate`, porque la versión capturada al planear queda obsoleta tras `pickup_scheduled`—, escribe `PickupConfirmed`/`DeliveryConfirmed` y registra el cambio `checkin`. Si ya no quedan paradas pendientes, completa el viaje y registra los cambios `trip` correspondientes.
 - `CheckinSyncHandler` valida el payload estricto (`stopId`, `kind`, `clientAt`, `mediaRef?`), exige `baseVersion`, usa `entityId` como ID del check-in y devuelve como `serverVersion` la versión actual del viaje. `delete` y `transition` no están soportados.
+- Las mutaciones de viaje (`mutateTrip`) y los check-ins leen el viaje con `findTripForUpdate` (`SELECT … FOR UPDATE`) antes de comparar la versión, de modo que dos cambios concurrentes con la misma versión no se aplican ambos. Los check-ins solo se aceptan en viajes `assigned` o `in_progress`; un tercero recibe `not_found`.
+- Conflictos: `assignment_conflict`, `invalid_order_status`, `invalid_transition` y `version_conflict` responden 409. Si dos transportistas crean a la vez un viaje con el mismo pedido, gana uno: la versión del pedido en `ordering` lo garantiza (no hay restricción de base de datos al respecto).
 
 La decisión está en [ADR-013](adr/ADR-013.md).
+
+## Propuestas de producto
+
+La taxonomía la cura el personal; `producer` y `supplier` proponen productos (`POST /catalog/product-proposals`) que el personal aprueba o rechaza. `CatalogService` deduplica con `matchProductNames` (dominio): mismo nombre normalizado devuelve el existente, contención de tokens devuelve 409 `product_similar_exists` con sugerencias (salvo `confirm: true`) y el nombre pendiente de otro proveedor devuelve 409 `product_pending_review`. Las respuestas a no-personal se construyen con las vistas de `application/product-views.ts` (sin `proposedBy`, `reviewedBy` ni `reviewedAt`), también en sync. Detalle en [ADR-015](adr/ADR-015.md).
+
+## Pedidos (ordering)
+
+`ordering` posee pedidos, líneas, cotizaciones y eventos encadenados en el schema `ordering`. `OrderingService` crea pedidos ya cotizados (un proveedor, 1–20 líneas, idempotentes por `id`), acepta (solo el comprador; reserva stock vía `LOT_RESERVATION_PORT`), cancela (comprador o proveedor, antes del pago) y expira cotizaciones y reservas. `OrderingMaintenanceService` (público como `ORDERING_MAINTENANCE`) lo expone al trabajador. Los precios se copian del lote por `LOT_QUOTE_PORT`; la comisión y el flete salen de `ORDER_COMMISSION_RATE_BPS` y `ORDER_FREIGHT_COP` (PROVISIONALES). Las reservas viven en `catalog.lot_reservations` y las gestiona catálogo (`CATALOG_ORDERING_API`), con bloqueo de los lotes. La propiedad se comprueba al cargar el pedido; un tercero recibe 404. Detalle en [ADR-014](adr/ADR-014.md).
+
+## Trabajador y outbox
+
+`apps/api/src/worker.ts` arranca `WorkerModule` (misma composición que la API) con pg-boss como planificador (`JobSchedulerPort`, colas `singleton`, cron en UTC) y 8 trabajos que llaman a las APIs públicas de mantenimiento: `CATALOG_MAINTENANCE`, `ORDERING_MAINTENANCE`, `IDENTITY_MAINTENANCE`, `MESSAGING_MAINTENANCE` y el despachador del outbox. Cada módulo implementa sus purgas con su propio puerto de repositorio (sin SQL en `application/`) y borrado por lotes acotados. `PostgresOutboxDispatcher` reclama eventos con `FOR UPDATE SKIP LOCKED` y un lease, entrega fuera de transacción, registra cada entrega en `shared.outbox_deliveries` y aplica reintentos con espera exponencial y cola de fallidos. Detalle en [ADR-016](adr/ADR-016.md) y [ADR-007](adr/ADR-007.md).
+
+## Almacenamiento y CORS
+
+`S3StorageAdapter` implementa `StoragePort` para cualquier proveedor compatible con S3. El CORS del navegador se configura según el proveedor:
+
+- **S3 con CORS por bucket** (AWS, Supabase): `pnpm storage:configure-cors` aplica `PutBucketCors` con los orígenes de `CORS_ALLOWED_ORIGINS` y comprueba que el bucket los conservó (no verificado contra un S3 real).
+- **MinIO**: no implementa CORS por bucket (el script termina con `StorageCorsNotSupportedError`); el CORS es del servidor, `MINIO_API_CORS_ALLOW_ORIGIN`. En `docker-compose.yml` se toma de `MINIO_CORS_ALLOWED_ORIGINS` con valor por defecto `http://localhost:8081`, porque sin configurar MinIO acepta cualquier origen.
 
 ## Messaging (Telegram / WhatsApp)
 
@@ -194,32 +215,35 @@ Cada módulo es dueño de sus datos. La migración inicial creó schemas para `i
 
 `apps/api/src/bootstrap/` es el único lugar donde se conectan puertos con adaptadores concretos. Ningún módulo conoce los adaptadores de otro; `bootstrap/` importa `index.ts` de cada módulo y wirea:
 
-| Archivo                          | Qué conecta                                                                                                                                                  |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `app.module.ts`                  | Importa `SharedInfraModule`, `AuthModule`, los módulos de negocio y los puentes de catálogo, ordering y logística.                                           |
-| `identity-bridge.module.ts`      | Expone `IdentityChannelApplication` (puerto de aplicación de `identity`) para que `bootstrap/` pueda adaptarlo.                                              |
-| `catalog-bridge.module.ts`       | Implementa `ProviderDirectoryPort` mediante `IdentityProviderDirectoryAdapter`, delegando a `ProviderProfileService` de `identity`.                          |
-| `catalog-sync-bridge.module.ts`  | Proporciona `CatalogChangeRecorderAdapter` para el puerto público `ChangeRecorderPort` y registra `CatalogLotSyncHandler` en `SyncOperationHandlerRegistry`. |
-| `ordering-bridge.module.ts`      | Implementa `LOT_QUOTE_PORT`, `LOT_RESERVATION_PORT` y `ORDER_PROVIDER_DIRECTORY` delegando en catálogo e identidad.                                          |
-| `logistics-bridge.module.ts`     | Implementa `OrderingLogisticsPort` y `ProviderZonePort`, proporciona `LogisticsChangeRecorderAdapter` y registra `CheckinSyncHandler`.                       |
-| `otp-delivery.module.ts`         | Selecciona `OtpSenderPort` según `OTP_SENDER`: `InMemoryOtpSender` (test), `DevelopmentOtpSender` (consola, dev), `TelegramOtpSender` (producción).          |
-| `telegram-otp-sender.adapter.ts` | Implementa `OtpSenderPort` usando `IdentityChannelApplication.findActiveChannelLinkByPhone` + `MessagingPort.sendText`. Fire-and-forget, sin bloqueo.        |
-| `identity-channel.adapter.ts`    | Implementa `ChannelIdentityPort` (de `messaging`) delegando a `IdentityChannelApplication`.                                                                  |
-| `http.ts`                        | Configuración global de Nest (prefijo, validación, throttler, CORS, Swagger).                                                                                |
+| Archivo                                  | Qué conecta                                                                                                                                                                                    |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `app.module.ts`                          | Define `APPLICATION_MODULES` (`SharedInfraModule`, `AuthModule`, módulos de negocio y puentes), que comparten la API HTTP y el trabajador.                                                     |
+| `identity-bridge.module.ts`              | Expone `IdentityChannelApplication` (puerto de aplicación de `identity`) para que `bootstrap/` pueda adaptarlo.                                                                                |
+| `catalog-bridge.module.ts`               | Implementa `ProviderDirectoryPort` mediante `IdentityProviderDirectoryAdapter`, delegando a `ProviderProfileService` de `identity`.                                                            |
+| `catalog-sync-bridge.module.ts`          | Proporciona `CatalogChangeRecorderAdapter` para el puerto público `ChangeRecorderPort` y registra `CatalogLotSyncHandler` en `SyncOperationHandlerRegistry`.                                   |
+| `ordering-bridge.module.ts`              | Implementa `LOT_QUOTE_PORT`, `LOT_RESERVATION_PORT` y `ORDER_PROVIDER_DIRECTORY` delegando en catálogo e identidad.                                                                            |
+| `logistics-bridge.module.ts`             | Implementa `OrderingLogisticsPort` y `ProviderZonePort`, proporciona `LogisticsChangeRecorderAdapter` y registra los manejadores de sync de `trip`, `checkin`, `incident` y `carrier_profile`. |
+| `worker.module.ts`                       | Composición del trabajador: reutiliza `APPLICATION_MODULES` y añade el despachador del outbox (`PostgresOutboxDispatcher`), el planificador (`PgBossJobScheduler`) y `WorkerLifecycle`.        |
+| `worker-lifecycle.ts` / `worker-jobs.ts` | Arrancan el planificador, registran los 8 trabajos llamando a las APIs públicas de mantenimiento de cada módulo y lo detienen al apagar.                                                       |
+| `otp-delivery.module.ts`                 | Selecciona `OtpSenderPort` según `OTP_SENDER`: `InMemoryOtpSender` (test), `DevelopmentOtpSender` (consola, dev), `TelegramOtpSender` (producción).                                            |
+| `telegram-otp-sender.adapter.ts`         | Implementa `OtpSenderPort` usando `IdentityChannelApplication.findActiveChannelLinkByPhone` + `MessagingPort.sendText`. Fire-and-forget, sin bloqueo.                                          |
+| `identity-channel.adapter.ts`            | Implementa `ChannelIdentityPort` (de `messaging`) delegando a `IdentityChannelApplication`.                                                                                                    |
+| `http.ts`                                | Configuración global de Nest (prefijo, validación, throttler, CORS, Swagger).                                                                                                                  |
 
 **Regla**: los módulos **no** importan `bootstrap/`. `bootstrap/` importa solo `index.ts` públicos. Los adaptadores en `bootstrap/` son los únicos que cruzan límites de módulo.
 
-## Regla de boundaries (eslint-plugin-boundaries)
+## Regla de límites entre módulos (ESLint)
 
-`eslint.config.js` en la raíz y `packages/config/eslint.config.js` configuran `eslint-plugin-boundaries` para forzar la regla de dependencia del §5.1–§5.3 (AGENTS.md):
+`packages/config/eslint.config.js` (usado por `eslint.config.js` de la raíz) impone la regla de dependencia de §5.1–§5.3 de AGENTS.md con **`no-restricted-imports`**:
 
-- `domain` no importa de `application`, `adapters`, `bootstrap` ni frameworks.
-- `application` importa solo de `domain` y `ports`.
-- `adapters` importan de `domain`, `ports` y su propio módulo.
-- **Prohibido** importar rutas internas de otro módulo (`modules/identity/application/...`). Solo `modules/identity/index.ts`.
-- `bootstrap/` importa de `modules/*/index.ts` y `shared/*`.
+- Ningún archivo de un módulo importa `adapters`, `ports`, `domain` ni `application` de **otro** módulo; solo su `index.ts`. Los patrones se definen una vez (`CROSS_MODULE_IMPORTS`) y se repiten en cada bloque, porque en la configuración plana un bloque posterior reemplaza las opciones de la regla.
+- `domain` no importa `shared/infra`, `application`, `adapters`, `@nestjs/**`, `drizzle-orm` ni `pg`.
+- `application` no importa `shared/infra` ni `adapters` (los `*.spec.ts` pueden usar adaptadores en memoria). Los tokens que necesita (por ejemplo `OUTBOX_WRITER`) viven en `shared/ports`.
+- `bootstrap/` solo importa los `index.ts` de los módulos y `shared/*`.
 
-El CI falla si hay violaciones (`pnpm lint`).
+`scripts/check-boundaries.mjs` (parte de `pnpm lint`) crea importaciones prohibidas y permitidas y comprueba que ESLint las rechaza o acepta (12 casos). El CI falla si hay violaciones.
+
+`eslint-plugin-boundaries` está configurado (`boundaries/element-types`), pero **no se dispara**: sin un resolvedor de TypeScript, cada import `.js` aparece como «of unknown type». Activarlo requiere `eslint-import-resolver-typescript` (fase de endurecimiento).
 
 ## Envío asíncrono de OTP y límites
 
