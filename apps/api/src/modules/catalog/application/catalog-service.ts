@@ -37,7 +37,6 @@ export type LotQuoteSnapshot = Pick<
 };
 export const CATALOG_SETTINGS = Symbol('CATALOG_SETTINGS');
 const STAFF = ['operator', 'admin'] as const;
-const PRODUCT_CREATORS = ['operator', 'admin', 'producer'] as const;
 const PROVIDERS = ['producer', 'supplier'] as const;
 type Actor = { readonly sub: string; readonly role: string };
 
@@ -89,7 +88,7 @@ export class CatalogService {
   }
 
   async createProduct(actor: Actor, input: ProductProps): Promise<ProductProps> {
-    this.requireRole(actor, PRODUCT_CREATORS);
+    this.requireRole(actor, STAFF);
     return this.uow.run(async () => {
       if (!(await this.categories.findById(input.categoryId)))
         throw new DomainError('Categoría no encontrada.', 'not_found');

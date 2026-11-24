@@ -119,7 +119,7 @@ export class CatalogController {
     });
   }
   @Post('products')
-  @Roles('operator', 'admin', 'producer')
+  @Roles('operator', 'admin')
   @ApiOperation({
     summary: 'Crear producto',
     description: 'Añade un producto con unidad y atributos estructurados.',
