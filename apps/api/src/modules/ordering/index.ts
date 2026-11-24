@@ -1,5 +1,10 @@
 export { OrderingModule } from './ordering.module.js';
 export { OrderingService } from './application/ordering-service.js';
+export { ORDERING_MAINTENANCE } from './application/ordering-maintenance-service.js';
+export type {
+  OrderingExpiryResult,
+  OrderingMaintenanceApi,
+} from './application/ordering-maintenance-service.js';
 export type {
   CreateOrderInput,
   AcceptQuoteInput,

@@ -43,3 +43,13 @@ export interface MessagingApplication {
   handleUpdate(updateId: bigint, message: InboundMessage | null): Promise<UpdateProcessingResult>;
   handleInboundMessage(message: InboundMessage): Promise<UpdateProcessingResult>;
 }
+
+export interface ProcessedUpdatesRetentionRepository {
+  /** Deletes up to `limit` processed update ids received before the cutoff. */
+  deleteReceivedBefore(cutoff: Date, limit: number): Promise<number>;
+}
+
+/** Public maintenance use case of messaging, run by the worker. */
+export interface MessagingMaintenanceApi {
+  purgeProcessedUpdates(): Promise<number>;
+}

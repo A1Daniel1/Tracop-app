@@ -45,23 +45,26 @@ class HealthController {
   }
 }
 
+/** Modules and bridges shared by the HTTP API and the worker process. */
+export const APPLICATION_MODULES = [
+  SharedInfraModule,
+  AuthModule,
+  CatalogBridgeModule,
+  CatalogSyncBridgeModule,
+  CatalogModule,
+  SyncModule,
+  IdentityBridgeModule,
+  MessagingModule,
+  IdentityModule,
+  OtpDeliveryModule,
+  OrderingBridgeModule,
+  OrderingModule,
+  LogisticsBridgeModule,
+  LogisticsModule,
+];
+
 @Module({
-  imports: [
-    SharedInfraModule,
-    AuthModule,
-    CatalogBridgeModule,
-    CatalogSyncBridgeModule,
-    CatalogModule,
-    SyncModule,
-    IdentityBridgeModule,
-    MessagingModule,
-    IdentityModule,
-    OtpDeliveryModule,
-    OrderingBridgeModule,
-    OrderingModule,
-    LogisticsBridgeModule,
-    LogisticsModule,
-  ],
+  imports: APPLICATION_MODULES,
   controllers: [HealthController],
 })
 export class AppModule {}

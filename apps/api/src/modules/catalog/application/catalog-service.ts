@@ -572,6 +572,9 @@ export class CatalogService {
       const didExpire = await this.uow.run(async () => {
         const [current] = await this.lots.lockForReservation([item.id]);
         if (!current || current.availableUntil >= this.clock.now()) return false;
+        // A concurrent run (or a provider action) may have settled the lot after it was
+        // listed; re-check the state under the lock instead of failing the whole run.
+        if (current.status !== 'published' && current.status !== 'reserved') return false;
         if (
           (await this.lots.getAvailableQuantity(current.id, this.clock.now())) <
           current.quantityMilli

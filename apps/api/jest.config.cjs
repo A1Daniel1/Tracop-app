@@ -74,6 +74,8 @@ module.exports = {
   },
   collectCoverageFrom: [
     'src/bootstrap/app.module.ts',
+    'src/bootstrap/worker-jobs.ts',
+    'src/bootstrap/worker-lifecycle.ts',
     'src/modules/identity/domain/**/*.ts',
     'src/modules/identity/application/**/*.ts',
     'src/modules/catalog/domain/**/*.ts',
