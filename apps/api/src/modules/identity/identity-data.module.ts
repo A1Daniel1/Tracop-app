@@ -9,6 +9,7 @@ import {
   DrizzleUserRepository,
   PostgresRateLimiter,
 } from './adapters/out/drizzle-repositories.js';
+import { DrizzleIdentityRetentionRepository } from './adapters/out/drizzle-retention-repository.js';
 import {
   CONSENT_REPOSITORY,
   DEVICE_REPOSITORY,
@@ -20,6 +21,7 @@ import {
   TOKEN_SERVICE,
   USER_REPOSITORY,
   PROVIDER_PROFILE_REPOSITORY,
+  IDENTITY_RETENTION_REPOSITORY,
 } from './ports/tokens.js';
 
 @Module({
@@ -43,6 +45,8 @@ import {
     { provide: TOKEN_SERVICE, useExisting: HmacTokenService },
     PostgresRateLimiter,
     { provide: RATE_LIMITER, useExisting: PostgresRateLimiter },
+    DrizzleIdentityRetentionRepository,
+    { provide: IDENTITY_RETENTION_REPOSITORY, useExisting: DrizzleIdentityRetentionRepository },
   ],
   exports: [
     USER_REPOSITORY,
@@ -55,6 +59,7 @@ import {
     IDENTITY_HASHER,
     TOKEN_SERVICE,
     RATE_LIMITER,
+    IDENTITY_RETENTION_REPOSITORY,
   ],
 })
 export class IdentityDataModule {}

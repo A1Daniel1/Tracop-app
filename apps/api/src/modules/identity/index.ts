@@ -8,6 +8,7 @@ export {
   IDENTITY_APPLICATION,
   IDENTITY_CHANNEL_APPLICATION,
   OTP_SENDER,
+  IDENTITY_MAINTENANCE,
 } from './ports/tokens.js';
 export { ProviderProfileService } from './application/provider-profile-service.js';
 export type { ProviderPublicSummary } from './domain/provider-profile.js';
@@ -19,4 +20,6 @@ export type {
   IdentityChannelLink,
   LinkChannelResult,
   OtpSenderPort,
+  IdentityMaintenanceApi,
+  IdentityPurgeResult,
 } from './ports/identity-ports.js';

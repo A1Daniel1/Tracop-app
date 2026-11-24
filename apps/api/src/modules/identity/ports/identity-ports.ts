@@ -152,3 +152,24 @@ export interface IdentitySettings {
   ACCESS_TOKEN_TTL_SECONDS: number;
   REFRESH_TOKEN_TTL_SECONDS: number;
 }
+
+/** Deletes data that is no longer needed, in bounded batches; each call returns rows deleted. */
+export interface IdentityRetentionRepository {
+  /** OTP codes whose validity ended before the cutoff (consumed codes included). */
+  deleteOtpCodesExpiredBefore(cutoff: Date, limit: number): Promise<number>;
+  /** Sessions that expired or were revoked before the cutoff. Live sessions are never touched. */
+  deleteSessionsEndedBefore(cutoff: Date, limit: number): Promise<number>;
+  /** Rate-limit windows that started before the cutoff. */
+  deleteRateLimitWindowsBefore(cutoff: Date, limit: number): Promise<number>;
+}
+
+export interface IdentityPurgeResult {
+  readonly otpCodes: number;
+  readonly sessions: number;
+  readonly rateLimitWindows: number;
+}
+
+/** Public maintenance use case of identity, run by the worker. */
+export interface IdentityMaintenanceApi {
+  purgeExpired(): Promise<IdentityPurgeResult>;
+}

@@ -11,6 +11,10 @@ import { IdentityController } from './adapters/in/identity.controller.js';
 import { IdentityAccessTokenVerifier } from './adapters/out/identity-access-token-verifier.js';
 import { ProviderProfileService } from './application/provider-profile-service.js';
 import { IdentityDataModule } from './identity-data.module.js';
+import { IdentityMaintenanceService } from './application/identity-maintenance-service.js';
+import type { AppEnvironment } from '../../shared/infra/env.js';
+import type { Clock } from '../../shared/kernel/clock.js';
+import type { IdentityRetentionRepository } from './ports/identity-ports.js';
 import {
   CONSENT_REPOSITORY,
   DEVICE_REPOSITORY,
@@ -25,6 +29,8 @@ import {
   SESSION_REPOSITORY,
   TOKEN_SERVICE,
   USER_REPOSITORY,
+  IDENTITY_MAINTENANCE,
+  IDENTITY_RETENTION_REPOSITORY,
 } from './ports/tokens.js';
 
 @Module({
@@ -60,7 +66,22 @@ import {
     },
     IdentityAccessTokenVerifier,
     { provide: IDENTITY_ACCESS_TOKEN_VERIFIER, useExisting: IdentityAccessTokenVerifier },
+    {
+      provide: IDENTITY_MAINTENANCE,
+      inject: [IDENTITY_RETENTION_REPOSITORY, APP_CLOCK, APP_ENVIRONMENT],
+      useFactory: (retention: IdentityRetentionRepository, clock: Clock, env: AppEnvironment) =>
+        new IdentityMaintenanceService(retention, clock, {
+          otpRetentionDays: env.OTP_RETENTION_DAYS,
+          sessionRetentionDays: env.SESSION_RETENTION_DAYS,
+          rateLimitRetentionSeconds: env.RATE_LIMIT_RETENTION_SECONDS,
+        }),
+    },
   ],
-  exports: [IDENTITY_APPLICATION, IDENTITY_ACCESS_TOKEN_VERIFIER, PROVIDER_PROFILE_SERVICE],
+  exports: [
+    IDENTITY_APPLICATION,
+    IDENTITY_ACCESS_TOKEN_VERIFIER,
+    PROVIDER_PROFILE_SERVICE,
+    IDENTITY_MAINTENANCE,
+  ],
 })
 export class IdentityAuthModule {}

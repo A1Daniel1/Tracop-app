@@ -98,6 +98,11 @@ const envSchema = z.object({
   ORDER_RATE_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   ORDER_LOCK_TIMEOUT_MS: z.coerce.number().int().positive().default(2_000),
   ORDER_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+  // PROVISIONAL retention values; validate with the team and Ley 1581 obligations.
+  OTP_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(7),
+  SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  PROCESSED_UPDATES_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(7),
+  RATE_LIMIT_RETENTION_SECONDS: z.coerce.number().int().positive().default(86_400),
   OUTBOX_LEASE_SECONDS: z.coerce.number().int().min(5).max(3600).default(60),
   OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
   OUTBOX_RETRY_BASE_SECONDS: z.coerce.number().int().positive().max(3600).default(5),
@@ -113,6 +118,18 @@ const envSchema = z.object({
 });
 
 const parsedEnvironmentSchema = envSchema.superRefine((value, ctx) => {
+  const longestDatabaseRateWindow = Math.max(
+    value.OTP_PHONE_WINDOW_SECONDS,
+    value.OTP_PHONE_COOLDOWN_SECONDS,
+    value.OTP_IP_WINDOW_SECONDS,
+  );
+  if (value.RATE_LIMIT_RETENTION_SECONDS < longestDatabaseRateWindow) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['RATE_LIMIT_RETENTION_SECONDS'],
+      message: 'RATE_LIMIT_RETENTION_SECONDS must cover the longest OTP rate-limit window.',
+    });
+  }
   const requiresTelegram = value.NODE_ENV === 'production' || value.OTP_SENDER === 'telegram';
 
   if (requiresTelegram && !value.TELEGRAM_BOT_TOKEN) {

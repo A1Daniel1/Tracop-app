@@ -2,6 +2,8 @@ import { loadAppEnvironment } from '../src/shared/infra/env.js';
 
 const environmentKeys = [
   'NODE_ENV',
+  'OTP_IP_WINDOW_SECONDS',
+  'RATE_LIMIT_RETENTION_SECONDS',
   'DATABASE_URL',
   'JWT_SECRET',
   'OTP_HMAC_SECRET',
@@ -203,6 +205,22 @@ describe('runtime environment validation', () => {
     expect(loadAppEnvironment('/tmp/tracop-no-env').S3_PUBLIC_ENDPOINT).toBe(
       'https://files.example.test',
     );
+  });
+
+  it('requires the rate-limit retention to cover the longest OTP window', () => {
+    Object.assign(process.env, {
+      NODE_ENV: 'test',
+      DATABASE_URL: 'postgres://localhost/test',
+      JWT_SECRET: 'j'.repeat(32),
+      OTP_HMAC_SECRET: 'o'.repeat(32),
+      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      OTP_SENDER: 'console',
+      OTP_IP_WINDOW_SECONDS: '900',
+      RATE_LIMIT_RETENTION_SECONDS: '600',
+    });
+    expect(() => loadAppEnvironment('/tmp/tracop-no-env')).toThrow('RATE_LIMIT_RETENTION_SECONDS');
+    process.env.RATE_LIMIT_RETENTION_SECONDS = '900';
+    expect(loadAppEnvironment('/tmp/tracop-no-env').RATE_LIMIT_RETENTION_SECONDS).toBe(900);
   });
 
   it('accepts an empty CORS allowlist', () => {
