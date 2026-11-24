@@ -6718,6 +6718,9 @@
         "responses": {
           "400": {
             "description": "Solicitud inválida o no autorizada."
+          },
+          "409": {
+            "description": "Conflicto con el estado actual (invalid_transition) o versión obsoleta (version_conflict)."
           }
         },
         "security": [
@@ -6745,6 +6748,9 @@
         "responses": {
           "400": {
             "description": "Solicitud inválida o no autorizada."
+          },
+          "409": {
+            "description": "Conflicto con el estado actual (invalid_transition) o versión obsoleta (version_conflict)."
           }
         },
         "security": [
@@ -6772,6 +6778,9 @@
         "responses": {
           "400": {
             "description": "Solicitud inválida o no autorizada."
+          },
+          "409": {
+            "description": "Conflicto con el estado actual (invalid_transition) o versión obsoleta (version_conflict)."
           }
         },
         "security": [
@@ -6817,6 +6826,9 @@
         "responses": {
           "400": {
             "description": "Solicitud inválida o no autorizada."
+          },
+          "409": {
+            "description": "Conflicto con el estado actual (invalid_transition) o versión obsoleta (version_conflict)."
           }
         },
         "security": [
@@ -6878,6 +6890,9 @@
         "responses": {
           "400": {
             "description": "Solicitud inválida o no autorizada."
+          },
+          "409": {
+            "description": "Conflicto con el estado actual (invalid_transition) o versión obsoleta (version_conflict)."
           }
         },
         "security": [

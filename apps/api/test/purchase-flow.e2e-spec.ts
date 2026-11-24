@@ -441,4 +441,100 @@ describePostgres('purchase flow over HTTP (Nest + PostgreSQL)', () => {
     await accept(buyer, order.id, version).expect(200);
     expect(await reservationStatuses(order.id)).toEqual(['active']);
   });
+
+  it('answers 409 with a stable code for state conflicts', async () => {
+    const supplier = await register('supplier');
+    const buyer = await register('buyer');
+    const carrier = await register('carrier');
+    await http()
+      .put('/me/provider-profile')
+      .set(bearer(supplier))
+      .send({
+        displayName: 'Finca sintética',
+        municipality: 'Tunja',
+        department: 'Boyacá',
+        lat: 5.53,
+        lng: -73.36,
+        description: 'Dato sintético',
+      })
+      .expect(200);
+    await http()
+      .post('/logistics/carrier-profile')
+      .set(bearer(carrier))
+      .send({ vehicleType: 'Camion', capacityKg: 2000, plate: 'TRK200' })
+      .expect(201);
+    const outcome = (response: request.Response) => ({
+      status: response.status,
+      code: response.body.code,
+    });
+    const conflict = (code: string) => ({ status: 409, code });
+
+    // quote_expired: accepting after the quote's validity.
+    const lotId = await publishLot(supplier, 10);
+    const late = await placeOrder(buyer, lotId, 1);
+    await pool.query(
+      `UPDATE ordering.quotes SET valid_until = now() - interval '1 minute' WHERE order_id = $1`,
+      [late.id],
+    );
+    expect(outcome(await accept(buyer, late.id, late.response.body.version))).toEqual(
+      conflict('quote_expired'),
+    );
+
+    // invalid_transition (lot): publishing a lot that is already published.
+    expect(
+      outcome(
+        await http().post(`/lots/${lotId}/publish`).set(bearer(supplier)).send({ version: 2 }),
+      ),
+    ).toEqual(conflict('invalid_transition'));
+
+    // lot_unavailable: the provider cancels the lot before the buyer accepts.
+    const pending = await placeOrder(buyer, lotId, 1);
+    await http()
+      .post(`/lots/${lotId}/cancel`)
+      .set(bearer(supplier))
+      .send({ version: 2 })
+      .expect(201);
+    expect(outcome(await accept(buyer, pending.id, pending.response.body.version))).toEqual(
+      conflict('lot_unavailable'),
+    );
+
+    // invalid_transition (order): a paid order can no longer be cancelled.
+    const lotForTrip = await publishLot(supplier, 10);
+    const paid = await placeOrder(buyer, lotForTrip, 1);
+    await accept(buyer, paid.id, paid.response.body.version).expect(200);
+    await pool.query(
+      `UPDATE ordering.orders SET status = 'paid', version = version + 1 WHERE id = $1`,
+      [paid.id],
+    );
+    const paidVersion = (await http().get(`/orders/${paid.id}`).set(bearer(buyer)).expect(200)).body
+      .version as number;
+    expect(
+      outcome(
+        await http()
+          .post(`/orders/${paid.id}/cancel`)
+          .set(bearer(buyer))
+          .send({ expectedVersion: paidVersion }),
+      ),
+    ).toEqual(conflict('invalid_transition'));
+
+    // invalid_transition (trip): starting a trip that is already in progress.
+    const trip = await http()
+      .post('/logistics/trips')
+      .set(bearer(carrier))
+      .send({ id: createId(), orderIds: [paid.id] })
+      .expect(201);
+    const started = await http()
+      .post(`/logistics/trips/${trip.body.id}/start`)
+      .set(bearer(carrier))
+      .send({ expectedVersion: trip.body.version })
+      .expect(200);
+    expect(
+      outcome(
+        await http()
+          .post(`/logistics/trips/${trip.body.id}/start`)
+          .set(bearer(carrier))
+          .send({ expectedVersion: started.body.version }),
+      ),
+    ).toEqual(conflict('invalid_transition'));
+  });
 });

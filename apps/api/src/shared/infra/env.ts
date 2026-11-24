@@ -80,7 +80,6 @@ const envSchema = z.object({
   SYNC_PUSH_RATE_LIMIT: z.coerce.number().int().positive().default(30),
   SYNC_PULL_RATE_LIMIT: z.coerce.number().int().positive().default(120),
   SYNC_RATE_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
-  ORDER_MAX_LINES: z.coerce.number().int().positive().max(20).default(20),
   ORDER_QUOTE_TTL_HOURS: z.coerce.number().int().positive().default(24),
   ORDER_RESERVATION_TTL_HOURS: z.coerce.number().int().positive().default(24),
   ORDER_SUBTOTAL_ROUNDING: z.enum(['half_up', 'floor', 'ceil']).default('half_up'),
