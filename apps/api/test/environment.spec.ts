@@ -235,6 +235,47 @@ describe('runtime environment validation', () => {
     expect(() => loadAppEnvironment('/tmp/tracop-no-env')).toThrow('CORS_ALLOWED_ORIGINS');
   });
 
+  it.each([
+    ['http://app.example.test', 'Production requires HTTPS CORS origins.'],
+    ['https://app.example.test/path', 'CORS_ALLOWED_ORIGINS solo admite orígenes, sin ruta.'],
+    ['not a url', 'CORS_ALLOWED_ORIGINS contiene un origen inválido.'],
+  ])('rejects the production CORS origin %s', (origin, message) => {
+    Object.assign(process.env, {
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgres://localhost/test',
+      JWT_SECRET: 'j'.repeat(32),
+      OTP_HMAC_SECRET: 'o'.repeat(32),
+      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      OTP_SENDER: 'telegram',
+      TELEGRAM_BOT_TOKEN: '123456:token',
+      TELEGRAM_WEBHOOK_SECRET: 'secret',
+      TELEGRAM_BOT_USERNAME: 'tracop_test_bot',
+      CORS_ALLOWED_ORIGINS: origin,
+      ...productionS3,
+    });
+    expect(() => loadAppEnvironment('/tmp/tracop-no-env')).toThrow(message);
+  });
+
+  it('accepts a list of HTTPS origins in production', () => {
+    Object.assign(process.env, {
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgres://localhost/test',
+      JWT_SECRET: 'j'.repeat(32),
+      OTP_HMAC_SECRET: 'o'.repeat(32),
+      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      OTP_SENDER: 'telegram',
+      TELEGRAM_BOT_TOKEN: '123456:token',
+      TELEGRAM_WEBHOOK_SECRET: 'secret',
+      TELEGRAM_BOT_USERNAME: 'tracop_test_bot',
+      CORS_ALLOWED_ORIGINS: ' https://app.example.test , https://backoffice.example.test ',
+      ...productionS3,
+    });
+    expect(loadAppEnvironment('/tmp/tracop-no-env').allowedCorsOrigins).toEqual([
+      'https://app.example.test',
+      'https://backoffice.example.test',
+    ]);
+  });
+
   it('requires the complete S3 configuration in production', () => {
     Object.assign(process.env, {
       NODE_ENV: 'production',
