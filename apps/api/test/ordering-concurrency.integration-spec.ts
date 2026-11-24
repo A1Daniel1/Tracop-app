@@ -404,4 +404,47 @@ describePostgres('Ordering concurrency (20 iterations each)', () => {
     expect(await ordering.expireReservations(now, 100)).toBe(1);
     expect(await ordering.expireReservations(now, 100)).toBe(0);
   }, 120000);
+
+  it('persists the quote status when the order is accepted or cancelled', async () => {
+    const supplier = await registerSupplier();
+    const buyer = await registerBuyer();
+    const quoteStatus = async (orderId: string) =>
+      (
+        await pool.query<{ status: string }>(
+          `SELECT status FROM ordering.quotes WHERE order_id = $1`,
+          [orderId],
+        )
+      ).rows[0]?.status;
+    const place = async () => {
+      const lotId = await createLot(supplier.userId, (global as any).__TEST_PROD_ID__, 5);
+      const orderId = uuidv7();
+      await request(app.getHttpServer())
+        .post('/orders')
+        .set('Authorization', `Bearer ${buyer.token}`)
+        .send({ id: orderId, lines: [{ lotId, quantityMilli: '1000' }], deliveryAddress: 'Addr' })
+        .expect(201);
+      const { rows } = await pool.query<{ version: number }>(
+        `SELECT version FROM ordering.orders WHERE id = $1`,
+        [orderId],
+      );
+      return { orderId, version: rows[0]!.version };
+    };
+
+    const accepted = await place();
+    expect(await quoteStatus(accepted.orderId)).toBe('active');
+    await request(app.getHttpServer())
+      .post(`/orders/${accepted.orderId}/accept`)
+      .set('Authorization', `Bearer ${buyer.token}`)
+      .send({ expectedVersion: accepted.version })
+      .expect(200);
+    expect(await quoteStatus(accepted.orderId)).toBe('accepted');
+
+    const cancelled = await place();
+    await request(app.getHttpServer())
+      .post(`/orders/${cancelled.orderId}/cancel`)
+      .set('Authorization', `Bearer ${buyer.token}`)
+      .send({ expectedVersion: cancelled.version })
+      .expect(200);
+    expect(await quoteStatus(cancelled.orderId)).toBe('cancelled');
+  }, 120000);
 });

@@ -160,6 +160,10 @@ export class DrizzleOrderRepository implements OrderRepository {
         cancelReason: aggregate.order.cancelReason,
       })
       .where(eq(orders.id, aggregate.order.id));
+    await db
+      .update(quotes)
+      .set({ status: aggregate.quote.status, updatedAt: aggregate.order.updatedAt })
+      .where(and(eq(quotes.id, aggregate.quote.id), eq(quotes.orderId, aggregate.order.id)));
     if (events.length) {
       const [lastEvent] = await db
         .select({ hash: orderEvents.hash })
