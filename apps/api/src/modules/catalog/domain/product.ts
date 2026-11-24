@@ -49,6 +49,27 @@ export class Product {
   }
 }
 
+export type ProductNameMatch = 'exact' | 'similar' | 'none';
+
+/**
+ * Compares a proposed product name with an existing one by complete normalized tokens.
+ * `exact`: same normalized name. `similar`: the token set of one contains the other's
+ * (including the same tokens in another order). `none`: otherwise, so a shared substring
+ * ("papa" in "papaya") or a partial overlap ("papa criolla" vs "papa pastusa") is not a match.
+ */
+export const matchProductNames = (proposed: string, existing: string): ProductNameMatch => {
+  const proposedText = normalizeProductSearchText(proposed);
+  const existingText = normalizeProductSearchText(existing);
+  if (proposedText === existingText) return 'exact';
+  const proposedTokens = new Set(proposedText.split(' '));
+  const existingTokens = new Set(existingText.split(' '));
+  const containedIn = (inner: Set<string>, outer: Set<string>) =>
+    [...inner].every((token) => outer.has(token));
+  return containedIn(proposedTokens, existingTokens) || containedIn(existingTokens, proposedTokens)
+    ? 'similar'
+    : 'none';
+};
+
 export const normalizeProductSearchText = (value: string): string =>
   value
     .normalize('NFD')

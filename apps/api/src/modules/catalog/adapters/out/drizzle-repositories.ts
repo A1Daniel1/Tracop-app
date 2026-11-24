@@ -7,11 +7,7 @@ import type { OutboxWriter } from '../../../../shared/ports/outbox-writer.js';
 import type { UnitOfWork } from '../../../../shared/infra/unit-of-work.js';
 import type { CategoryProps } from '../../domain/category.js';
 import { quantityDecimalToMilli, quantityMilliToDecimal, type LotProps } from '../../domain/lot.js';
-import {
-  normalizeProductSearchText,
-  type ProductProps,
-  type ProductStatus,
-} from '../../domain/product.js';
+import { type ProductProps, type ProductStatus } from '../../domain/product.js';
 import type {
   CatalogClock,
   CatalogEventWriter,
@@ -218,86 +214,46 @@ export class DrizzleProductRepository implements ProductRepository {
     return row ? toProduct(row) : null;
   }
 
-  async findTokenExactVisible(
+  async findVisibleInCategory(
     categoryId: string,
-    searchText: string,
     viewerId: string,
     viewerRole: string,
-  ): Promise<ProductProps | null> {
-    const visiblePending =
-      viewerRole === 'operator' || viewerRole === 'admin'
-        ? eq(products.status, 'pending_review')
-        : and(eq(products.status, 'pending_review'), eq(products.proposedBy, viewerId));
-    const rows = await this.database
-      .current()
-      .select()
-      .from(products)
-      .where(
-        and(
-          eq(products.categoryId, categoryId),
-          isNull(products.deletedAt),
-          or(eq(products.status, 'approved'), visiblePending),
-        ),
-      );
-    const queryTokens = new Set(searchText.split(/\s+/).filter(Boolean));
-    for (const row of rows) {
-      const candidateTokens = new Set(
-        normalizeProductSearchText(row.name).split(/\s+/).filter(Boolean),
-      );
-      if (queryTokens.size === candidateTokens.size) {
-        let match = true;
-        for (const token of queryTokens) {
-          if (!candidateTokens.has(token)) {
-            match = false;
-            break;
-          }
-        }
-        if (match) return toProduct(row);
-      }
-    }
-    return null;
-  }
-
-  async findSimilarVisible(
-    categoryId: string,
-    searchText: string,
-    viewerId: string,
-    viewerRole: string,
-    limit: number,
   ): Promise<readonly ProductProps[]> {
     const visiblePending =
       viewerRole === 'operator' || viewerRole === 'admin'
         ? eq(products.status, 'pending_review')
         : and(eq(products.status, 'pending_review'), eq(products.proposedBy, viewerId));
-    const rows = await this.database
+    return (
+      await this.database
+        .current()
+        .select()
+        .from(products)
+        .where(
+          and(
+            eq(products.categoryId, categoryId),
+            isNull(products.deletedAt),
+            or(eq(products.status, 'approved'), visiblePending),
+          ),
+        )
+        .orderBy(asc(products.name))
+    ).map(toProduct);
+  }
+
+  async existsActiveBySearchText(categoryId: string, searchText: string): Promise<boolean> {
+    const [row] = await this.database
       .current()
-      .select()
+      .select({ id: products.id })
       .from(products)
       .where(
         and(
           eq(products.categoryId, categoryId),
+          eq(products.searchText, searchText),
           isNull(products.deletedAt),
-          or(eq(products.status, 'approved'), visiblePending),
+          inArray(products.status, ['approved', 'pending_review']),
         ),
       )
-      .orderBy(asc(products.name));
-    const queryTokens = new Set(searchText.split(/\s+/).filter(Boolean));
-    return rows
-      .map((row) => {
-        const normalized = normalizeProductSearchText(row.name);
-        const candidateTokens = new Set(normalized.split(/\s+/).filter(Boolean));
-        let score = 0;
-        for (const token of queryTokens) if (candidateTokens.has(token)) score += 1;
-        return { row, score, normalized };
-      })
-      .filter(({ normalized, score }) => normalized !== searchText && score > 0)
-      .sort(
-        (left, right) =>
-          right.score - left.score ||
-          left.row.name.localeCompare(right.row.name, 'es', { sensitivity: 'base' }),
-      )
-      .slice(0, limit)
-      .map(({ row }) => toProduct(row));
+      .limit(1);
+    return row !== undefined;
   }
 
   async countPendingByUser(userId: string): Promise<number> {

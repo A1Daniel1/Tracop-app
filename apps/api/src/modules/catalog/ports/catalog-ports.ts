@@ -24,19 +24,14 @@ export interface ProductRepository {
     viewerId: string,
     viewerRole: string,
   ): Promise<ProductProps | null>;
-  findTokenExactVisible(
+  /** Approved products of the category plus the pending ones the viewer may see. */
+  findVisibleInCategory(
     categoryId: string,
-    searchText: string,
     viewerId: string,
     viewerRole: string,
-  ): Promise<ProductProps | null>;
-  findSimilarVisible(
-    categoryId: string,
-    searchText: string,
-    viewerId: string,
-    viewerRole: string,
-    limit: number,
   ): Promise<readonly ProductProps[]>;
+  /** Whether any approved or pending product (visible or not) already uses this name. */
+  existsActiveBySearchText(categoryId: string, searchText: string): Promise<boolean>;
   countPendingByUser(userId: string): Promise<number>;
   findPending(viewerId: string, viewerRole: string): Promise<readonly ProductProps[]>;
 }

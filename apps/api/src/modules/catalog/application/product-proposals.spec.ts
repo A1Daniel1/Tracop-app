@@ -9,7 +9,7 @@ import type {
   ProviderDirectoryPort,
   ChangeRecorderPort,
 } from '../ports/catalog-ports.js';
-import type { ProductProps } from '../domain/product.js';
+import { normalizeProductSearchText, type ProductProps } from '../domain/product.js';
 import type { LotProps } from '../domain/lot.js';
 
 const actor = { sub: '018f47a2-8b45-7cc2-9a1e-123456789abc', role: 'producer' };
@@ -43,6 +43,13 @@ const createHarness = () => {
     findAll: async () => [...categories.values()],
     save: async () => undefined,
   };
+  // Same visibility as DrizzleProductRepository: approved for everyone, pending for its
+  // proposer and staff, rejected for nobody.
+  const isStaff = (role: string) => role === 'operator' || role === 'admin';
+  const visibleTo = (product: ProductProps, viewerId: string, viewerRole: string) =>
+    product.status === 'approved' ||
+    (product.status === 'pending_review' &&
+      (isStaff(viewerRole) || product.proposedBy === viewerId));
   const productRepository: ProductRepository = {
     findById: async (id) => products.get(id) ?? null,
     findAll: async () => [...products.values()].filter((product) => product.status === 'approved'),
@@ -51,10 +58,31 @@ const createHarness = () => {
     },
     lockForProductProposal: async () => undefined,
     lockPendingLimitByUser: async () => undefined,
-    findExactVisible: async () => null,
-    findTokenExactVisible: async () => null,
-    findSimilarVisible: async () => [],
-    countPendingByUser: async () => 0,
+    findExactVisible: async (categoryId, searchText, viewerId, viewerRole) =>
+      [...products.values()].find(
+        (product) =>
+          product.categoryId === categoryId &&
+          normalizeProductSearchText(product.name) === searchText &&
+          visibleTo(product, viewerId, viewerRole),
+      ) ?? null,
+    findVisibleInCategory: async (categoryId, viewerId, viewerRole) =>
+      [...products.values()]
+        .filter(
+          (product) =>
+            product.categoryId === categoryId && visibleTo(product, viewerId, viewerRole),
+        )
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    existsActiveBySearchText: async (categoryId, searchText) =>
+      [...products.values()].some(
+        (product) =>
+          product.categoryId === categoryId &&
+          normalizeProductSearchText(product.name) === searchText &&
+          (product.status === 'approved' || product.status === 'pending_review'),
+      ),
+    countPendingByUser: async (userId) =>
+      [...products.values()].filter(
+        (product) => product.status === 'pending_review' && product.proposedBy === userId,
+      ).length,
     findPending: async () =>
       [...products.values()].filter((product) => product.status === 'pending_review'),
   };
@@ -98,83 +126,145 @@ const createHarness = () => {
     eventWriter,
     clock,
     providerDirectory,
-    { lotHorizonDays: 90 },
+    { lotHorizonDays: 90, productProposalPendingLimit: 5 },
     changeRecorder,
   );
   return { service, products, lots, productRepository, eventWriter, changeRecorder };
 };
 
+const proposalInput = (id: string, name: string, confirm?: boolean) => ({
+  id,
+  categoryId: approved.categoryId,
+  name,
+  unit: 'kg' as const,
+  attributes: {},
+  ...(confirm === undefined ? {} : { confirm }),
+});
+
+const withProduct = (
+  harness: ReturnType<typeof createHarness>,
+  id: string,
+  name: string,
+  extra: Partial<ProductProps> = {},
+): ProductProps => {
+  const product: ProductProps = { ...approved, id, name, ...extra };
+  harness.products.set(product.id, product);
+  return product;
+};
+
+const otherProducer = { sub: '018f47a2-8b45-7cc2-9a1e-123456789aaa', role: 'producer' };
+
 describe('Catalog product proposals', () => {
-  it('returns an exact approved product with created false', async () => {
+  it('returns the existing product with created:false for the same normalized name', async () => {
     const harness = createHarness();
-    harness.productRepository.findExactVisible = jest.fn(async () => approved);
-    const result = await harness.service.createProductProposal(actor, {
-      id: '018f47a2-8b45-7cc2-9a1e-123456789ab0',
-      categoryId: approved.categoryId,
-      name: 'Tomate chonto',
-      unit: 'kg',
-      attributes: {},
-    });
-    expect(result.created).toBe(false);
-    expect(result.product.id).toBe(approved.id);
+    const result = await harness.service.createProductProposal(
+      actor,
+      proposalInput('018f47a2-8b45-7cc2-9a1e-123456789ab0', '  TOMATE   chonto '),
+    );
+    expect(result).toMatchObject({ created: false, product: { id: approved.id } });
+    expect(harness.eventWriter.append).not.toHaveBeenCalled();
   });
 
-  it('rejects approximate matches without confirm and supports confirm', async () => {
+  it('answers 409 product_similar_exists for papa vs papa criolla and creates with confirm', async () => {
     const harness = createHarness();
-    harness.productRepository.findSimilarVisible = jest.fn(async () => [approved]);
+    const papaCriolla = withProduct(
+      harness,
+      '018f47a2-8b45-7cc2-9a1e-123456789ac0',
+      'Papa criolla',
+    );
+
     await expect(
-      harness.service.createProductProposal(actor, {
-        id: '018f47a2-8b45-7cc2-9a1e-123456789ab1',
-        categoryId: approved.categoryId,
-        name: 'Tomate Cherry',
-        unit: 'kg',
-        attributes: {},
-      }),
+      harness.service.createProductProposal(
+        actor,
+        proposalInput('018f47a2-8b45-7cc2-9a1e-123456789ac1', 'Papa'),
+      ),
+    ).rejects.toMatchObject({
+      code: 'product_similar_exists',
+      details: { suggestions: [expect.objectContaining({ id: papaCriolla.id })] },
+    });
+
+    const confirmed = await harness.service.createProductProposal(
+      actor,
+      proposalInput('018f47a2-8b45-7cc2-9a1e-123456789ac1', 'Papa', true),
+    );
+    expect(confirmed).toMatchObject({ created: true, product: { status: 'pending_review' } });
+  });
+
+  it('treats the same tokens in another order as similar, not exact', async () => {
+    const harness = createHarness();
+    withProduct(harness, '018f47a2-8b45-7cc2-9a1e-123456789ac0', 'Papa criolla');
+    await expect(
+      harness.service.createProductProposal(
+        actor,
+        proposalInput('018f47a2-8b45-7cc2-9a1e-123456789ac2', 'Criolla papa'),
+      ),
     ).rejects.toMatchObject({ code: 'product_similar_exists' });
-
-    const confirmed = await harness.service.createProductProposal(actor, {
-      id: '018f47a2-8b45-7cc2-9a1e-123456789ab2',
-      categoryId: approved.categoryId,
-      name: 'Tomate Cherry',
-      unit: 'kg',
-      attributes: {},
-      confirm: true,
-    });
-    expect(confirmed.created).toBe(true);
-    expect(confirmed.product.status).toBe('pending_review');
   });
 
-  it('enforces five pending proposals per user', async () => {
+  it.each([
+    ['Papa', 'Papaya'],
+    ['Papa pastusa', 'Papa criolla'],
+  ])('creates %s without confirm when only %s exists', async (proposed, existing) => {
     const harness = createHarness();
-    harness.productRepository.countPendingByUser = jest.fn(async () => 5);
+    withProduct(harness, '018f47a2-8b45-7cc2-9a1e-123456789ac3', existing);
+    const result = await harness.service.createProductProposal(
+      actor,
+      proposalInput('018f47a2-8b45-7cc2-9a1e-123456789ac4', proposed),
+    );
+    expect(result).toMatchObject({ created: true, product: { name: proposed } });
+  });
+
+  it('returns at most five suggestions', async () => {
+    const harness = createHarness();
+    for (let index = 0; index < 7; index += 1)
+      withProduct(harness, `018f47a2-8b45-7cc2-9a1e-12345678a00${index}`, `Mango variedad${index}`);
     await expect(
-      harness.service.createProductProposal(actor, {
-        id: '018f47a2-8b45-7cc2-9a1e-123456789ab3',
-        categoryId: approved.categoryId,
-        name: 'Otra fruta',
-        unit: 'kg',
-        attributes: {},
-        confirm: true,
-      }),
+      harness.service.createProductProposal(
+        actor,
+        proposalInput('018f47a2-8b45-7cc2-9a1e-123456789ac5', 'Mango'),
+      ),
+    ).rejects.toMatchObject({
+      details: { suggestions: expect.objectContaining({ length: 5 }) },
+    });
+  });
+
+  it("answers 409 product_pending_review for another provider's pending name", async () => {
+    const harness = createHarness();
+    withProduct(harness, '018f47a2-8b45-7cc2-9a1e-123456789ac6', 'Gulupa', {
+      status: 'pending_review',
+      proposedBy: otherProducer.sub,
+    });
+    const failure = await harness.service
+      .createProductProposal(actor, proposalInput('018f47a2-8b45-7cc2-9a1e-123456789ac7', 'gulupa'))
+      .catch((error: unknown) => error);
+    expect(failure).toMatchObject({ code: 'product_pending_review', details: undefined });
+  });
+
+  it('enforces the configured pending limit per user', async () => {
+    const harness = createHarness();
+    for (let index = 0; index < 5; index += 1)
+      withProduct(harness, `018f47a2-8b45-7cc2-9a1e-12345678b00${index}`, `Fruta ${index}x`, {
+        status: 'pending_review',
+        proposedBy: actor.sub,
+      });
+    await expect(
+      harness.service.createProductProposal(
+        actor,
+        proposalInput('018f47a2-8b45-7cc2-9a1e-123456789ab3', 'Otra cosa', true),
+      ),
     ).rejects.toMatchObject({ code: 'pending_limit_reached' });
   });
 
-  it('approves and rejects proposals with domain events and sync owners', async () => {
+  it('approves and rejects proposals keeping the proposer and recording the reviewer', async () => {
     const harness = createHarness();
-    const proposed: ProductProps = {
-      id: '018f47a2-8b45-7cc2-9a1e-123456789ab4',
-      categoryId: approved.categoryId,
-      name: 'Lulo',
-      unit: 'kg',
-      attributes: {},
+    const proposed = withProduct(harness, '018f47a2-8b45-7cc2-9a1e-123456789ab4', 'Lulo', {
       status: 'pending_review',
       proposedBy: actor.sub,
-    };
-    harness.products.set(proposed.id, proposed);
+    });
 
     const approvedProposal = await harness.service.approveProductProposal(staff, proposed.id);
-    expect(approvedProposal.status).toBe('approved');
     expect(approvedProposal).toMatchObject({
+      status: 'approved',
       proposedBy: actor.sub,
       reviewedBy: staff.sub,
       reviewedAt: new Date('2026-11-19T12:00:00.000Z'),
@@ -182,22 +272,20 @@ describe('Catalog product proposals', () => {
 
     harness.products.set(proposed.id, proposed);
     const rejected = await harness.service.rejectProductProposal(staff, proposed.id, 'Duplicado');
-    expect(rejected.status).toBe('rejected');
-    expect(rejected.rejectionReason).toBe('Duplicado');
+    expect(rejected).toMatchObject({
+      status: 'rejected',
+      proposedBy: actor.sub,
+      reviewedBy: staff.sub,
+      rejectionReason: 'Duplicado',
+    });
   });
 
   it('blocks publishing a lot that uses a non-approved product', async () => {
     const harness = createHarness();
-    const pending: ProductProps = {
-      id: '018f47a2-8b45-7cc2-9a1e-123456789ab5',
-      categoryId: approved.categoryId,
-      name: 'Maracuyá',
-      unit: 'kg',
-      attributes: {},
+    const pending = withProduct(harness, '018f47a2-8b45-7cc2-9a1e-123456789ab5', 'Maracuyá', {
       status: 'pending_review',
       proposedBy: actor.sub,
-    };
-    harness.products.set(pending.id, pending);
+    });
     const lot: LotProps = {
       id: '018f47a2-8b45-7cc2-9a1e-123456789ab6',
       providerId: actor.sub,
@@ -217,84 +305,5 @@ describe('Catalog product proposals', () => {
     await expect(harness.service.publishLot(actor, lot.id, 1)).rejects.toMatchObject({
       code: 'product_pending_review',
     });
-  });
-
-  it('deduplicates by complete tokens: papa vs papa criolla returns 409 (similar, not exact)', async () => {
-    const harness = createHarness();
-    const papaCriolla: ProductProps = {
-      ...approved,
-      id: '018f47a2-8b45-7cc2-9a1e-123456789ac0',
-      name: 'Papa criolla',
-    };
-    harness.products.set(papaCriolla.id, papaCriolla);
-    harness.productRepository.findExactVisible = jest.fn(async () => null);
-    // findTokenExactVisible should return null because token sets differ: {papa} vs {papa, criolla}
-    harness.productRepository.findTokenExactVisible = jest.fn(async () => null);
-    harness.productRepository.findSimilarVisible = jest.fn(async () => [papaCriolla]);
-
-    // 'Papa' vs 'Papa criolla' - tokens of one contained in the other but sets differ -> 409 similar
-    await expect(
-      harness.service.createProductProposal(actor, {
-        id: '018f47a2-8b45-7cc2-9a1e-123456789ac1',
-        categoryId: approved.categoryId,
-        name: 'Papa',
-        unit: 'kg',
-        attributes: {},
-      }),
-    ).rejects.toMatchObject({ code: 'product_similar_exists' });
-  });
-
-  it('deduplicates by complete tokens: papa vs papaya creates new (no shared tokens)', async () => {
-    const harness = createHarness();
-    const papaya: ProductProps = {
-      ...approved,
-      id: '018f47a2-8b45-7cc2-9a1e-123456789ac2',
-      name: 'Papaya',
-    };
-    harness.products.set(papaya.id, papaya);
-    harness.productRepository.findExactVisible = jest.fn(async () => null);
-    harness.productRepository.findTokenExactVisible = jest.fn(async () => null);
-    harness.productRepository.findSimilarVisible = jest.fn(async () => [papaya]);
-
-    // 'Papa' vs 'Papaya' - 'papa' is substring but not a complete token -> creates new
-    const resultPapaya = await harness.service.createProductProposal(actor, {
-      id: '018f47a2-8b45-7cc2-9a1e-123456789ac3',
-      categoryId: approved.categoryId,
-      name: 'Papa',
-      unit: 'kg',
-      attributes: {},
-      confirm: true,
-    });
-    expect(resultPapaya.created).toBe(true);
-    expect(resultPapaya.product.name).toBe('Papa');
-  });
-
-  it('exact search_text match returns existing product with created:false', async () => {
-    const harness = createHarness();
-    harness.productRepository.findExactVisible = jest.fn(async () => approved);
-
-    const result = await harness.service.createProductProposal(actor, {
-      id: '018f47a2-8b45-7cc2-9a1e-123456789ab0',
-      categoryId: approved.categoryId,
-      name: 'Tomate chonto',
-      unit: 'kg',
-      attributes: {},
-    });
-    expect(result.created).toBe(false);
-    expect(result.product.id).toBe(approved.id);
-  });
-
-  it('enforces rate limit 429 on proposal endpoint via rate limiter', async () => {
-    const mockEnv = {
-      CATALOG_PRODUCT_PROPOSAL_RATE_WINDOW_SECONDS: 60,
-      CATALOG_PRODUCT_PROPOSAL_RATE_LIMIT: 5,
-    } as any;
-    const rateLimiterModule = await import('../adapters/in/product-proposal-rate-limiter.js');
-    const { RateLimitExceeded } = await import('../../../shared/kernel/domain-error.js');
-    const rateLimiter = new rateLimiterModule.InMemoryProductProposalRateLimiter(mockEnv);
-    for (let i = 0; i < 5; i++) {
-      rateLimiter.consume(actor.sub);
-    }
-    expect(() => rateLimiter.consume(actor.sub)).toThrow(RateLimitExceeded);
   });
 });

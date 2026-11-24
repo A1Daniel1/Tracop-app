@@ -2,7 +2,11 @@ import { Module } from '@nestjs/common';
 import { SharedInfraModule } from '../../shared/infra/shared-infra.module.js';
 import { APP_ENVIRONMENT } from '../../shared/infra/tokens.js';
 import type { AppEnvironment } from '../../shared/infra/env.js';
-import { CatalogService, CATALOG_SETTINGS } from './application/catalog-service.js';
+import {
+  CatalogService,
+  CATALOG_SETTINGS,
+  type CatalogSettings,
+} from './application/catalog-service.js';
 import { DeleteLot } from './application/delete-lot.js';
 import { LotPhotoService } from './application/lot-photo-service.js';
 import { CatalogController, LotsController } from './adapters/in/catalog.controller.js';
@@ -84,7 +88,10 @@ import { STORAGE_PORT, type StoragePort } from './ports/storage-port.js';
     {
       provide: CATALOG_SETTINGS,
       inject: [APP_ENVIRONMENT],
-      useFactory: (env: AppEnvironment) => ({ lotHorizonDays: env.CATALOG_LOT_MAX_HORIZON_DAYS }),
+      useFactory: (env: AppEnvironment): CatalogSettings => ({
+        lotHorizonDays: env.CATALOG_LOT_MAX_HORIZON_DAYS,
+        productProposalPendingLimit: env.CATALOG_PRODUCT_PROPOSAL_PENDING_LIMIT,
+      }),
     },
     {
       provide: LotPhotoService,

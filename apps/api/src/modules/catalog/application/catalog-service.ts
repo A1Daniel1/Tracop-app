@@ -5,6 +5,7 @@ import { Lot, type LotProps } from '../domain/lot.js';
 import {
   CURATED_REVIEW_STATE,
   Product,
+  matchProductNames,
   normalizeProductSearchText,
   type ProductProps,
 } from '../domain/product.js';
@@ -33,7 +34,10 @@ import { LOT_PHOTO_REPOSITORY, type LotPhotoRepository } from '../ports/lot-phot
 
 export interface CatalogSettings {
   readonly lotHorizonDays: number;
+  /** PROVISIONAL: pending proposals allowed per provider; validate with real producers. */
+  readonly productProposalPendingLimit: number;
 }
+const MAX_PRODUCT_SUGGESTIONS = 5;
 export type LotQuoteSnapshot = Pick<
   LotProps,
   'id' | 'providerId' | 'unit' | 'unitPrice' | 'availableUntil' | 'status'
@@ -151,28 +155,26 @@ export class CatalogService {
       );
       if (exact) return { product: exact, created: false, suggestions: [] };
 
-      const tokenExact = await this.products.findTokenExactVisible(
-        input.categoryId,
-        searchText,
-        actor.sub,
-        actor.role,
-      );
-      if (tokenExact) return { product: tokenExact, created: false, suggestions: [] };
+      // Same name, but invisible to this viewer: another provider's pending proposal.
+      // The answer reveals only that the name is under review, never who proposed it.
+      if (await this.products.existsActiveBySearchText(input.categoryId, searchText))
+        throw new DomainError(
+          'Ya hay una propuesta en revisión con ese nombre.',
+          'product_pending_review',
+        );
 
       const pendingCount = await this.products.countPendingByUser(actor.sub);
-      if (pendingCount >= 5)
+      if (pendingCount >= this.settings.productProposalPendingLimit)
         throw new DomainError(
           'Has alcanzado el límite de productos pendientes.',
           'pending_limit_reached',
         );
 
-      const similar = await this.products.findSimilarVisible(
-        input.categoryId,
-        searchText,
-        actor.sub,
-        actor.role,
-        5,
-      );
+      const similar = (
+        await this.products.findVisibleInCategory(input.categoryId, actor.sub, actor.role)
+      )
+        .filter((candidate) => matchProductNames(input.name, candidate.name) === 'similar')
+        .slice(0, MAX_PRODUCT_SUGGESTIONS);
       if (similar.length > 0 && input.confirm !== true) {
         throw new DomainError('Existe un producto similar.', 'product_similar_exists', {
           suggestions: similar,
