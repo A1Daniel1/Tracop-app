@@ -109,6 +109,11 @@ export class LogisticsController {
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Crear viaje a partir de pedidos' })
   @ApiResponse({ status: 400, description: 'Solicitud inválida o no autorizada.' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'El pedido no está pagado o ya está en otro viaje (invalid_order_status, assignment_conflict), o conflicto de versión.',
+  })
   async createTrip(@Req() req: Request, @Body() body: unknown) {
     const input = createTripSchema.parse(body);
     return serializeTrip(await this.trips.createTrip(req.identity, input));
@@ -153,6 +158,11 @@ export class LogisticsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Confirmar asignación del viaje' })
   @ApiResponse({ status: 400, description: 'Solicitud inválida o no autorizada.' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'El pedido no está pagado o ya está en otro viaje (invalid_order_status, assignment_conflict), o conflicto de versión.',
+  })
   async assign(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
     const { expectedVersion } = tripTransitionSchema.parse(body);
     return serializeTrip(await this.trips.assign(req.identity, id, expectedVersion));
@@ -163,6 +173,11 @@ export class LogisticsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Reasignar viaje para resolver conflictos' })
   @ApiResponse({ status: 400, description: 'Solicitud inválida o no autorizada.' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'El pedido no está pagado o ya está en otro viaje (invalid_order_status, assignment_conflict), o conflicto de versión.',
+  })
   async reassign(@Req() req: Request, @Param('id') id: string, @Body() body: unknown) {
     const input = reassignTripSchema.parse(body);
     return serializeTrip(
