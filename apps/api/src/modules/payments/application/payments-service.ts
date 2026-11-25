@@ -178,6 +178,15 @@ export class PaymentsService {
     return this.view(payment, actor);
   }
 
+  /**
+   * Whether the order's payment was verified (verified, held or settled), for trust to accept a
+   * rating only on paid orders. Not exposed by any controller.
+   */
+  async hasVerifiedPayment(orderId: string): Promise<boolean> {
+    const payment = await this.payments.findOpenByOrder(orderId);
+    return payment !== null && ['verified', 'held', 'settled'].includes(payment.status);
+  }
+
   /** Staff queue: proofs to review and open disputes, oldest first. */
   async listForReview(actor: PaymentsActor, limit: number): Promise<readonly PaymentProps[]> {
     this.requireStaff(actor);

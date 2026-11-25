@@ -34,7 +34,13 @@ import { APP_ENVIRONMENT } from '../../../../shared/infra/tokens.js';
 import type { AppEnvironment } from '../../../../shared/infra/env.js';
 import { CatalogService } from '../../application/catalog-service.js';
 import { DeleteLot } from '../../application/delete-lot.js';
-import { PROVIDER_DIRECTORY, type ProviderDirectoryPort } from '../../ports/catalog-ports.js';
+import {
+  PROVIDER_DIRECTORY,
+  PROVIDER_TRUST,
+  type ProviderDirectoryPort,
+  type ProviderTrustPort,
+  type ProviderTrustSummary,
+} from '../../ports/catalog-ports.js';
 import { serializeLotForViewer } from './lot-response.js';
 import { ApiErrorResponses, ApiZodBody, ApiZodResponse } from '../../../../shared/infra/openapi.js';
 import { z } from 'zod';
@@ -57,6 +63,8 @@ const photoUploadResponseSchema = z.object({
     })
     .optional(),
 });
+
+const UNRATED: ProviderTrustSummary = { verified: false, rating: null, ratingsCount: 0 };
 
 @ApiTags('catalog')
 @ApiBearerAuth()
@@ -233,6 +241,7 @@ export class LotsController {
     @Inject(DeleteLot) private readonly deleteDraft: DeleteLot,
     @Inject(LotPhotoService) private readonly lotPhotos: LotPhotoService,
     @Inject(PROVIDER_DIRECTORY) private readonly providers: ProviderDirectoryPort,
+    @Inject(PROVIDER_TRUST) private readonly providerTrust: ProviderTrustPort,
     @Inject(InMemorySearchRateLimiter)
     private readonly searchRateLimiter: InMemorySearchRateLimiter,
     @Inject(APP_ENVIRONMENT) private readonly env: AppEnvironment,
@@ -384,10 +393,21 @@ export class LotsController {
       ...(input.radiusKm !== undefined ? { radiusKm: input.radiusKm } : {}),
       ...(cursor ? { cursor } : {}),
     });
+    // One trust lookup for the whole page (a page has at most 50 lots), not one per lot.
+    const trust = await this.providerTrust.get([
+      ...new Set(page.items.map(({ lot }) => lot.providerId)),
+    ]);
     return {
       items: await Promise.all(
         page.items.map(({ lot, distanceKm }) =>
-          this.toResponse(lot, req.identity!.sub, distanceKm, false, lot.availableQuantityMilli),
+          this.toResponse(
+            lot,
+            req.identity!.sub,
+            distanceKm,
+            false,
+            lot.availableQuantityMilli,
+            trust.get(lot.providerId),
+          ),
         ),
       ),
       ...(page.nextCursor ? { nextCursor: this.encodeCursor(page.nextCursor) } : {}),
@@ -605,6 +625,7 @@ export class LotsController {
     distanceKm?: number,
     includeAllPhotos = false,
     availableOverride?: bigint,
+    trust?: ProviderTrustSummary,
   ) {
     const availableQuantityMilli =
       availableOverride ??
@@ -618,12 +639,19 @@ export class LotsController {
       .then((map) => [map.get(lot.providerId)]);
     if (!provider)
       throw new DomainError('Perfil público del proveedor no encontrado.', 'not_found');
+    const providerTrust =
+      trust ?? (await this.providerTrust.get([lot.providerId])).get(lot.providerId) ?? UNRATED;
     const photos = await this.lotPhotos.photosForLots(
       [lot.id],
       includeAllPhotos ? new Set([lot.id]) : new Set(),
     );
     return {
-      ...serializeLotForViewer(lotWithAvailability, provider, viewerId, distanceKm),
+      ...serializeLotForViewer(
+        lotWithAvailability,
+        { ...provider, ...providerTrust },
+        viewerId,
+        distanceKm,
+      ),
       photos: photos.get(lot.id) ?? [],
     };
   }

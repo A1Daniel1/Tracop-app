@@ -39,6 +39,8 @@ export type {
   OrderingRateLimit,
   ProviderDirectoryPort,
   ProviderPublicSummary,
+  ProviderTrustPort,
+  ProviderTrustSummary,
 } from './ports/ordering-ports.js';
 export {
   ORDER_REPOSITORY,
@@ -49,4 +51,5 @@ export {
   ORDERING_CLOCK,
   ORDERING_RATE_LIMIT,
   ORDER_PROVIDER_DIRECTORY,
+  ORDER_PROVIDER_TRUST,
 } from './ports/ordering-ports.js';

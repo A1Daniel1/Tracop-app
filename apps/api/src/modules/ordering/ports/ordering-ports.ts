@@ -62,6 +62,8 @@ export interface OrderRepository {
   findExpiredQuoteIds(now: Date, limit: number): Promise<readonly string[]>;
   listByStatus?(status: OrderProps['status'], limit: number): Promise<readonly OrderAggregate[]>;
   metrics?(): Promise<OrderingMetrics>;
+  /** When the order was delivered, from its OrderDelivered event; null if it was not. */
+  findDeliveredAt?(orderId: string): Promise<Date | null>;
 }
 
 export interface OrderingMetrics {
@@ -101,3 +103,17 @@ export const LOT_QUOTE_PORT = Symbol('LOT_QUOTE_PORT');
 export const LOT_RESERVATION_PORT = Symbol('LOT_RESERVATION_PORT');
 export const ORDERING_RATE_LIMIT = Symbol('ORDERING_RATE_LIMIT');
 export const ORDER_PROVIDER_DIRECTORY = Symbol('ORDER_PROVIDER_DIRECTORY');
+
+/** Public trust of providers (verified badge, visible rating), from trust via bootstrap. */
+export interface ProviderTrustSummary {
+  readonly verified: boolean;
+  readonly rating: string | null;
+  readonly ratingsCount: number;
+}
+
+export interface ProviderTrustPort {
+  /** At most 50 distinct ids per call; unknown providers come back unverified and unrated. */
+  get(providerIds: readonly string[]): Promise<ReadonlyMap<string, ProviderTrustSummary>>;
+}
+
+export const ORDER_PROVIDER_TRUST = Symbol('ORDER_PROVIDER_TRUST');

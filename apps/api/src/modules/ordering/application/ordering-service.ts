@@ -460,6 +460,29 @@ export class OrderingService {
     };
   }
 
+  /**
+   * Who took part in an order and when it was delivered (from its OrderDelivered event), for
+   * trust to decide who may rate whom. Not exposed by any controller.
+   */
+  async getDeliveryRecord(orderId: string): Promise<{
+    readonly buyerId: string;
+    readonly providerId: string;
+    readonly status: OrderProps['status'];
+    readonly deliveryWindow: Date | null;
+    readonly deliveredAt: Date | null;
+  } | null> {
+    const aggregate = await this.orderRepository.findById(orderId);
+    if (!aggregate) return null;
+    const window = aggregate.order.deliveryWindow;
+    return {
+      buyerId: aggregate.order.buyerId,
+      providerId: aggregate.order.providerId,
+      status: aggregate.order.status,
+      deliveryWindow: window ? new Date(window) : null,
+      deliveredAt: (await this.orderRepository.findDeliveredAt?.(orderId)) ?? null,
+    };
+  }
+
   /** Backoffice metrics (aggregates only, no personal data). */
   async metrics(): Promise<OrderingMetrics> {
     if (!this.orderRepository.metrics) throw new Error('metrics_unavailable');

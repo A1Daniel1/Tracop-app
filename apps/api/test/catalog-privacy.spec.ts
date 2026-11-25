@@ -17,7 +17,14 @@ const lot: LotProps = {
   status: 'published',
   version: 2,
 };
-const publicProvider = { displayName: 'Finca', municipality: 'Tunja', department: 'Boyacá' };
+const publicProvider = {
+  displayName: 'Finca',
+  municipality: 'Tunja',
+  department: 'Boyacá',
+  verified: false,
+  rating: null,
+  ratingsCount: 0,
+};
 
 describe('lot response location privacy', () => {
   it('omits exact lot and provider coordinates and private provider identifiers from third-party responses', () => {

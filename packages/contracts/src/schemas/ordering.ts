@@ -78,6 +78,13 @@ export const orderResponseSchema = z
         displayName: z.string(),
         municipality: z.string(),
         department: z.string(),
+        // Trust (ADR-020): verified badge and the one-decimal average, null below the minimum.
+        verified: z.boolean(),
+        rating: z
+          .string()
+          .regex(/^[1-5]\.\d$/)
+          .nullable(),
+        ratingsCount: z.number().int().nonnegative(),
       })
       .nullable()
       .optional(),

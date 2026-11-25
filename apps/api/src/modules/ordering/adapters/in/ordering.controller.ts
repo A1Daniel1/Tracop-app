@@ -24,7 +24,10 @@ import { AuthGuard, type AuthPrincipal } from '../../../../shared/auth/index.js'
 import { Inject } from '@nestjs/common';
 import {
   ORDER_PROVIDER_DIRECTORY,
+  ORDER_PROVIDER_TRUST,
   type ProviderDirectoryPort,
+  type ProviderTrustPort,
+  type ProviderTrustSummary,
 } from '../../ports/ordering-ports.js';
 
 @ApiTags('ordering')
@@ -37,6 +40,8 @@ export class OrderingController {
     private readonly ordering: OrderingService,
     @Inject(ORDER_PROVIDER_DIRECTORY)
     private readonly providerDirectory: ProviderDirectoryPort,
+    @Inject(ORDER_PROVIDER_TRUST)
+    private readonly providerTrust: ProviderTrustPort,
   ) {}
 
   @Post()
@@ -72,8 +77,10 @@ export class OrderingController {
     const { cursor, limit } = orderCursorQuerySchema.parse(query);
     const actor = req.identity;
     const result = await this.ordering.listMine(actor.sub, cursor, limit);
+    // One trust lookup per page (at most 100 orders, in chunks of 50), not one per order.
+    const trust = await this.trustFor(result.items.map((a) => a.order.providerId));
     return {
-      items: await Promise.all(result.items.map((a) => this.serializeOrder(a, actor))),
+      items: await Promise.all(result.items.map((a) => this.serializeOrder(a, actor, trust))),
       nextCursor: result.nextCursor,
     };
   }
@@ -167,9 +174,21 @@ export class OrderingController {
     return this.serializeOrder(aggregate, actor);
   }
 
+  private async trustFor(
+    providerIds: readonly string[],
+  ): Promise<ReadonlyMap<string, ProviderTrustSummary>> {
+    const ids = [...new Set(providerIds)];
+    const merged = new Map<string, ProviderTrustSummary>();
+    for (let start = 0; start < ids.length; start += 50)
+      for (const [id, trust] of await this.providerTrust.get(ids.slice(start, start + 50)))
+        merged.set(id, trust);
+    return merged;
+  }
+
   private async serializeOrder(
     aggregate: OrderAggregate,
     actor?: AuthPrincipal,
+    prefetchedTrust?: ReadonlyMap<string, ProviderTrustSummary>,
   ): Promise<Record<string, unknown>> {
     const isBuyer = actor?.sub === aggregate.order.buyerId;
     const base = {
@@ -193,12 +212,17 @@ export class OrderingController {
       quoteValidUntil: aggregate.quote.validUntil.toISOString(),
     };
     if (isBuyer) {
-      const summaries = await this.providerDirectory.getProviderPublicSummaries([
-        aggregate.order.providerId,
-      ]);
+      const providerId = aggregate.order.providerId;
+      const summaries = await this.providerDirectory.getProviderPublicSummaries([providerId]);
+      const summary = summaries.get(providerId);
+      const trust = (prefetchedTrust ?? (await this.trustFor([providerId]))).get(providerId) ?? {
+        verified: false,
+        rating: null,
+        ratingsCount: 0,
+      };
       return {
         ...base,
-        provider: summaries.get(aggregate.order.providerId) ?? null,
+        provider: summary ? { ...summary, ...trust } : null,
         deliveryAddress: aggregate.order.deliveryAddress,
         deliveryWindow: aggregate.order.deliveryWindow,
       };

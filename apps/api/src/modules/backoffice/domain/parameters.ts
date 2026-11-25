@@ -1,7 +1,7 @@
 import { DomainError } from '../../../shared/kernel/domain-error.js';
 import { PARAMETER_KEYS, type ParameterKey } from '../../../shared/kernel/parameter-keys.js';
 
-export type ParameterUnit = 'bps' | 'cop' | 'hours' | 'count';
+export type ParameterUnit = 'bps' | 'cop' | 'hours' | 'days' | 'count' | 'characters';
 
 export interface ParameterDefinition {
   readonly key: ParameterKey;
@@ -73,6 +73,39 @@ export const PARAMETER_DEFINITIONS: Readonly<Record<ParameterKey, ParameterDefin
     max: 50n,
     provisional: true,
     description: 'Propuestas de producto pendientes por usuario.',
+  },
+  'trust.rating_window_days': {
+    key: 'trust.rating_window_days',
+    unit: 'days',
+    min: 1n,
+    max: 90n,
+    provisional: true,
+    description: 'Días tras la entrega en que el comprador puede calificar.',
+  },
+  'trust.min_ratings_visible': {
+    key: 'trust.min_ratings_visible',
+    unit: 'count',
+    min: 1n,
+    max: 50n,
+    provisional: true,
+    description: 'Calificaciones mínimas para mostrar el promedio y los comentarios al calificado.',
+  },
+  'trust.comment_max_length': {
+    key: 'trust.comment_max_length',
+    unit: 'characters',
+    min: 0n,
+    max: 500n,
+    provisional: true,
+    description:
+      'Longitud máxima del comentario de una calificación (0 desactiva los comentarios).',
+  },
+  'trust.verification_cooldown_days': {
+    key: 'trust.verification_cooldown_days',
+    unit: 'days',
+    min: 0n,
+    max: 365n,
+    provisional: true,
+    description: 'Espera mínima para volver a solicitar la verificación tras un rechazo.',
   },
 };
 

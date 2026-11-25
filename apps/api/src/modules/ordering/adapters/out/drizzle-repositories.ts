@@ -68,6 +68,17 @@ const toQuoteProps = (row: typeof quotes.$inferSelect): QuoteProps => ({
 export class DrizzleOrderRepository implements OrderRepository {
   constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
 
+  async findDeliveredAt(orderId: string): Promise<Date | null> {
+    const [row] = await this.database
+      .current()
+      .select({ occurredAt: orderEvents.occurredAt })
+      .from(orderEvents)
+      .where(and(eq(orderEvents.orderId, orderId), eq(orderEvents.type, 'OrderDelivered')))
+      .orderBy(asc(orderEvents.occurredAt))
+      .limit(1);
+    return row?.occurredAt ?? null;
+  }
+
   async metrics(): Promise<OrderingMetrics> {
     const counts = await this.database.current().execute(sql`
       SELECT status, count(*)::int AS count FROM ordering.orders
