@@ -205,6 +205,8 @@ describe('logistics application', () => {
     await h.checkins.record(carrier, input(pickupB.id, 'pickup'), trip.version);
     await h.checkins.record(carrier, input(deliveryB.id, 'delivery'), trip.version);
     expect((await h.repository.findTrip(trip.id))?.status).toBe('completed');
+    expect(await h.trips.findDeliveringCarrier(orderA)).toBe(carrier.sub);
+    expect(await h.trips.findDeliveringCarrier(createId())).toBeNull();
     expect(h.changes.record).toHaveBeenCalledWith(
       expect.objectContaining({ entity: 'checkin', op: 'upsert' }),
     );
