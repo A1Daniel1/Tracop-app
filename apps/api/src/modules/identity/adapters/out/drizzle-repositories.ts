@@ -119,6 +119,17 @@ export class DrizzleChannelLinkRepository implements ChannelLinkRepository {
     return row ? mapChannelLink(row.link) : null;
   }
 
+  async findVerifiedByUser(userId: string): Promise<ChannelLinkProps | null> {
+    const [row] = await this.database
+      .current()
+      .select()
+      .from(channelLinks)
+      .where(and(eq(channelLinks.userId, userId), sql`${channelLinks.verifiedAt} IS NOT NULL`))
+      .orderBy(desc(channelLinks.verifiedAt))
+      .limit(1);
+    return row ? mapChannelLink(row) : null;
+  }
+
   async create(link: ChannelLinkProps): Promise<void> {
     await this.database.current().insert(channelLinks).values(link);
   }
@@ -148,6 +159,16 @@ export class DrizzleUserRepository implements UserRepository {
       .where(and(eq(users.id, id), isNull(users.deletedAt)))
       .limit(1);
     return row ? mapUser(row, this.environment.allowedCountryCodes) : null;
+  }
+  async listActiveIdsByRole(role: UserProps['role'], limit: number): Promise<readonly string[]> {
+    const rows = await this.database
+      .current()
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.role, role), eq(users.status, 'active'), isNull(users.deletedAt)))
+      .orderBy(users.createdAt, users.id)
+      .limit(limit);
+    return rows.map(({ id }) => id);
   }
   async create(user: UserProps): Promise<void> {
     await this.database.current().insert(users).values({

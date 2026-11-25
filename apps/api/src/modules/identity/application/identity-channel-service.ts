@@ -8,7 +8,9 @@ import type {
   ChannelLinkRepository,
   IdentityChannelApplication,
   IdentityChannelLink,
+  IdentityNotificationDirectory,
   IdentitySettings,
+  NotificationContact,
   LinkChannelResult,
   UserRepository,
 } from '../ports/identity-ports.js';
@@ -19,7 +21,9 @@ export interface LinkChannelCommand {
   phone: string;
 }
 
-export class IdentityChannelService implements IdentityChannelApplication {
+export class IdentityChannelService
+  implements IdentityChannelApplication, IdentityNotificationDirectory
+{
   constructor(
     private readonly environment: IdentitySettings,
     private readonly users: UserRepository,
@@ -43,6 +47,32 @@ export class IdentityChannelService implements IdentityChannelApplication {
     const link = await this.links.findVerifiedByPhone(phone.value);
     if (!link?.verifiedAt) return null;
     return { userId: link.userId, channel: link.channel, channelUserId: link.channelUserId };
+  }
+
+  async findNotificationContacts(
+    userIds: readonly string[],
+  ): Promise<readonly NotificationContact[]> {
+    const contacts: NotificationContact[] = [];
+    for (const userId of new Set(userIds)) {
+      const user = await this.users.findById(userId);
+      if (!user || user.status !== 'active') continue;
+      const link = await this.links.findVerifiedByUser(userId);
+      contacts.push({
+        userId,
+        locale: user.locale,
+        channel: link?.verifiedAt
+          ? { userId, channel: link.channel, channelUserId: link.channelUserId }
+          : null,
+      });
+    }
+    return contacts;
+  }
+
+  async listActiveStaffIds(
+    role: 'operator' | 'finance' | 'admin',
+    limit: number,
+  ): Promise<readonly string[]> {
+    return this.users.listActiveIdsByRole(role, limit);
   }
 
   async linkChannel(command: LinkChannelCommand): Promise<Result<LinkChannelResult, DomainError>> {

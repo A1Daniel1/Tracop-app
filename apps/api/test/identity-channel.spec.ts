@@ -38,6 +38,14 @@ class MemoryChannelLinkRepository implements ChannelLinkRepository {
     );
   }
 
+  async findVerifiedByUser(userId: string): Promise<ChannelLinkProps | null> {
+    return (
+      this.links
+        .filter((link) => link.userId === userId && link.verifiedAt !== null)
+        .sort((left, right) => right.verifiedAt!.getTime() - left.verifiedAt!.getTime())[0] ?? null
+    );
+  }
+
   async create(link: ChannelLinkProps): Promise<void> {
     this.links.push(link);
   }
@@ -239,5 +247,42 @@ describe('ChannelLink domain', () => {
       channel: 'telegram',
       occurredAt: now.toISOString(),
     });
+  });
+
+  it('gives notifications only the locale and verified channel of active users', async () => {
+    const { addUser, service, state } = setup();
+    const linked = addUser('3001234567');
+    const unlinked = addUser('3001234568');
+    const suspended = addUser('3001234569', 'suspended');
+    await service.linkChannel({
+      channel: 'telegram',
+      channelUserId: '900001',
+      phone: '3001234567',
+    });
+
+    const contacts = await service.findNotificationContacts([
+      linked.id,
+      unlinked.id,
+      suspended.id,
+      linked.id,
+      'unknown',
+    ]);
+
+    expect(contacts).toEqual([
+      {
+        userId: linked.id,
+        locale: 'es-CO',
+        channel: { userId: linked.id, channel: 'telegram', channelUserId: '900001' },
+      },
+      { userId: unlinked.id, locale: 'es-CO', channel: null },
+    ]);
+    for (const contact of contacts) {
+      expect(contact).not.toHaveProperty('phone');
+      expect(contact).not.toHaveProperty('fullName');
+    }
+    const staff = { ...linked, id: 'operator-1', role: 'operator' as const };
+    state.users.set(staff.id, staff);
+    expect(await service.listActiveStaffIds('operator', 10)).toEqual(['operator-1']);
+    expect(await service.listActiveStaffIds('finance', 10)).toEqual([]);
   });
 });

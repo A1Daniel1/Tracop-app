@@ -24,6 +24,7 @@ describe('ProviderDirectoryPort contract', () => {
     const users: UserRepository = {
       findById: async () => null,
       findByPhone: async () => null,
+      listActiveIdsByRole: async () => [],
       create: async () => undefined,
       update: async () => undefined,
     };

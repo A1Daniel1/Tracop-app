@@ -7,6 +7,7 @@ export {
   PROVIDER_PROFILE_SERVICE,
   IDENTITY_APPLICATION,
   IDENTITY_CHANNEL_APPLICATION,
+  IDENTITY_NOTIFICATION_DIRECTORY,
   OTP_SENDER,
   IDENTITY_MAINTENANCE,
 } from './ports/tokens.js';
@@ -18,6 +19,8 @@ export type {
   ChannelLinkRepository,
   IdentityChannelApplication,
   IdentityChannelLink,
+  IdentityNotificationDirectory,
+  NotificationContact,
   LinkChannelResult,
   OtpSenderPort,
   IdentityMaintenanceApi,
