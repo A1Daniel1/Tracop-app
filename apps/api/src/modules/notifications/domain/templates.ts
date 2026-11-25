@@ -70,8 +70,14 @@ export const orderReference = (orderId: string): string =>
   `#${orderId.replace(/-/g, '').slice(0, 8).toUpperCase()}`;
 
 /** Thousands separated with dots, as in Colombia; amounts are integer COP. */
-export const formatCop = (amount: bigint): string =>
-  amount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+export const formatCop = (amount: bigint): string => {
+  // Grouped by hand, in linear time: a lookahead regex here backtracks super-linearly (S8786).
+  const digits = (amount < 0n ? -amount : amount).toString();
+  const groups: string[] = [];
+  for (let end = digits.length; end > 0; end -= 3)
+    groups.unshift(digits.slice(Math.max(0, end - 3), end));
+  return `${amount < 0n ? '-' : ''}${groups.join('.')}`;
+};
 
 export const renderNotification = (
   kind: NotificationKind,

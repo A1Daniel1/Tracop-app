@@ -138,12 +138,16 @@ describe('templates', () => {
 
   it('shortens order ids and formats COP with dot separators', () => {
     expect(orderReference('01a21018-025b-77c6-9f60-725b833daf62')).toBe('#01A21018');
-    expect([0n, 950n, 45_000n, 1_234_567n].map(formatCop)).toEqual([
+    expect([0n, 950n, 1_000n, 45_000n, 1_234_567n, -12_500n].map(formatCop)).toEqual([
       '0',
       '950',
+      '1.000',
       '45.000',
       '1.234.567',
+      '-12.500',
     ]);
+    // The largest COP amount the API accepts (19 digits) is grouped in linear time.
+    expect(formatCop(9_223_372_036_854_775_807n)).toBe('9.223.372.036.854.775.807');
     expect(renderNotification('settlement_paid', 'es-CO', { orderRef: '#1' }).body).toContain(
       '$0 COP',
     );
