@@ -40,8 +40,7 @@ const createHarness = () => {
     isExpired: jest.fn(async () => false),
   };
   const pricing = {
-    configuration: { commissionRateBps: 0n, freightCop: 0n, subtotalRounding: 'half_up' as const },
-    calculate: () => ({
+    calculate: async () => ({
       subtotal: 5000n,
       freight: 0n,
       commission: 0n,
@@ -59,8 +58,7 @@ const createHarness = () => {
     { now: () => now },
     { consume: () => undefined },
     outbox,
-    24,
-    24,
+    { get: async () => 24n },
   );
   return { state, repository, lotQuote, lotReservation, pricing, outbox, service };
 };

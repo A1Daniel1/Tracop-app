@@ -1,4 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { AUDIT_WRITER, type AuditWriter } from '../../../shared/ports/audit-writer.js';
+import { PARAMETER_READER, type ParameterReader } from '../../../shared/ports/parameter-reader.js';
 import { DomainError } from '../../../shared/kernel/domain-error.js';
 import { Category, type CategoryProps } from '../domain/category.js';
 import { Lot, type LotProps } from '../domain/lot.js';
@@ -73,7 +75,34 @@ export class CatalogService {
     },
     @Inject(LOT_PHOTO_REPOSITORY)
     private readonly photos?: LotPhotoRepository,
+    // Nest injects both (the backoffice module is global); the defaults only serve tests that
+    // build the service by hand.
+    @Inject(AUDIT_WRITER)
+    private readonly audit: AuditWriter = { record: async () => undefined },
+    @Inject(PARAMETER_READER)
+    private readonly parameters: ParameterReader = {
+      get: async () => BigInt(settings.productProposalPendingLimit),
+    },
   ) {}
+
+  private async audited(
+    actor: Actor,
+    action: string,
+    entity: string,
+    entityId: string,
+    before: Record<string, unknown> | null,
+    after: Record<string, unknown> | null,
+  ): Promise<void> {
+    await this.audit.record({
+      actorId: actor.sub,
+      actorRole: actor.role,
+      action,
+      entity,
+      entityId,
+      before,
+      after,
+    });
+  }
 
   async createCategory(actor: Actor, input: Omit<CategoryProps, 'depth'>): Promise<CategoryProps> {
     this.requireRole(actor, STAFF);
@@ -86,6 +115,10 @@ export class CatalogService {
       const category = Category.create({ ...input, depth: parent ? parent.depth + 1 : 1 });
       await this.categories.save(category.props);
       await this.recordCategory(category.props);
+      await this.audited(actor, 'category.create', 'category', category.props.id, null, {
+        name: category.props.name,
+        parentId: category.props.parentId,
+      });
       return category.props;
     });
   }
@@ -98,6 +131,14 @@ export class CatalogService {
       const updated = Category.create({ ...current, name: input.name });
       await this.categories.save(updated.props);
       await this.recordCategory(updated.props);
+      await this.audited(
+        actor,
+        'category.update',
+        'category',
+        id,
+        { name: current.name },
+        { name: updated.props.name },
+      );
       return updated.props;
     });
   }
@@ -110,6 +151,11 @@ export class CatalogService {
       const product = Product.create({ ...input, ...CURATED_REVIEW_STATE });
       await this.products.save(product.props);
       await this.recordProductChange(product.props);
+      await this.audited(actor, 'product.create', 'product', product.props.id, null, {
+        name: product.props.name,
+        categoryId: product.props.categoryId,
+        unit: product.props.unit,
+      });
       return product.props;
     });
   }
@@ -140,6 +186,18 @@ export class CatalogService {
       });
       await this.products.save(product.props);
       await this.recordProductChange(product.props);
+      await this.audited(
+        actor,
+        'product.update',
+        'product',
+        id,
+        { name: current.name, categoryId: current.categoryId, unit: current.unit },
+        {
+          name: product.props.name,
+          categoryId: product.props.categoryId,
+          unit: product.props.unit,
+        },
+      );
       return product.props;
     });
   }
@@ -182,7 +240,8 @@ export class CatalogService {
         );
 
       const pendingCount = await this.products.countPendingByUser(actor.sub);
-      if (pendingCount >= this.settings.productProposalPendingLimit)
+      const pendingLimit = await this.parameters.get('catalog.product_proposal_pending_limit');
+      if (BigInt(pendingCount) >= pendingLimit)
         throw new DomainError(
           'Has alcanzado el límite de productos pendientes.',
           'pending_limit_reached',
@@ -259,6 +318,14 @@ export class CatalogService {
       }).props;
       await this.products.save(approved);
       await this.recordProductChange(approved);
+      await this.audited(
+        actor,
+        'product_proposal.approve',
+        'product',
+        approved.id,
+        { status: 'pending_review' },
+        { status: 'approved' },
+      );
       await this.events.append([
         {
           aggregate: `product:${approved.id}`,
@@ -293,6 +360,14 @@ export class CatalogService {
       }).props;
       await this.products.save(rejected);
       await this.recordProductChange(rejected);
+      await this.audited(
+        actor,
+        'product_proposal.reject',
+        'product',
+        rejected.id,
+        { status: 'pending_review' },
+        { status: 'rejected', rejectionReason },
+      );
       await this.events.append([
         {
           aggregate: `product:${rejected.id}`,

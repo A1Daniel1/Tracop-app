@@ -16,8 +16,6 @@ const orderId = '018f47a2-8b45-7cc2-9a1e-123456789abc';
 const paymentId = '018f47a2-8b45-7cc2-9a1e-123456789abd';
 
 const settings: PaymentsSettings = {
-  rejectionGraceHours: 4,
-  claimWindowHours: 48,
   proofMaxBytes: 100,
   proofUploadUrlTtlSeconds: 900,
   proofDownloadUrlTtlSeconds: 300,
@@ -29,6 +27,7 @@ const harness = (amounts = { subtotal: 1000n, freight: 0n, commission: 0n }) => 
   const settlements = new Map<string, SettlementProps>();
   const posted: string[] = [];
   const objects = new Map<string, Uint8Array>();
+  const audited: { action: string; entityId: string }[] = [];
   const paymentRepository: PaymentRepository = {
     findById: async (id) => payments.get(id) ?? null,
     findOpenByOrder: async (id) =>
@@ -129,6 +128,15 @@ const harness = (amounts = { subtotal: 1000n, freight: 0n, commission: 0n }) => 
     { run: async (operation) => operation() },
     { now: () => now },
     settings,
+    { record: async (entry) => void audited.push(entry) },
+    {
+      get: async (key) =>
+        key === 'payment.claim_window_hours'
+          ? 48n
+          : key === 'payment.rejection_grace_hours'
+            ? 4n
+            : 0n,
+    },
     () => `settlement-${(sequence += 1)}`,
   );
   const pendingWithUpload = async () => {
@@ -145,6 +153,7 @@ const harness = (amounts = { subtotal: 1000n, freight: 0n, commission: 0n }) => 
     orders,
     processor,
     pendingWithUpload,
+    audited,
   };
 };
 
@@ -285,6 +294,12 @@ describe('PaymentsService', () => {
       'delivery_confirmed',
       'settlement_paid_producer',
       'settlement_paid_carrier',
+    ]);
+    expect(h.audited.map(({ action }) => action)).toEqual([
+      'payment.verify',
+      'payment.dispute_release',
+      'settlement.mark_paid',
+      'settlement.mark_paid',
     ]);
   });
 

@@ -1,9 +1,13 @@
+import { spawnSync } from 'node:child_process';
 import { createHmac } from 'node:crypto';
+import { resolve } from 'node:path';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import pg from 'pg';
 import request from 'supertest';
 import { AppModule } from '../src/bootstrap/app.module.js';
+import { OrderingService } from '../src/modules/ordering/index.js';
+import { createId } from '../src/shared/kernel/ids.js';
 import { configureHttp } from '../src/bootstrap/http.js';
 import { DATABASE_POOL } from '../src/shared/infra/tokens.js';
 import { PARAMETER_READER, type ParameterReader } from '../src/shared/ports/parameter-reader.js';
@@ -155,4 +159,113 @@ describePostgres('backoffice parameters and audit log (Nest + PostgreSQL)', () =
       expect(stored.rows[0]!.value).toBe(audits.rows[1]!.after.value);
     }
   }, 120_000);
+
+  it('audits a staff account created by the CLI as a system action, without the phone or name', () => {
+    const result = spawnSync(
+      resolve('node_modules/.bin/tsx'),
+      [
+        '--tsconfig',
+        'test/tsconfig.worker.json',
+        'scripts/create-staff.ts',
+        '--phone',
+        '+573079999999',
+        '--name',
+        'Finanzas sintética',
+        '--role',
+        'finance',
+      ],
+      { env: { ...process.env, NODE_ENV: 'development' }, cwd: resolve('.'), encoding: 'utf8' },
+    );
+    expect(result.status).toBe(0);
+    return pool
+      .query<{
+        actor_id: string | null;
+        actor_role: string;
+        action: string;
+        entity_id: string;
+        after: Record<string, unknown>;
+      }>(`SELECT actor_id, actor_role, action, entity_id, after FROM backoffice.audit_log`)
+      .then(async ({ rows }) => {
+        const user = await pool.query<{ id: string }>(
+          `SELECT id FROM identity.users WHERE phone = '+573079999999'`,
+        );
+        expect(rows).toEqual([
+          {
+            actor_id: null,
+            actor_role: 'system',
+            action: 'staff.create',
+            entity_id: user.rows[0]!.id,
+            after: { role: 'finance' },
+          },
+        ]);
+      });
+  }, 60_000);
+
+  it('applies stored parameters to new quotes and audits staff catalog actions, through the real wiring', async () => {
+    const admin = await staff('admin');
+    const operator = await staff('operator');
+    const auth = (account: { token: string }) => ({ Authorization: `Bearer ${account.token}` });
+    for (const [key, value] of [
+      ['order.commission_rate_bps', '1000'],
+      ['order.freight_cop', '5000'],
+      ['order.quote_ttl_hours', '2'],
+    ])
+      await http()
+        .put(`/backoffice/parameters/${key}`)
+        .set(auth(admin))
+        .send({ value })
+        .expect(200);
+
+    const categoryId = createId();
+    const productId = createId();
+    await http()
+      .post('/catalog/categories')
+      .set(auth(operator))
+      .send({ id: categoryId, name: 'Tubérculos', parentId: null })
+      .expect(201);
+    await http()
+      .post('/catalog/products')
+      .set(auth(operator))
+      .send({ id: productId, categoryId, name: 'Papa criolla', unit: 'kg', attributes: {} })
+      .expect(201);
+    const lotId = createId();
+    await pool.query(
+      `INSERT INTO catalog.lots (id, provider_id, product_id, quantity, unit, unit_price, quality_grade,
+         available_from, available_until, location_lat, location_lng, status, version, created_at, updated_at)
+       VALUES ($1, $2, $3, 10, 'kg', 4500, NULL, NOW(), NOW() + INTERVAL '7 days', 4.6, -74.1,
+         'published', 1, NOW(), NOW())`,
+      [lotId, createId(), productId],
+    );
+    const buyerId = createId();
+    const before = Date.now();
+    const order = await app.get(OrderingService).createOrder(
+      { sub: buyerId, role: 'buyer' },
+      {
+        id: createId(),
+        buyerId,
+        lines: [{ lotId, quantityMilli: 2000n }],
+        deliveryAddress: 'Calle sintética 1, Bogotá',
+        deliveryWindow: null,
+      },
+    );
+    expect(order.quote).toMatchObject({
+      subtotal: 9000n,
+      commission: 900n,
+      freight: 5000n,
+      total: 14000n,
+      providerNet: 8100n,
+    });
+    const ttl = order.quote.validUntil.getTime() - before;
+    expect(ttl).toBeGreaterThanOrEqual(2 * 3_600_000 - 1000);
+    expect(ttl).toBeLessThanOrEqual(2 * 3_600_000 + 5000);
+
+    const audit = await pool.query<{ actor_id: string; action: string; entity_id: string }>(
+      `SELECT actor_id, action, entity_id FROM backoffice.audit_log
+       WHERE entity IN ('category', 'product') ORDER BY at, id`,
+    );
+    expect(audit.rows).toEqual([
+      { actor_id: operator.userId, action: 'category.create', entity_id: categoryId },
+      { actor_id: operator.userId, action: 'product.create', entity_id: productId },
+    ]);
+  });
 });

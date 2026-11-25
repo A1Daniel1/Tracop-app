@@ -16,6 +16,8 @@ import {
   type PhotoProcessorPort,
 } from '../../shared/ports/photo-processor.js';
 import { STORAGE_PORT, type StoragePort } from '../../shared/ports/storage.js';
+import { AUDIT_WRITER, type AuditWriter } from '../../shared/ports/audit-writer.js';
+import { PARAMETER_READER, type ParameterReader } from '../../shared/ports/parameter-reader.js';
 import { OrderDeliveredSubscriber } from './adapters/in/order-delivered.subscriber.js';
 import {
   OrderPaymentsController,
@@ -54,8 +56,6 @@ import {
       provide: PAYMENTS_SETTINGS,
       inject: [APP_ENVIRONMENT],
       useFactory: (env: AppEnvironment): PaymentsSettings => ({
-        rejectionGraceHours: env.PAYMENT_REJECTION_GRACE_HOURS,
-        claimWindowHours: env.PAYMENT_CLAIM_WINDOW_HOURS,
         proofMaxBytes: env.PAYMENT_PROOF_MAX_BYTES,
         proofUploadUrlTtlSeconds: env.PAYMENT_PROOF_UPLOAD_URL_TTL_SECONDS,
         proofDownloadUrlTtlSeconds: env.PAYMENT_PROOF_DOWNLOAD_URL_TTL_SECONDS,
@@ -82,6 +82,8 @@ import {
         UNIT_OF_WORK,
         APP_CLOCK,
         PAYMENTS_SETTINGS,
+        AUDIT_WRITER,
+        PARAMETER_READER,
       ],
       useFactory: (
         payments: DrizzlePaymentRepository,
@@ -95,6 +97,8 @@ import {
         uow: UnitOfWork,
         clock: Clock,
         settings: PaymentsSettings,
+        audit: AuditWriter,
+        parameters: ParameterReader,
       ) =>
         new PaymentsService(
           payments,
@@ -108,6 +112,8 @@ import {
           uow,
           clock,
           settings,
+          audit,
+          parameters,
           createId,
         ),
     },

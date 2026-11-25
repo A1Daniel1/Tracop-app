@@ -88,8 +88,6 @@ export interface PaymentsClock {
 }
 
 export interface PaymentsSettings {
-  readonly rejectionGraceHours: number;
-  readonly claimWindowHours: number;
   readonly proofMaxBytes: number;
   readonly proofUploadUrlTtlSeconds: number;
   readonly proofDownloadUrlTtlSeconds: number;

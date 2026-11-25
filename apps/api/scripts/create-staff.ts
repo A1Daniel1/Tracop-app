@@ -64,6 +64,13 @@ try {
        VALUES ($1, $2, $3, $4::jsonb, $5)`,
       [createId(), user.props.id, event.type, JSON.stringify({ ...event }), now],
     );
+    // A new staff account is a sensitive action: audited in the same transaction, as the system
+    // (there is no signed-in actor in the CLI). Neither the phone nor the name is recorded.
+    await client.query(
+      `INSERT INTO backoffice.audit_log (id, actor_id, actor_role, action, entity, entity_id, before, after, at)
+       VALUES ($1, NULL, 'system', 'staff.create', 'user', $2, NULL, $3::jsonb, $4)`,
+      [createId(), user.props.id, JSON.stringify({ role: user.props.role }), now],
+    );
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');

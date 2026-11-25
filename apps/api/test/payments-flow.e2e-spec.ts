@@ -410,6 +410,14 @@ describePostgres('payments over HTTP (Nest + PostgreSQL)', () => {
       'SettlementPaid',
       'PaymentSettled',
     ]);
+    // Staff actions are in the audit log, with the actor, in the same transactions.
+    const audited = await pool.query<{ actor_id: string; action: string }>(
+      `SELECT actor_id, action FROM backoffice.audit_log ORDER BY at, id`,
+    );
+    expect(audited.rows).toEqual([
+      { actor_id: finance.userId, action: 'payment.verify' },
+      { actor_id: finance.userId, action: 'settlement.mark_paid' },
+    ]);
     // Settlement events name the beneficiary so notifications can reach them.
     const issued = await pool.query<{ payload: Record<string, unknown> }>(
       `SELECT payload FROM shared.outbox_events

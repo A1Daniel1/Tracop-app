@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { OUTBOX_WRITER } from '../../../shared/ports/outbox-writer.js';
+import { PARAMETER_READER, type ParameterReader } from '../../../shared/ports/parameter-reader.js';
 import type { OutboxWriter } from '../../../shared/ports/outbox-writer.js';
 import { DomainError } from '../../../shared/kernel/domain-error.js';
 import {
@@ -101,8 +102,7 @@ export class OrderingService {
     @Inject(ORDERING_CLOCK) private readonly clock: OrderingClock,
     @Inject(ORDERING_RATE_LIMIT) private readonly rateLimit: OrderingRateLimit,
     @Inject(OUTBOX_WRITER) private readonly outbox: OutboxWriter,
-    @Inject('ORDER_QUOTE_TTL_HOURS') private readonly quoteTtlHours: number,
-    @Inject('ORDER_RESERVATION_TTL_HOURS') private readonly reservationTtlHours: number,
+    @Inject(PARAMETER_READER) private readonly parameters: ParameterReader,
   ) {}
 
   async createOrder(actor: Actor, input: CreateOrderInput): Promise<OrderAggregate> {
@@ -175,8 +175,9 @@ export class OrderingService {
         );
       const providerId = lineProps[0]!.providerId;
 
-      const quoteAmounts = this.pricingPort.calculate(pricingLines);
-      const validUntil = new Date(now.getTime() + this.quoteTtlHours * 60 * 60 * 1000);
+      const quoteAmounts = await this.pricingPort.calculate(pricingLines);
+      const quoteTtlHours = Number(await this.parameters.get('order.quote_ttl_hours'));
+      const validUntil = new Date(now.getTime() + quoteTtlHours * 60 * 60 * 1000);
       const quoteId = createId();
       const quote: QuoteProps = {
         id: quoteId,
@@ -268,9 +269,8 @@ export class OrderingService {
         lines: aggregate.lines,
         quote: { ...quote, status: 'accepted' },
       };
-      const reservationExpiresAt = new Date(
-        now.getTime() + this.reservationTtlHours * 60 * 60 * 1000,
-      );
+      const reservationTtlHours = Number(await this.parameters.get('order.reservation_ttl_hours'));
+      const reservationExpiresAt = new Date(now.getTime() + reservationTtlHours * 60 * 60 * 1000);
       await this.lotReservationPort.reserve(
         input.orderId,
         aggregate.lines.map((line) => ({

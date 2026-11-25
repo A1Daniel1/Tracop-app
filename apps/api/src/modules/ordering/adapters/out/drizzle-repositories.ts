@@ -1,4 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
+import {
+  PARAMETER_READER,
+  type ParameterReader,
+} from '../../../../shared/ports/parameter-reader.js';
 import { and, asc, desc, eq, gt, isNull, lt, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../../../shared/infra/database.js';
 import type { OrderAggregate, OrderRepository, PricingPort } from '../../ports/ordering-ports.js';
@@ -304,30 +308,30 @@ export class DrizzleOrderRepository implements OrderRepository {
   }
 }
 
-@Injectable()
-export class EnvPricingPort implements PricingPort {
-  readonly configuration: PricingConfiguration;
+/** Commission and freight are read when each order is quoted, so a change applies forward. */
+export class ParameterPricingPort implements PricingPort {
   constructor(
-    @Inject('ORDER_COMMISSION_RATE_BPS') commissionRateBps: bigint,
-    @Inject('ORDER_FREIGHT_COP') freightCop: bigint,
-    @Inject('ORDER_SUBTOTAL_ROUNDING') subtotalRounding: 'half_up' | 'floor' | 'ceil',
-  ) {
-    this.configuration = { commissionRateBps, freightCop, subtotalRounding };
-  }
+    private readonly parameters: ParameterReader,
+    private readonly subtotalRounding: 'half_up' | 'floor' | 'ceil',
+  ) {}
 
-  calculate(lines: readonly Pick<OrderLineProps, 'unitPrice' | 'quantityMilli'>[]): QuoteAmounts {
-    return calculateQuoteAmounts(lines, this.configuration);
+  async calculate(
+    lines: readonly Pick<OrderLineProps, 'unitPrice' | 'quantityMilli'>[],
+  ): Promise<QuoteAmounts> {
+    const configuration: PricingConfiguration = {
+      commissionRateBps: await this.parameters.get('order.commission_rate_bps'),
+      freightCop: await this.parameters.get('order.freight_cop'),
+      subtotalRounding: this.subtotalRounding,
+    };
+    return calculateQuoteAmounts(lines, configuration);
   }
 }
 
 import { PRICING_PORT } from '../../ports/ordering-ports.js';
 
-export const envPricingPortProvider = {
+export const parameterPricingPortProvider = {
   provide: PRICING_PORT,
-  useFactory: (
-    commissionRateBps: bigint,
-    freightCop: bigint,
-    subtotalRounding: 'half_up' | 'floor' | 'ceil',
-  ) => new EnvPricingPort(commissionRateBps, freightCop, subtotalRounding),
-  inject: ['ORDER_COMMISSION_RATE_BPS', 'ORDER_FREIGHT_COP', 'ORDER_SUBTOTAL_ROUNDING'],
+  useFactory: (parameters: ParameterReader, subtotalRounding: 'half_up' | 'floor' | 'ceil') =>
+    new ParameterPricingPort(parameters, subtotalRounding),
+  inject: [PARAMETER_READER, 'ORDER_SUBTOTAL_ROUNDING'],
 };

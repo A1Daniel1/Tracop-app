@@ -43,6 +43,8 @@ import {
   type PhotoUploadRateLimitPort,
 } from './ports/lot-photo-ports.js';
 import { StorageModule } from '../../shared/infra/storage/storage.module.js';
+import { AUDIT_WRITER } from '../../shared/ports/audit-writer.js';
+import { PARAMETER_READER } from '../../shared/ports/parameter-reader.js';
 import {
   PHOTO_PROCESSOR_PORT,
   type PhotoProcessorPort,
@@ -127,6 +129,8 @@ import { STORAGE_PORT, type StoragePort } from '../../shared/ports/storage.js';
         CATALOG_SETTINGS,
         CHANGE_RECORDER,
         LOT_PHOTO_REPOSITORY,
+        AUDIT_WRITER,
+        PARAMETER_READER,
       ],
     },
     {
