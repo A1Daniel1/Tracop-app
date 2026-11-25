@@ -43,4 +43,29 @@ export class DrizzleIdentityRetentionRepository implements IdentityRetentionRepo
         )`),
     );
   }
+
+  async expireUnverifiedBefore(
+    cutoff: Date,
+    limit: number,
+    pseudonym: (userId: string, phone: string) => string,
+    now: Date,
+  ): Promise<number> {
+    const { rows } = await this.database.current().execute(sql`
+      SELECT id, phone FROM identity.users
+      WHERE status = 'pending_verification' AND created_at < ${cutoff}
+      ORDER BY created_at LIMIT ${limit}
+      FOR UPDATE SKIP LOCKED`);
+    let expired = 0;
+    for (const row of rows as { id: string; phone: string }[]) {
+      await this.database.current().execute(sql`
+        UPDATE identity.users
+        SET status = 'expired', phone = ${pseudonym(row.id, row.phone)}, full_name = '',
+            updated_at = ${now}, deleted_at = ${now}
+        WHERE id = ${row.id}::uuid AND status = 'pending_verification'`);
+      await this.database.current().execute(sql`
+        DELETE FROM identity.otp_codes WHERE user_id = ${row.id}::uuid`);
+      expired += 1;
+    }
+    return expired;
+  }
 }

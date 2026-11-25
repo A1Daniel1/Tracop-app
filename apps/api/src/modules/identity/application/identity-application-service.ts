@@ -351,6 +351,11 @@ export class IdentityApplicationService {
         return failure(new DomainError('La sesión no es válida.', 'session_invalid'));
       }
       if (oldProps.rotatedAt) {
+        // A retry of a refresh whose answer was lost: within the grace window, and only while
+        // the session it produced was never used, that successor is replaced by a new pair.
+        // The window counts from the first rotation, so retries cannot extend it.
+        const grace = await this.refreshWithinGrace(oldProps, newRefreshToken, now);
+        if (grace) return grace;
         const affected = await this.sessions.revokeFamily(oldProps.familyId, now, 'reuse_detected');
         for (const revoked of affected) {
           const event = new Session(revoked).revokedEvent('reuse_detected', now);
@@ -384,6 +389,35 @@ export class IdentityApplicationService {
       await this.sessions.create(next);
       return success(await this.authResult(user, next, newRefreshToken, now));
     });
+  }
+
+  private async refreshWithinGrace(
+    oldProps: SessionProps,
+    newRefreshToken: string,
+    now: Date,
+  ): Promise<Result<AuthSessionResult, DomainError> | null> {
+    const graceMs = this.environment.REFRESH_GRACE_SECONDS * 1000;
+    if (graceMs <= 0 || !oldProps.rotatedAt) return null;
+    if (now.getTime() - oldProps.rotatedAt.getTime() > graceMs) return null;
+    if (oldProps.revokedAt || oldProps.expiresAt.getTime() <= now.getTime()) return null;
+    const successor = await this.sessions.findActiveSuccessor(
+      oldProps.familyId,
+      oldProps.rotatedAt,
+      oldProps.id,
+    );
+    if (!successor || successor.deviceId !== oldProps.deviceId || successor.lastUsedAt) return null;
+    const user = await this.users.findById(oldProps.userId);
+    if (!user || user.status !== 'active') return null;
+    await this.sessions.revokeSession(successor.id, now, 'grace_replaced');
+    const next = this.newSession(
+      user.id,
+      oldProps.deviceId,
+      oldProps.familyId,
+      newRefreshToken,
+      now,
+    );
+    await this.sessions.create(next);
+    return success(await this.authResult(user, next, newRefreshToken, now));
   }
 
   async logout(claims: AuthenticatedActor): Promise<Result<{ message: string }, DomainError>> {

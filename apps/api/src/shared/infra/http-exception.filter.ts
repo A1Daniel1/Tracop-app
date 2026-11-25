@@ -33,6 +33,7 @@ const domainStatus: Record<string, number> = {
   alert_limit: HttpStatus.CONFLICT,
   mapping_conflict: HttpStatus.CONFLICT,
   invalid_cursor: HttpStatus.BAD_REQUEST,
+  invalid_channel: HttpStatus.BAD_REQUEST,
   invalid_radius: HttpStatus.BAD_REQUEST,
   invalid_price: HttpStatus.BAD_REQUEST,
   verification_checks_incomplete: HttpStatus.CONFLICT,

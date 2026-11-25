@@ -8,6 +8,7 @@ const EXPECTED_JOBS = [
   'ai-assistant.maintenance',
   'catalog.expire-lots',
   'catalog.purge-orphan-photos',
+  'identity.expire-unverified',
   'identity.purge-otp-codes',
   'identity.purge-rate-limit-windows',
   'identity.purge-sessions',

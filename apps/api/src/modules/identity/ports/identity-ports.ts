@@ -35,6 +35,15 @@ export interface SessionRepository {
   update(session: SessionProps): Promise<void>;
   revokeFamily(familyId: string, now: Date, reason: string): Promise<readonly SessionProps[]>;
   revokeSession(id: string, now: Date, reason: string): Promise<SessionProps | null>;
+  /**
+   * The live, never rotated session of a family created at or after `since`, locked; null when
+   * any session created since then was already rotated (the chain moved on: no grace).
+   */
+  findActiveSuccessor(
+    familyId: string,
+    since: Date,
+    rotatedId: string,
+  ): Promise<SessionProps | null>;
 }
 
 export interface DeviceRepository {
@@ -80,6 +89,8 @@ export interface ChannelLinkRepository {
   /** The user's most recently verified channel link, if any. */
   findVerifiedByUser(userId: string): Promise<ChannelLinkProps | null>;
   create(link: ChannelLinkProps): Promise<void>;
+  /** Removes a user's link on a channel; returns it, or null if there was none. */
+  deleteForUser(userId: string, channel: string): Promise<ChannelLinkProps | null>;
 }
 
 /** How to reach a user with a notification; no phone or name, only what delivery needs. */
@@ -173,6 +184,7 @@ export interface IdentitySettings {
   OTP_IP_WINDOW_SECONDS: number;
   ACCESS_TOKEN_TTL_SECONDS: number;
   REFRESH_TOKEN_TTL_SECONDS: number;
+  REFRESH_GRACE_SECONDS: number;
 }
 
 /** Deletes data that is no longer needed, in bounded batches; each call returns rows deleted. */
@@ -183,6 +195,16 @@ export interface IdentityRetentionRepository {
   deleteSessionsEndedBefore(cutoff: Date, limit: number): Promise<number>;
   /** Rate-limit windows that started before the cutoff. */
   deleteRateLimitWindowsBefore(cutoff: Date, limit: number): Promise<number>;
+  /**
+   * Registrations still pending verification created before the cutoff become `expired`; the
+   * phone is replaced by `pseudonym(id, phone)` and the name cleared, freeing the number.
+   */
+  expireUnverifiedBefore(
+    cutoff: Date,
+    limit: number,
+    pseudonym: (userId: string, phone: string) => string,
+    now: Date,
+  ): Promise<number>;
 }
 
 /** Public maintenance use cases of identity, run by the worker as separate jobs. */
@@ -190,4 +212,5 @@ export interface IdentityMaintenanceApi {
   purgeExpiredOtpCodes(): Promise<number>;
   purgeEndedSessions(): Promise<number>;
   purgeRateLimitWindows(): Promise<number>;
+  expireUnverifiedRegistrations(): Promise<number>;
 }

@@ -186,6 +186,8 @@ describe('identity application use cases with in-memory ports', () => {
         )
       ).ok,
     ).toBe(false);
+    // REFRESH_GRACE_SECONDS = 30: one second after the window closes it is a reuse.
+    harness.clock.advance(31);
     expect(
       (
         await harness.service.refreshSession(
@@ -200,6 +202,49 @@ describe('identity application use cases with in-memory ports', () => {
       ),
     ).toBe(true);
     expect(harness.state.outbox.at(-1)?.type).toBe('SessionRevoked');
+  });
+
+  it('answers a retried refresh within the grace window with a new pair, replacing the unused successor', async () => {
+    const harness = createHarness();
+    const device = '10000000-0000-7000-8000-000000000001';
+    await harness.registration('3001234567');
+    const auth = unwrap(await harness.verify('3001234567', harness.sender.sent.at(-1)!.code));
+    const lost = unwrap(await harness.service.refreshSession(auth.refreshToken, device));
+    harness.clock.advance(5);
+    const retried = unwrap(await harness.service.refreshSession(auth.refreshToken, device));
+    expect(retried.refreshToken).not.toBe(lost.refreshToken);
+    // The answer that was lost is no longer valid; the family stays alive.
+    expect((await harness.service.refreshSession(lost.refreshToken, device)).ok).toBe(false);
+    const reasons = [...harness.state.sessions.values()].map((session) => session.revokedReason);
+    expect(reasons).toContain('grace_replaced');
+    expect(reasons).not.toContain('reuse_detected');
+    expect(
+      unwrap(await harness.service.refreshSession(retried.refreshToken, device)).refreshToken,
+    ).toEqual(expect.any(String));
+  });
+
+  it('treats a grace retry as reuse when the successor was already used or from another device', async () => {
+    const harness = createHarness();
+    const device = '10000000-0000-7000-8000-000000000001';
+    await harness.registration('3001234567');
+    const auth = unwrap(await harness.verify('3001234567', harness.sender.sent.at(-1)!.code));
+    expect(
+      (
+        await harness.service.refreshSession(
+          auth.refreshToken,
+          '10000000-0000-7000-8000-000000000009',
+        )
+      ).ok,
+    ).toBe(false);
+    const next = unwrap(await harness.service.refreshSession(auth.refreshToken, device));
+    unwrap(await harness.service.refreshSession(next.refreshToken, device)); // successor used
+    harness.clock.advance(2);
+    expect((await harness.service.refreshSession(auth.refreshToken, device)).ok).toBe(false);
+    expect(
+      [...harness.state.sessions.values()].every(
+        (session) => session.revokedReason === 'reuse_detected',
+      ),
+    ).toBe(true);
   });
 
   it('supports login OTP for an active user, logout and profile not-found errors', async () => {

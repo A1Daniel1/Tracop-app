@@ -42,7 +42,12 @@ describePostgres('identity authentication flow (PostgreSQL Testcontainers)', () 
       .post('/auth/otp/verify')
       .send({ phone, deviceId, platform: 'web', code });
 
+  // These cases test reuse detection itself, so the refresh grace window (a retry within
+  // REFRESH_GRACE_SECONDS gets a new pair) is off here; identity-hardening.e2e-spec.ts covers it.
+  let previousGrace: string | undefined;
   beforeAll(async () => {
+    previousGrace = process.env.REFRESH_GRACE_SECONDS;
+    process.env.REFRESH_GRACE_SECONDS = '0';
     pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
     await resetPostgresFixtures(pool);
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -52,6 +57,8 @@ describePostgres('identity authentication flow (PostgreSQL Testcontainers)', () 
   });
 
   afterAll(async () => {
+    if (previousGrace === undefined) delete process.env.REFRESH_GRACE_SECONDS;
+    else process.env.REFRESH_GRACE_SECONDS = previousGrace;
     await app.close();
     await pool.end();
   });

@@ -149,6 +149,31 @@ export class MemorySessionRepository implements SessionRepository {
     session.revokedReason = reason;
     return session;
   }
+  async findActiveSuccessor(
+    familyId: string,
+    since: Date,
+    rotatedId: string,
+  ): Promise<SessionProps | null> {
+    const moved = [...this.state.sessions.values()].some(
+      (session) =>
+        session.familyId === familyId &&
+        session.id !== rotatedId &&
+        session.rotatedAt !== null &&
+        session.createdAt.getTime() >= since.getTime(),
+    );
+    if (moved) return null;
+    return (
+      [...this.state.sessions.values()]
+        .filter(
+          (session) =>
+            session.familyId === familyId &&
+            !session.rotatedAt &&
+            !session.revokedAt &&
+            session.createdAt.getTime() >= since.getTime(),
+        )
+        .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0] ?? null
+    );
+  }
 }
 
 export class MemoryDeviceRepository implements DeviceRepository {
@@ -276,6 +301,7 @@ export const memorySettings: IdentitySettings = {
   OTP_IP_WINDOW_SECONDS: 600,
   ACCESS_TOKEN_TTL_SECONDS: 900,
   REFRESH_TOKEN_TTL_SECONDS: 2_592_000,
+  REFRESH_GRACE_SECONDS: 30,
 };
 
 export const unwrap = <T>(result: Result<T, DomainError>): T => {
