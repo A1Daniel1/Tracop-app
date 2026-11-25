@@ -473,13 +473,19 @@ describe('LotPhotoService', () => {
       expect(storage.deleteObject).toHaveBeenCalledWith(photo().mediaRef);
     });
 
-    it('rejects invalid reorder payloads and accepts complete ones', async () => {
+    it('rejects invalid reorder payloads, answers not_found for a foreign lot and accepts complete ones', async () => {
       const repository = makeRepository();
-      repository.reorder.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+      repository.reorder
+        .mockResolvedValueOnce('invalid')
+        .mockResolvedValueOnce('not_found')
+        .mockResolvedValueOnce('reordered');
       const { service } = makeService({ repository });
 
       await expect(service.reorder(actor, photo().lotId, [photo().id])).rejects.toMatchObject({
         code: 'photo_order_invalid',
+      });
+      await expect(service.reorder(actor, photo().lotId, [photo().id])).rejects.toMatchObject({
+        code: 'not_found',
       });
       await expect(service.reorder(actor, photo().lotId, [photo().id])).resolves.toBeUndefined();
     });

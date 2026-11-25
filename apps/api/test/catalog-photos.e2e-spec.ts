@@ -364,7 +364,7 @@ describePostgres('catalog photo HTTP flow (Nest + PostgreSQL Testcontainers)', (
     ]);
   });
 
-  it('uses the same generic 409 for a photo id owned by another lot or owner', async () => {
+  it('uses the same generic 409 for a photo id that already belongs to another lot', async () => {
     const operator = await createOperator();
     const first = await register('producer');
     const second = await register('producer');
@@ -389,17 +389,41 @@ describePostgres('catalog photo HTTP flow (Nest + PostgreSQL Testcontainers)', (
       })
       .expect(409);
 
+    // The second provider, on their own lot, sends the first provider's photo id: an id collision.
     await request(app.getHttpServer())
       .post(`/lots/${secondLotId}/photos`)
-      .set(actor(first.token))
-      .send({ photoId: prepared.photoId })
-      .expect(409)
-      .expect(({ body }) => expect(body).toEqual(duplicateLot.body));
-    await request(app.getHttpServer())
-      .post(`/lots/${firstLotId}/photos`)
       .set(actor(second.token))
       .send({ photoId: prepared.photoId })
       .expect(409)
       .expect(({ body }) => expect(body).toEqual(duplicateLot.body));
+  });
+
+  it('answers 404 to another provider on the photo routes of a lot, the same as a missing lot', async () => {
+    // Regression: uploading to someone else's lot answered 409 version_conflict and reordering
+    // answered 409 photo_order_invalid, unlike a missing lot (404).
+    const operator = await createOperator();
+    const owner = await register('producer');
+    const intruder = await register('producer');
+    const lotId = await createPublishedLot(owner.token, operator);
+    await createPublishedLot(intruder.token, operator);
+    const { photoId } = await prepareUpload(owner.token, lotId);
+    const missing = createId();
+
+    for (const target of [lotId, missing]) {
+      await request(app.getHttpServer())
+        .post(`/lots/${target}/photos`)
+        .set(actor(intruder.token))
+        .send({ photoId: createId() })
+        .expect(404)
+        .expect(({ body }) => expect(body.code).toBe('not_found'));
+      await request(app.getHttpServer())
+        .patch(`/lots/${target}/photos/order`)
+        .set(actor(intruder.token))
+        .send({ photoIds: [photoId] })
+        .expect(404)
+        .expect(({ body }) => expect(body.code).toBe('not_found'));
+    }
+    const photos = await pool.query(`SELECT id FROM catalog.lot_photos WHERE lot_id = $1`, [lotId]);
+    expect(photos.rows).toEqual([{ id: photoId }]);
   });
 });
