@@ -10,3 +10,4 @@ export * from './schemas/notifications.js';
 export * from './schemas/backoffice.js';
 export * from './schemas/logistics-location.js';
 export * from './schemas/trust.js';
+export * from './schemas/recommendations.js';
