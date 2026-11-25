@@ -421,7 +421,7 @@ Unidades actualmente aceptadas por el catálogo: `kg`, `g`, `lb`, `und`, `docena
 - `processed_operations` (`op_id uuid` PK, `device_id uuid` NOT NULL, `user_id uuid` NOT NULL, `entity text` NOT NULL, `entity_id uuid` NOT NULL, `result jsonb` NOT NULL, `error_code text` nullable, `payload_hash text` NOT NULL, `server_seq bigint` nullable, `processed_at timestamptz` NOT NULL). Restricciones: longitud de `entity` entre 1 y 64; longitud del código de error nullable ≤100; `payload_hash` contiene 64 caracteres hexadecimales en minúscula; `result` es un objeto JSON cuyo `status` es `applied`, `rejected` o `conflict`.
 - `change_log` (`server_seq bigint` PK, default from `sync.change_log_server_seq_seq`; `entity text` NOT NULL; `entity_id uuid` NOT NULL; `op text` NOT NULL; `payload jsonb` NOT NULL; `owner_user_id uuid` nullable; `occurred_at timestamptz` NOT NULL). Índice: `(owner_user_id, server_seq)`. Restricciones: longitud de `entity` entre 1 y 64 y valor en `category`, `product`, `lot`, `trip`, `checkin`, `incident`, `notification`; longitud de `op` entre 1 y 32 y valor en `upsert`, `delete`, `cancel`; tamaño serializado de `payload` ≤262,144 bytes.
 
-Actualmente no hay implementada retención ni compactación para `sync.change_log` ni `sync.processed_operations`; se deben definir e implementar más adelante, sin asumir un periodo de retención.
+Actualmente no hay implementada retención ni compactación para `sync.change_log` ni `sync.processed_operations`: el diseño y por qué hoy rompería cursores o idempotencia están en [docs/SYNC-RETENTION.md](docs/SYNC-RETENTION.md); no se asume un periodo de retención.
 
 **backoffice**
 
@@ -663,6 +663,7 @@ pnpm catalog:backfill-changes     # registra la línea base de cambios del catá
 pnpm ai:eval-live                 # evaluación con el modelo real (LLM_API_KEY en el entorno; nunca en CI)
 pnpm recommendations:import-reference-prices <archivo.csv>  # precios de referencia DANE-SIPSA (CSV documentado en ADR-022)
 pnpm storage:configure-cors       # CORS por bucket en S3; MinIO responde que no lo admite
+pnpm storage:configure-lifecycle  # expira incoming/ y payment-incoming/ a las 24 h (S3 y MinIO)
 ```
 
 No existen todavía `dev:mobile`, `test:integration`, `test:e2e` ni `test:contract`. **No usar `db:generate`** (`drizzle-kit generate`): las migraciones se escriben a mano (ver «Reglas de trabajo»).
@@ -778,8 +779,8 @@ La fuente de verdad es el esquema zod de `apps/api/src/shared/infra/env.ts` (val
 8. **Política de verificación** de proveedores (documentos exigidos). Hoy la verificación es manual con tres comprobaciones y sin documentos ([ADR-020](docs/adr/ADR-020.md)); las ventanas y mínimos de trust son parámetros PROVISIONALES.
 9. **Texto del aviso de privacidad y del aviso de IA, y sus versiones.** El aviso de IA del bot es un borrador marcado; `AI_CONSENT_VERSION` no tiene valor por defecto. El valor técnico inicial es `v0-draft`; el equipo debe redactar y aprobar el texto legal.
 10. Verify the adapter against a real S3 provider and confirm the minimum IAM permissions for `S3_API_*` and `S3_POLICY_*`.
-11. Define the bucket lifecycle policy for `incoming/`. The code only purges old orphan objects from `incoming/` and `photos/` when `catalog:purge-orphan-photos` is run; it does not automatically clean up the bucket.
-12. Definir e implementar la retención/compactación de `sync.change_log` y `sync.processed_operations`; actualmente ninguna de las dos tablas cuenta con un proceso automático de retención.
+11. Ciclo de vida del bucket: `pnpm storage:configure-lifecycle` expira a las 24 h (`INCOMING_RETENTION_DAYS`) lo subido y nunca procesado en `incoming/` (fotos) y `payment-incoming/` (comprobantes), y aborta subidas multiparte incompletas; probado contra MinIO, NO verificado contra un S3 real. `catalog:purge-orphan-photos` sigue limpiando huérfanos de `incoming/` y `photos/`.
+12. Retención de `sync.change_log` y `sync.processed_operations`: diseñada en [docs/SYNC-RETENTION.md](docs/SYNC-RETENTION.md) y **sin implementar**, porque compactar hoy rompería cursores (marcas de borrado perdidas) o idempotencia (reintentos tardíos); requiere un 410 `cursor_expired`, un plazo máximo de la outbox del cliente y los plazos que decida el equipo.
 13. Validar los valores PROVISIONALES de retención de datos personales (`OTP_RETENTION_DAYS` 7, `SESSION_RETENTION_DAYS` 30, `PROCESSED_UPDATES_RETENTION_DAYS` 7) con el equipo y la Ley 1581.
 14. Validar las vigencias PROVISIONALES de cotización y reserva (`ORDER_QUOTE_TTL_HOURS` y `ORDER_RESERVATION_TTL_HOURS`, 24 h) y el límite de propuestas pendientes (`CATALOG_PRODUCT_PROPOSAL_PENDING_LIMIT`, 5).
 15. Proveedor de almacenamiento de producción: con MinIO, el CORS es del servidor (`MINIO_API_CORS_ALLOW_ORIGIN`); `storage:configure-cors` solo sirve para proveedores con CORS por bucket y no se ha verificado contra un S3 real.
