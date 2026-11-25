@@ -46,6 +46,7 @@ class HealthController {
 }
 
 /** Modules and bridges shared by the HTTP API and the worker process. */
+import { BackofficeModule } from '../modules/backoffice/index.js';
 import { NotificationsModule } from '../modules/notifications/index.js';
 import { PaymentsModule } from '../modules/payments/index.js';
 import { NotificationsBridgeModule } from './notifications-bridge.module.js';
@@ -53,6 +54,7 @@ import { PaymentsBridgeModule } from './payments-bridge.module.js';
 
 export const APPLICATION_MODULES = [
   SharedInfraModule,
+  BackofficeModule,
   AuthModule,
   CatalogBridgeModule,
   CatalogSyncBridgeModule,
