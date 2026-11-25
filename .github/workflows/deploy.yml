@@ -26,7 +26,7 @@ jobs:
           script: |
             set -e
             cd /opt/tracop
-            git fetch origin && git checkout develop && git pull --ff-only
+            git fetch origin && git checkout main && git pull --ff-only
             docker compose -f docker-compose.aws.yml --env-file .env.demo up -d --build --wait api worker
             curl -fsS http://127.0.0.1:3000/health
             curl -fsS http://127.0.0.1:3000/ready | grep -q '"status":"ready"'

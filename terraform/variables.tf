@@ -43,7 +43,7 @@ variable "repo_url" {
 variable "repo_branch" {
   description = "Rama a desplegar."
   type        = string
-  default     = "develop"
+  default     = "main"
 }
 
 variable "api_port" {
