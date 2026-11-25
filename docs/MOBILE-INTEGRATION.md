@@ -110,7 +110,12 @@ Un lote reservado solo en parte sigue siendo visible con la cantidad restante. S
 
 ### Ubicaciones
 
-Nadie recibe las coordenadas exactas de un lote salvo su dueño; los demás ven `distanceKm` redondeado cuando buscan por cercanía. Logística solo maneja zonas de texto (municipio): hoy ni el transportista asignado recibe la ubicación exacta de recogida (pendiente).
+Nadie recibe las coordenadas exactas de un lote salvo su dueño; los demás ven `distanceKm` redondeado cuando buscan por cercanía. Logística maneja zonas de texto (municipio), con una excepción para el transportista asignado (también `operator` y `admin`):
+
+- `GET /logistics/trips/{id}/stops/{stopId}/location`: la recogida devuelve `points` (coordenadas de los lotes del pedido, hasta 20) y la entrega `address`. Solo con el viaje `assigned` o `in_progress` y la parada sin completar; si no, 404.
+- `GET /logistics/trips/{id}/location-pack`: las paradas pendientes con `expiresAt`, para trabajar sin señal. Descárguenlo al iniciar el viaje con señal.
+- **Obligatorio en la app:** guarden el paquete **cifrado** (almacenamiento seguro del sistema), no lo registren ni lo envíen a analítica, y **bórrenlo** al completar o cancelar el viaje y al llegar `expiresAt` (24 h como máximo hoy, PROVISIONAL). No llega por sync, a propósito.
+- Las respuestas llevan `Cache-Control: no-store`; cada consulta queda auditada y hay un límite por usuario (429 con `Retry-After`).
 
 ## Cambios BREAKING
 
