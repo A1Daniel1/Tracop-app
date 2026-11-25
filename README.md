@@ -128,6 +128,8 @@ pnpm identity:create-staff --phone "+57 300 000 0000" --name "Nombre" --role ope
 # En producción exige --confirm; el comando se rechaza con NODE_ENV=test.
 ```
 
+Cada alta queda en `backoffice.audit_log` como acción del sistema (`staff.create`, solo con el rol). Los parámetros de negocio (comisión, flete, vigencias, ventanas) los cambia un `admin` en `PUT /backoffice/parameters/{key}`; sin valor guardado rige la variable de entorno.
+
 El seed local sintético es `pnpm db:seed` y solo se permite con `NODE_ENV=development`.
 
 El mismo seed crea además categorías y productos sintéticos `[DEMO]` del catálogo (actualmente papa, mora y cebolla); es idempotente respecto a esas categorías y productos. No crea lotes. Para expirar lotes publicados cuya disponibilidad terminó, ejecuta `pnpm catalog:expire-lots`; el comando informa cuántos lotes expiró. Debe programarse externamente si se requiere ejecución periódica.
@@ -232,4 +234,5 @@ El workflow ejecuta `pnpm test` antes del escaneo para generar los reportes LCOV
 - [ADR-016: trabajador y outbox](docs/adr/ADR-016.md)
 - [ADR-017: pagos, ledger y liquidaciones](docs/adr/ADR-017.md)
 - [ADR-018: notificaciones](docs/adr/ADR-018.md)
+- [ADR-019: audit log, parámetros y métricas](docs/adr/ADR-019.md)
 - [Aviso de privacidad (texto pendiente)](docs/PRIVACY_NOTICE.md)

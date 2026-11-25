@@ -51,6 +51,7 @@ Ordenar: `PATCH /lots/{id}/photos/order`; borrar: `DELETE /lots/{id}/photos/{pho
 ## Pedidos
 
 - `POST /orders` (comprador): `id` UUID v7 generado por la app, 1–20 líneas de **un solo proveedor**. El pedido nace `quoted` con la cotización: `subtotal`, `freight`, `commission`, `total`, `providerNet` y `quoteValidUntil`. Importes y cantidades son **cadenas** de enteros (pesos y milésimas). Reenviar la misma petición con el mismo `id` es seguro (devuelve el mismo pedido).
+- La comisión, el flete y las vigencias son parámetros que el personal puede cambiar: cada pedido conserva los valores con que se cotizó. Muestren siempre los importes y `quoteValidUntil` que devuelve la API; no los calculen en la app.
 - `POST /orders/{id}/accept` con `{ expectedVersion }`: solo el comprador. Reserva el stock durante 24 h (configurable).
 - `POST /orders/{id}/cancel` con `{ expectedVersion, reason? }`: comprador o proveedor, solo antes del pago.
 - Si nadie acepta, la cotización vence a las 24 h y el pedido pasa a `cancelled` con `cancelReason: "expired"`. Si se acepta y no se paga, al vencer la reserva pasa a `cancelled` con `"reservation_expired"`.
