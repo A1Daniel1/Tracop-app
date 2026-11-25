@@ -10,6 +10,11 @@ export interface SentMessage {
 
 export class InMemoryMessagingAdapter implements MessagingPort {
   readonly sent: SentMessage[] = [];
+  readonly acknowledged: string[] = [];
+
+  async acknowledgeAction(callbackId: string): Promise<void> {
+    this.acknowledged.push(callbackId);
+  }
 
   async sendText(to: ChannelUserRef, text: string): Promise<Result<void, MessagingError>> {
     this.sent.push({ to, text });

@@ -11,13 +11,14 @@ export const normalizeTelegramUpdate = (
   now: Date,
 ): NormalizedTelegramUpdate => {
   const updateId = BigInt(update.update_id);
+  if (update.callback_query !== undefined)
+    return { updateId, message: normalizeCallback(update, now) };
   const message = update.message;
   if (
     !message ||
     update.edited_message !== undefined ||
     update.channel_post !== undefined ||
-    update.my_chat_member !== undefined ||
-    update.callback_query !== undefined
+    update.my_chat_member !== undefined
   ) {
     return { updateId, message: null };
   }
@@ -82,4 +83,23 @@ export const normalizeTelegramUpdate = (
     };
   }
   return { updateId, message: null };
+};
+
+/**
+ * A button press. Only from a private chat with the same person who pressed it, and only with
+ * data; the receive time is the server's (callbacks carry no date).
+ */
+const normalizeCallback = (update: TelegramUpdate, now: Date): InboundMessage | null => {
+  const callback = update.callback_query;
+  if (!callback?.data || !callback.message) return null;
+  const chat = callback.message.chat;
+  if (chat.type !== 'private' || String(chat.id) !== String(callback.from.id)) return null;
+  return {
+    channel: 'telegram',
+    channelUserId: String(callback.from.id),
+    type: 'action',
+    action: { name: callback.data, payload: {} },
+    callbackId: callback.id,
+    receivedAt: now.toISOString(),
+  };
 };

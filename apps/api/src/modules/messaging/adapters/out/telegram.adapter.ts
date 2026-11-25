@@ -42,14 +42,19 @@ export class TelegramAdapter implements MessagingPort {
           inline_keyboard: buttons.map((button) => [
             {
               text: button.text,
-              callback_data:
-                button.kind === 'action'
-                  ? JSON.stringify({ action: button.action, payload: button.payload ?? {} })
-                  : button.text,
+              callback_data: callbackData(button),
             },
           ]),
         };
     return this.send(to, text, replyMarkup);
+  }
+
+  async acknowledgeAction(callbackId: string): Promise<void> {
+    try {
+      await this.bot.api.answerCallbackQuery(callbackId);
+    } catch {
+      // Best effort: the button only keeps spinning a little longer.
+    }
   }
 
   private async send(
@@ -70,6 +75,21 @@ export class TelegramAdapter implements MessagingPort {
     }
   }
 }
+
+const CALLBACK_DATA_MAX_BYTES = 64;
+
+/** The action itself when it has no payload; Telegram refuses callback_data over 64 bytes. */
+const callbackData = (button: OutboundButton): string => {
+  const data =
+    button.kind !== 'action'
+      ? button.text
+      : button.payload && Object.keys(button.payload).length > 0
+        ? JSON.stringify({ action: button.action, payload: button.payload })
+        : button.action;
+  if (Buffer.byteLength(data, 'utf8') > CALLBACK_DATA_MAX_BYTES)
+    throw new Error('callback_data exceeds 64 bytes.');
+  return data;
+};
 
 const mapTelegramError = (error: unknown): MessagingError => {
   if (error instanceof GrammyError) {

@@ -2,6 +2,7 @@ import { messagingMessages } from '../i18n.js';
 import type { InboundMessage, OutboundMessage } from '../domain/messaging.js';
 import type {
   ChannelIdentityPort,
+  ConversationPort,
   MessagingApplication,
   MessagingUnitOfWork,
   ProcessedUpdatesRepository,
@@ -13,6 +14,7 @@ export class MessagingApplicationService implements MessagingApplication {
     private readonly identity: ChannelIdentityPort,
     private readonly processedUpdates: ProcessedUpdatesRepository,
     private readonly unitOfWork: MessagingUnitOfWork,
+    private readonly conversation: ConversationPort | null = null,
   ) {}
 
   async handleUpdate(
@@ -41,6 +43,14 @@ export class MessagingApplicationService implements MessagingApplication {
           },
         ],
       };
+    }
+    if (
+      this.conversation &&
+      (message.type === 'text' || message.type === 'location' || message.type === 'action')
+    ) {
+      // Queued in this same transaction; the worker answers.
+      await this.conversation.accept(message);
+      return { kind: 'processed', replies: [] };
     }
     if (message.type === 'voice' || message.type === 'photo' || message.type === 'location') {
       return {

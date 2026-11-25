@@ -140,6 +140,26 @@ const envSchema = z.object({
   OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
   OUTBOX_RETRY_BASE_SECONDS: z.coerce.number().int().positive().max(3600).default(5),
   OUTBOX_RETRY_MAX_SECONDS: z.coerce.number().int().positive().max(86_400).default(300),
+  // AI assistant. Off by default; with AI_ENABLED=true the provider, model, key and consent
+  // version are required (no default model). Limits and retention are PROVISIONAL.
+  AI_ENABLED: booleanFromString.default(false),
+  LLM_PROVIDER: optionalText(z.enum(['anthropic'])),
+  LLM_MODEL: optionalText(z.string().min(1).max(100)),
+  LLM_API_KEY: optionalText(z.string().min(1)),
+  LLM_BASE_URL: optionalText(z.string().url()),
+  LLM_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60_000).default(15_000),
+  LLM_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(64).max(4096).default(400),
+  AI_CONSENT_VERSION: optionalText(z.string().min(1).max(64)),
+  AI_DAILY_REQUESTS_PER_USER: z.coerce.number().int().min(1).max(1000).default(30),
+  AI_REQUESTS_PER_MINUTE: z.coerce.number().int().min(1).max(120).default(6),
+  AI_MONTHLY_TOKEN_CAP: z.coerce.number().int().min(1).max(1_000_000_000).default(2_000_000),
+  AI_DRAFT_TTL_MINUTES: z.coerce.number().int().min(5).max(1440).default(30),
+  AI_FINISHED_DRAFT_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(7),
+  AI_USAGE_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(90),
+  AI_INBOX_LEASE_SECONDS: z.coerce.number().int().min(10).max(600).default(60),
+  AI_INBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  JOB_AI_INBOX_CRON: z.string().trim().min(9).default('* * * * *'),
+  JOB_AI_MAINTENANCE_CRON: z.string().trim().min(9).default('*/10 * * * *'),
   S3_ENDPOINT: optionalText(z.string().url()),
   S3_PUBLIC_ENDPOINT: optionalText(z.string().url()),
   S3_BUCKET: optionalText(z.string().min(3).max(63)),
@@ -162,6 +182,12 @@ const parsedEnvironmentSchema = envSchema.superRefine((value, ctx) => {
       path: ['RATE_LIMIT_RETENTION_SECONDS'],
       message: 'RATE_LIMIT_RETENTION_SECONDS must cover the longest OTP rate-limit window.',
     });
+  }
+  if (value.AI_ENABLED) {
+    for (const key of ['LLM_PROVIDER', 'LLM_MODEL', 'LLM_API_KEY', 'AI_CONSENT_VERSION'] as const) {
+      if (!value[key])
+        ctx.addIssue({ code: 'custom', path: [key], message: 'Required when AI_ENABLED=true.' });
+    }
   }
   const requiresTelegram = value.NODE_ENV === 'production' || value.OTP_SENDER === 'telegram';
 

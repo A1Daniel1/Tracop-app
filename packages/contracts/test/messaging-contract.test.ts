@@ -26,4 +26,26 @@ describe('messaging contracts', () => {
   it('rejects updates without an update id', () => {
     expect(() => telegramUpdateSchema.parse({ message: {} })).toThrow();
   });
+
+  it('accepts button presses with at most 64 bytes of data', () => {
+    const press = {
+      update_id: 1,
+      callback_query: {
+        id: 'q1',
+        from: { id: 900001 },
+        message: { chat: { id: 900001, type: 'private' } },
+        data: 'd:2s:3:confirm',
+      },
+    };
+    expect(telegramUpdateSchema.safeParse(press).success).toBe(true);
+    expect(
+      telegramUpdateSchema.safeParse({
+        ...press,
+        callback_query: { ...press.callback_query, data: 'x'.repeat(65) },
+      }).success,
+    ).toBe(false);
+    expect(telegramUpdateSchema.safeParse({ update_id: 2, callback_query: {} }).success).toBe(
+      false,
+    );
+  });
 });

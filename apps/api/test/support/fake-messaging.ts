@@ -15,6 +15,11 @@ export interface FakeSentMessage {
 export class FakeMessagingAdapter implements MessagingPort {
   readonly sent: FakeSentMessage[] = [];
   failure: MessagingError | undefined;
+  readonly acknowledged: string[] = [];
+
+  async acknowledgeAction(callbackId: string): Promise<void> {
+    this.acknowledged.push(callbackId);
+  }
 
   async sendText(to: ChannelUserRef, text: string): Promise<Result<void, MessagingError>> {
     return this.record({ to, text });

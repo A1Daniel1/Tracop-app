@@ -5,6 +5,14 @@ import {
   type OnApplicationShutdown,
 } from '@nestjs/common';
 import type pino from 'pino';
+import {
+  ASSISTANT_INBOX_PROCESSOR,
+  ASSISTANT_MAINTENANCE,
+  INBOX_NOTIFY_CHANNEL,
+  type AssistantMaintenance,
+  type InboxProcessor,
+} from '../modules/ai-assistant/index.js';
+import { PostgresNotificationListener } from '../shared/infra/postgres-notification-listener.js';
 import { CATALOG_MAINTENANCE, type CatalogMaintenanceApi } from '../modules/catalog/index.js';
 import { IDENTITY_MAINTENANCE, type IdentityMaintenanceApi } from '../modules/identity/index.js';
 import { MESSAGING_MAINTENANCE, type MessagingMaintenanceApi } from '../modules/messaging/index.js';
@@ -34,7 +42,11 @@ export class WorkerLifecycle implements OnApplicationBootstrap, OnApplicationShu
     @Inject(PAYMENTS_MAINTENANCE) private readonly payments: PaymentsMaintenanceApi,
     @Inject(NOTIFICATIONS_MAINTENANCE) private readonly notifications: NotificationsMaintenanceApi,
     @Inject(OUTBOX_DISPATCHER) private readonly outbox: OutboxDispatcher,
+    @Inject(ASSISTANT_INBOX_PROCESSOR) private readonly assistantInbox: InboxProcessor,
+    @Inject(ASSISTANT_MAINTENANCE) private readonly assistantMaintenance: AssistantMaintenance,
   ) {}
+
+  private listener: PostgresNotificationListener | null = null;
 
   async onApplicationBootstrap(): Promise<void> {
     await this.scheduler.start();
@@ -47,10 +59,20 @@ export class WorkerLifecycle implements OnApplicationBootstrap, OnApplicationShu
         payments: this.payments,
         notifications: this.notifications,
         outbox: this.outbox,
+        assistantInbox: this.assistantInbox,
+        assistantMaintenance: this.assistantMaintenance,
       },
       this.environment,
     );
     for (const job of jobs) await this.scheduler.schedule(job);
+    if (this.environment.DATABASE_URL)
+      this.listener = new PostgresNotificationListener(
+        this.environment.DATABASE_URL,
+        INBOX_NOTIFY_CHANNEL,
+        () => this.assistantInbox.drain(),
+        this.logger,
+      );
+    await this.listener?.start();
     this.logger.info(
       { event: 'worker_started', jobs: this.scheduler.registered() },
       'Worker started.',
@@ -58,6 +80,7 @@ export class WorkerLifecycle implements OnApplicationBootstrap, OnApplicationShu
   }
 
   async onApplicationShutdown(): Promise<void> {
+    await this.listener?.stop();
     await this.scheduler.stop();
     this.logger.info({ event: 'worker_stopped' }, 'Worker stopped.');
   }

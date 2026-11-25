@@ -1,3 +1,4 @@
+import type { AssistantMaintenance, InboxProcessor } from '../modules/ai-assistant/index.js';
 import type { CatalogMaintenanceApi } from '../modules/catalog/index.js';
 import type { IdentityMaintenanceApi } from '../modules/identity/index.js';
 import type { MessagingMaintenanceApi } from '../modules/messaging/index.js';
@@ -16,6 +17,8 @@ export interface WorkerJobDependencies {
   readonly payments: PaymentsMaintenanceApi;
   readonly notifications: NotificationsMaintenanceApi;
   readonly outbox: OutboxDispatcher;
+  readonly assistantInbox: Pick<InboxProcessor, 'drain'>;
+  readonly assistantMaintenance: Pick<AssistantMaintenance, 'run'>;
 }
 
 export type WorkerJobSchedule = Pick<
@@ -27,6 +30,8 @@ export type WorkerJobSchedule = Pick<
   | 'JOB_OUTBOX_DISPATCH_CRON'
   | 'JOB_ISSUE_SETTLEMENTS_CRON'
   | 'JOB_SEND_NOTIFICATIONS_CRON'
+  | 'JOB_AI_INBOX_CRON'
+  | 'JOB_AI_MAINTENANCE_CRON'
 >;
 
 /**
@@ -83,6 +88,16 @@ export const workerJobs = (
       schedule.JOB_OUTBOX_DISPATCH_CRON,
       () => dependencies.outbox.dispatch(),
       50,
+    ),
+    // Fallback sweep: the worker also drains the inbox as soon as PostgreSQL notifies it.
+    job(
+      'ai-assistant.drain-inbox',
+      schedule.JOB_AI_INBOX_CRON,
+      () => dependencies.assistantInbox.drain(),
+      50,
+    ),
+    job('ai-assistant.maintenance', schedule.JOB_AI_MAINTENANCE_CRON, () =>
+      dependencies.assistantMaintenance.run(),
     ),
   ];
 };

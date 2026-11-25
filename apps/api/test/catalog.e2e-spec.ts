@@ -426,6 +426,42 @@ describePostgres('catalog HTTP flow (Nest + PostgreSQL Testcontainers)', () => {
     for (const item of listed.body) expect(Object.keys(item).sort()).toEqual(publicKeys);
   });
 
+  it('searches products by every word, treating % and _ literally', async () => {
+    const buyer = await register('buyer');
+    const categoryId = createId();
+    await pool.query(
+      `INSERT INTO catalog.categories (id, name, parent_id, depth, created_at, updated_at)
+       VALUES ($1, 'Tubérculos', NULL, 1, now(), now())`,
+      [categoryId],
+    );
+    const ids: Record<string, string> = {};
+    for (const name of ['Papa criolla', 'Papa pastusa', 'Papa 100%_seleccionada']) {
+      ids[name] = createId();
+      await pool.query(
+        `INSERT INTO catalog.products (id, category_id, name, search_text, unit, attributes, created_at, updated_at)
+         VALUES ($1, $2, $3, lower($3), 'kg', '{}', now(), now())`,
+        [ids[name], categoryId, name],
+      );
+    }
+    const search = async (q: string) =>
+      (
+        await request(app.getHttpServer())
+          .get(`/catalog/products?q=${encodeURIComponent(q)}`)
+          .set(actor(buyer.token))
+          .expect(200)
+      ).body.map((item: { name: string }) => item.name);
+
+    expect(await search('papa CRIOLLA')).toEqual(['Papa criolla']);
+    expect(await search('papa')).toEqual([
+      'Papa 100%_seleccionada',
+      'Papa criolla',
+      'Papa pastusa',
+    ]);
+    expect(await search('100%_')).toEqual(['Papa 100%_seleccionada']);
+    expect(await search('%')).toEqual(['Papa 100%_seleccionada']);
+    expect(await search('_')).toEqual(['Papa 100%_seleccionada']);
+  });
+
   it('rate limits product proposals per user with Retry-After', async () => {
     // beforeEach resets the counter but not the OTP phone limits, so use a range of our own.
     phoneCounter = 7200000;

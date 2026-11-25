@@ -18,3 +18,18 @@ Puntos a cubrir en el aviso definitivo:
 6. **Conservación**: TRACOP no guarda el contenido de mensajes de voz/foto (solo `mediaRef` / `file_id`); los updates procesados se marcan en `messaging.processed_updates` solo con `update_id` (idempotencia técnica).
 
 > Esta nota **no** es texto legal definitivo. Sirve como checklist para quien redacte el aviso final.
+
+---
+
+## Nota para el equipo: proveedor de IA como tercero
+
+El asistente de lotes por Telegram (`ai-assistant`, [ADR-021](adr/ADR-021.md)) envía el texto de la oferta del productor a un proveedor externo de IA (Anthropic en la implementación actual). Puntos a cubrir en el aviso de IA, cuya versión es `AI_CONSENT_VERSION` (sin valor por defecto):
+
+1. **Finalidad**: convertir el mensaje en un borrador de lote que el usuario revisa y confirma; la IA no publica nada.
+2. **Datos compartidos**: solo el texto del mensaje (máximo 1000 caracteres) y nombres de productos del catálogo. Nunca teléfono, dirección, ids ni coordenadas.
+3. **Base legal**: consentimiento explícito con los botones Acepto / No acepto, registrado en `identity.ai_consent_events` (append-only, por versión). Sin él, el bot solo usa el formulario guiado y no envía nada al proveedor.
+4. **Derechos**: el usuario retira el consentimiento con `/ia` → «Retirar consentimiento»; desde entonces no se envía nada más.
+5. **Transferencia internacional**: el proveedor procesa los datos fuera de Colombia; el aviso debe informarlo.
+6. **Conservación**: TRACOP no guarda el texto ni las respuestas del modelo (la cola `ai_assistant.inbox` se borra al atender cada mensaje); `ai_assistant.usage` guarda solo tokens, latencia y resultado (90 días, PROVISIONAL). La retención en el proveedor depende de su política y debe confirmarse.
+
+> El texto que hoy muestra el bot está marcado como pendiente de aprobación legal.

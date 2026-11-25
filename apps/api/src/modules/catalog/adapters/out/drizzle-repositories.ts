@@ -132,7 +132,7 @@ export class DrizzleProductRepository implements ProductRepository {
       const tokens = normalizeSearchText(filter.q).trim().split(/\s+/).filter(Boolean);
       for (const token of tokens) {
         const escaped = token.replace(/[\\%_]/g, '\\$&');
-        clauses.push(sql`${products.searchText} LIKE ${`%${escaped}%`} ESCAPE E'\\'`);
+        clauses.push(sql`${products.searchText} LIKE ${`%${escaped}%`} ESCAPE '\\'`);
       }
     }
     return (

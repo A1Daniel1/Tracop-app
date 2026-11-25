@@ -25,6 +25,11 @@ const environmentKeys = [
   'S3_API_SECRET_KEY',
   'S3_POLICY_ACCESS_KEY',
   'S3_POLICY_SECRET_KEY',
+  'AI_ENABLED',
+  'LLM_PROVIDER',
+  'LLM_MODEL',
+  'LLM_API_KEY',
+  'AI_CONSENT_VERSION',
 ];
 const previousValues = new Map<string, string | undefined>();
 const productionS3 = {
@@ -221,6 +226,45 @@ describe('runtime environment validation', () => {
     expect(() => loadAppEnvironment('/tmp/tracop-no-env')).toThrow('RATE_LIMIT_RETENTION_SECONDS');
     process.env.RATE_LIMIT_RETENTION_SECONDS = '900';
     expect(loadAppEnvironment('/tmp/tracop-no-env').RATE_LIMIT_RETENTION_SECONDS).toBe(900);
+  });
+
+  it('keeps AI off by default and refuses to start with AI on but its settings missing', () => {
+    Object.assign(process.env, {
+      NODE_ENV: 'test',
+      DATABASE_URL: 'postgres://localhost/test',
+      JWT_SECRET: 'j'.repeat(32),
+      OTP_HMAC_SECRET: 'o'.repeat(32),
+      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      OTP_SENDER: 'console',
+    });
+    for (const key of [
+      'AI_ENABLED',
+      'LLM_PROVIDER',
+      'LLM_MODEL',
+      'LLM_API_KEY',
+      'AI_CONSENT_VERSION',
+    ])
+      delete process.env[key];
+    const off = loadAppEnvironment('/tmp/tracop-no-env');
+    expect([off.AI_ENABLED, off.LLM_MODEL]).toEqual([false, undefined]);
+
+    process.env.AI_ENABLED = 'true';
+    const required = {
+      LLM_PROVIDER: 'anthropic',
+      LLM_MODEL: 'some-model',
+      LLM_API_KEY: 'k',
+      AI_CONSENT_VERSION: 'ai-v1',
+    };
+    for (const missing of Object.keys(required)) {
+      Object.assign(process.env, required);
+      delete process.env[missing];
+      expect(() => loadAppEnvironment('/tmp/tracop-no-env')).toThrow(missing);
+    }
+    Object.assign(process.env, required);
+    expect(loadAppEnvironment('/tmp/tracop-no-env')).toMatchObject({
+      AI_ENABLED: true,
+      LLM_MODEL: 'some-model',
+    });
   });
 
   it('accepts an empty CORS allowlist', () => {

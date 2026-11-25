@@ -33,6 +33,8 @@ export class TelegramUpdateHandler {
     const normalized = normalizeTelegramUpdate(parsed.data, this.clock.now());
     if (!normalized.message) return { kind: 'ignored', replies: [] };
 
+    if (normalized.message.callbackId)
+      await this.messaging.acknowledgeAction(normalized.message.callbackId);
     if (!this.rateLimiter.allow(normalized.message.channelUserId)) {
       return { kind: 'dropped', replies: [] };
     }
