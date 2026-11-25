@@ -191,11 +191,18 @@ export const totalCop = (unitPrice: bigint, quantityMilli: bigint): bigint | nul
   return scaled % 1000n === 0n ? scaled / 1000n : null;
 };
 
-export const formatCop = (amount: bigint): string =>
-  `$${amount.toString().replace(/\B(?=(\d{3})+$)/g, '.')}`;
+/** «$1.500.000»: thousands grouped with dots, by slicing (no regular expression). */
+export const formatCop = (amount: bigint): string => {
+  const digits = amount.toString();
+  const groups: string[] = [];
+  for (let end = digits.length; end > 0; end -= 3)
+    groups.unshift(digits.slice(Math.max(0, end - 3), end));
+  return `$${groups.join('.')}`;
+};
 
 export const formatQuantity = (quantityMilli: bigint): string => {
   const whole = quantityMilli / 1000n;
-  const fraction = (quantityMilli % 1000n).toString().padStart(3, '0').replace(/0+$/, '');
+  let fraction = (quantityMilli % 1000n).toString().padStart(3, '0');
+  while (fraction.endsWith('0')) fraction = fraction.slice(0, -1);
   return fraction ? `${whole},${fraction}` : whole.toString();
 };
