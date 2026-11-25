@@ -14,6 +14,16 @@ export interface MessagingPort {
     text: string,
     buttons: readonly OutboundButton[],
   ): Promise<Result<void, MessagingError>>;
+  /** Stops the spinner of a pressed button; best effort. */
+  acknowledgeAction(callbackId: string): Promise<void>;
+}
+
+/**
+ * Hands chat messages (free text, shared locations, button presses) to the conversation that
+ * handles them, in the webhook's transaction. Adapted in bootstrap.
+ */
+export interface ConversationPort {
+  accept(message: InboundMessage): Promise<void>;
 }
 
 export type LinkChannelOutcome =

@@ -22,6 +22,8 @@ export interface InboundMessage {
   location?: { lat: number; lng: number };
   action?: { name: string; payload: Record<string, unknown> };
   contact?: InboundContact;
+  /** Telegram callback_query id, answered right away so the button stops spinning. */
+  callbackId?: string;
   receivedAt: string;
 }
 

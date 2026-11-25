@@ -13,6 +13,7 @@ import { InMemoryMessagingAdapter } from './adapters/out/in-memory-messaging.ada
 import { TelegramAdapter } from './adapters/out/telegram.adapter.js';
 import {
   CHANNEL_IDENTITY_PORT,
+  CONVERSATION_PORT,
   MESSAGING_APPLICATION,
   MESSAGING_PORT,
   MESSAGING_MAINTENANCE,
@@ -56,7 +57,12 @@ import {
     },
     {
       provide: MESSAGING_APPLICATION,
-      inject: [CHANNEL_IDENTITY_PORT, PROCESSED_UPDATES_REPOSITORY, UNIT_OF_WORK],
+      inject: [
+        CHANNEL_IDENTITY_PORT,
+        PROCESSED_UPDATES_REPOSITORY,
+        UNIT_OF_WORK,
+        { token: CONVERSATION_PORT, optional: true },
+      ],
       useFactory: (...dependencies: ConstructorParameters<typeof MessagingApplicationService>) =>
         new MessagingApplicationService(...dependencies),
     },

@@ -27,7 +27,7 @@ const main = async (): Promise<void> => {
       body: JSON.stringify({
         url: webhookUrl,
         secret_token: environment.TELEGRAM_WEBHOOK_SECRET,
-        allowed_updates: ['message'],
+        allowed_updates: ['message', 'callback_query'],
         drop_pending_updates: false,
       }),
     },

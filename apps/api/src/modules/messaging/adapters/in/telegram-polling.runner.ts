@@ -48,7 +48,7 @@ export class TelegramPollingRunner implements OnApplicationBootstrap, OnApplicat
         'Telegram polling failed.',
       );
     });
-    void bot.start({ allowed_updates: ['message'] }).catch((error: unknown) => {
+    void bot.start({ allowed_updates: ['message', 'callback_query'] }).catch((error: unknown) => {
       this.logger.error(
         {
           event: 'telegram_polling_start_failed',

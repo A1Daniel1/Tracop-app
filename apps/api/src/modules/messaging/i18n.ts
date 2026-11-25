@@ -7,7 +7,8 @@ export const messagingMessages = {
     'No encontramos una cuenta de TRACOP con ese número. Regístrate primero en la app y vuelve a intentarlo.',
   genericFailure: 'No pudimos vincular tu cuenta. Inténtalo de nuevo o contacta a soporte.',
   contactSecurity: 'Por seguridad, comparte tu propio contacto desde el botón del mensaje.',
-  unavailable: 'Por ahora solo puedo recibir texto y contactos.',
+  unavailable:
+    'Las notas de voz y las fotos aún no están disponibles. Por ahora escríbeme tu oferta en texto.',
   otp: (code: string): string =>
     `Tu código de TRACOP es ${code}. Vence en pocos minutos. No lo compartas.`,
 } as const;
