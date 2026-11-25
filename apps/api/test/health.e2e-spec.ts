@@ -43,6 +43,7 @@ describePostgres('GET /health', () => {
         throw bridgeFailure;
       },
       findExpiredReservationOrderIds: async () => [],
+      getLotLocations: async () => new Map(),
       holdOrderReservations: async () => undefined,
       resumeOrderReservationExpiry: async () => undefined,
       consumeOrderReservations: async () => undefined,
