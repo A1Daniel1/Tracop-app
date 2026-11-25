@@ -59,7 +59,7 @@ Rutas: 103. Fuera de OpenAPI a propósito: `GET /metrics` (Bearer METRICS_TOKEN;
 | `PATCH /catalog/categories/{id}`                       | operator, admin                                              | 401       | 403      | 403      | 403   | 403     | 404      | 403     | 404   |
 | `PATCH /catalog/products/{id}`                         | operator, admin                                              | 401       | 403      | 403      | 403   | 403     | 404      | 403     | 404   |
 | `PATCH /lots/{id}`                                     | producer, supplier                                           | 401       | 404      | 404      | 403   | 403     | 403      | 403     | 403   |
-| `PATCH /lots/{id}/photos/order`                        | producer, supplier                                           | 401       | 409      | 409      | 403   | 403     | 403      | 403     | 403   |
+| `PATCH /lots/{id}/photos/order`                        | producer, supplier                                           | 401       | 404      | 404      | 403   | 403     | 403      | 403     | 403   |
 | `PATCH /me`                                            | producer, supplier, buyer, carrier, operator, finance, admin | 401       | 200      | 200      | 200   | 200     | 200      | 200     | 200   |
 | `POST /alerts`                                         | en la aplicación                                             | 401       | 403      | 403      | 404   | 403     | 403      | 403     | 403   |
 | `POST /auth/logout`                                    | producer, supplier, buyer, carrier, operator, finance, admin | 401       | 201      | 201      | 201   | 201     | 201      | 201     | 201   |

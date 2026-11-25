@@ -50,17 +50,10 @@ const DOCUMENT = resolve(__dirname, '..', '..', '..', 'docs', 'AUTHZ-OBJECTS.md'
 class ObjectsModule {}
 
 /**
- * Answers that are not 404 today and have their own fix PR. The test fails if one of them stops
- * reproducing, so the entry is removed together with the fix.
+ * Answers that are not 404 today, each with its own fix PR. Empty since #73 and #74: an entry
+ * that stops reproducing fails the test, so it is removed together with its fix.
  */
-const KNOWN_LEAKS = new Map<string, number>([
-  // Another provider's lot answers 409 version_conflict (a missing lot answers 404).
-  ['POST /lots/{borrador de A}/photos as producerB', 409],
-  // Uniform 409 photo_order_invalid for a foreign or missing lot: no leak, but not a 404.
-  ['PATCH /lots/{borrador de A}/photos/order as producerB', 409],
-  // The version is checked before the buyer: a wrong version reveals the payment exists.
-  ['POST /payments/{pago de A}/dispute as buyerB (wrong version)', 409],
-]);
+const KNOWN_LEAKS = new Map<string, number>();
 
 type Account = { readonly token: string; readonly userId: string };
 type Probe = {
