@@ -74,7 +74,9 @@ export type PaymentEventType =
   | 'PaymentDisputed'
   | 'PaymentDisputeReleased'
   | 'PaymentRefunded'
-  | 'PaymentSettled';
+  | 'PaymentSettled'
+  | 'SettlementIssued'
+  | 'SettlementPaid';
 
 export interface PaymentEvent {
   readonly type: PaymentEventType;

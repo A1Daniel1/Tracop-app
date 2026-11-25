@@ -46,6 +46,9 @@ class HealthController {
 }
 
 /** Modules and bridges shared by the HTTP API and the worker process. */
+import { PaymentsModule } from '../modules/payments/index.js';
+import { PaymentsBridgeModule } from './payments-bridge.module.js';
+
 export const APPLICATION_MODULES = [
   SharedInfraModule,
   AuthModule,
@@ -61,6 +64,8 @@ export const APPLICATION_MODULES = [
   OrderingModule,
   LogisticsBridgeModule,
   LogisticsModule,
+  PaymentsBridgeModule,
+  PaymentsModule,
 ];
 
 @Module({
