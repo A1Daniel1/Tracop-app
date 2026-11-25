@@ -58,23 +58,35 @@ Ordenar: `PATCH /lots/{id}/photos/order`; borrar: `DELETE /lots/{id}/photos/{pho
 
 ### Estados
 
-- **Pedido**: `quoted → accepted → payment_pending → paid → pickup_scheduled → in_transit → delivered → closed`; `cancelled` antes del pago; `disputed` después. Hoy los pedidos nacen `quoted`, y `payment_pending`/`paid` llegarán con el módulo de pagos.
-- **Lote**: `draft → published ↔ reserved`, `expired`, `cancelled`.
+- **Pedido**: `quoted → accepted → payment_pending → paid → pickup_scheduled → in_transit → delivered → closed`; `cancelled` antes del pago; `disputed → closed` si el comprador disputa un pedido pagado.
+- **Lote**: `draft → published ↔ reserved → sold_out`, `expired`, `cancelled`. `sold_out` llega cuando pagos verificados consumen todo el lote.
+- **Pago**: `pending → proof_uploaded → verified → held → settled`; `rejected`; `disputed → held | refunded`.
 - **Viaje**: `planned → assigned → in_progress → completed`, o `cancelled`.
+
+## Pagos
+
+El comprador paga por transferencia o Nequi fuera de la app y sube una foto del comprobante; finanzas lo revisa. Solo en línea (no entra en sync). Detalle de rutas en [`docs/API.md`](API.md#pagos).
+
+1. Con el pedido `accepted`, `POST /orders/{orderId}/payment` con `{ id: "<UUID v7>", method }`. Reintentar es seguro: mientras haya un pago abierto se devuelve ese mismo (200).
+2. `POST /payments/{id}/proof` devuelve una política de carga, igual que las fotos de lotes: suban la imagen (JPEG, PNG o WebP) directo al almacenamiento y luego `POST /payments/{id}/proof/confirm`. Desde ahí el stock queda retenido: el pedido no se cancela por vencimiento mientras se revisa.
+3. Consulten el estado con `GET /orders/{orderId}/payment`. Si se rechaza (`status: rejected`, con `rejectionReason`), el pedido sigue `payment_pending` unas horas (`PAYMENT_REJECTION_GRACE_HOURS`): inicien **otro** pago con un `id` nuevo; reutilizar el anterior da 409.
+4. Verificado, el pedido pasa a `paid` y entra en logística. Desde entonces, y hasta que se emitan las liquidaciones (`PAYMENT_CLAIM_WINDOW_HOURS` después de la entrega), el comprador puede disputar (`POST /payments/{id}/dispute`).
+
+`proofUrl` es una URL firmada de corta duración: muéstrenla, no la guarden. El proveedor no ve el pago: sabe que está pagado por el estado del pedido. Productores, proveedores y transportistas ven sus liquidaciones en `GET /settlements`.
 
 ## Errores y límites
 
 Formato: `{ statusCode, code?, message, details?, suggestions? }`; los 429 traen `Retry-After` (segundos). Errores de validación: 400 sin `code`. Cuerpo máximo: 64 KiB (256 KiB en `/sync/push`, 413 si se supera).
 
-| Estado | Significado para la app                                            | Códigos frecuentes                                                                                                                                                                                                             |
-| ------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 400    | Petición mal formada: corrijan los datos                           | validación, `duplicate_lot_line`, `multiple_providers`                                                                                                                                                                         |
-| 401    | Sesión inválida o vencida: renueven o vuelvan a entrar             | `session_invalid`, `session_expired`, `invalid_otp`, `otp_expired`                                                                                                                                                             |
-| 403    | El rol no puede hacer esto                                         | `forbidden`, `invalid_role`                                                                                                                                                                                                    |
-| 404    | No existe **o no es suyo** (no se distingue a propósito)           | `not_found`                                                                                                                                                                                                                    |
-| 409    | Conflicto con el estado actual: refresquen y reintenten o informen | `version_conflict`, `invalid_transition`, `quote_expired`, `lot_unavailable`, `insufficient_stock`, `assignment_conflict`, `invalid_order_status`, `product_similar_exists`, `product_pending_review`, `pending_limit_reached` |
-| 429    | Demasiadas peticiones: esperen `Retry-After`                       | `rate_limited`, `otp_attempts_exceeded`                                                                                                                                                                                        |
-| 503    | Base de datos ocupada: reintenten más tarde                        | `lock_timeout`, `statement_timeout`, `storage_unavailable`                                                                                                                                                                     |
+| Estado | Significado para la app                                            | Códigos frecuentes                                                                                                                                                                                                                                                                                 |
+| ------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 400    | Petición mal formada: corrijan los datos                           | validación, `duplicate_lot_line`, `multiple_providers`                                                                                                                                                                                                                                             |
+| 401    | Sesión inválida o vencida: renueven o vuelvan a entrar             | `session_invalid`, `session_expired`, `invalid_otp`, `otp_expired`                                                                                                                                                                                                                                 |
+| 403    | El rol no puede hacer esto                                         | `forbidden`, `invalid_role`                                                                                                                                                                                                                                                                        |
+| 404    | No existe **o no es suyo** (no se distingue a propósito)           | `not_found`                                                                                                                                                                                                                                                                                        |
+| 409    | Conflicto con el estado actual: refresquen y reintenten o informen | `version_conflict`, `invalid_transition`, `quote_expired`, `lot_unavailable`, `insufficient_stock`, `assignment_conflict`, `invalid_order_status`, `reservation_expired`, `proof_upload_missing`, `settlement_issued`, `product_similar_exists`, `product_pending_review`, `pending_limit_reached` |
+| 429    | Demasiadas peticiones: esperen `Retry-After`                       | `rate_limited`, `otp_attempts_exceeded`                                                                                                                                                                                                                                                            |
+| 503    | Base de datos ocupada: reintenten más tarde                        | `lock_timeout`, `statement_timeout`, `storage_unavailable`                                                                                                                                                                                                                                         |
 
 Lista completa por código en [`docs/API.md`](API.md#http-errors).
 
