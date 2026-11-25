@@ -2,6 +2,10 @@
  * Request counters and durations in memory, rendered in the Prometheus text format. Labels are
  * the method, the route template (never the concrete path, which may carry ids) and the status.
  */
+/** Orders [key, value] entries by key only, so the output never depends on the values. */
+const byKey = <T>([left]: [string, T], [right]: [string, T]): number =>
+  left < right ? -1 : left > right ? 1 : 0;
+
 export class HttpMetrics {
   private readonly requests = new Map<string, number>();
   private readonly durations = new Map<string, { sum: number; count: number }>();
@@ -23,13 +27,13 @@ export class HttpMetrics {
     const lines = [
       '# HELP tracop_http_requests_total HTTP requests by method, route template and status.',
       '# TYPE tracop_http_requests_total counter',
-      ...[...this.requests].sort().map(([key, count]) => {
+      ...[...this.requests].sort(byKey).map(([key, count]) => {
         const [method, route, status] = key.split('|') as [string, string, string];
         return `tracop_http_requests_total{method="${label(method)}",route="${label(route)}",status="${status}"} ${count}`;
       }),
       '# HELP tracop_http_request_duration_ms HTTP request duration in milliseconds.',
       '# TYPE tracop_http_request_duration_ms summary',
-      ...[...this.durations].sort().flatMap(([key, { sum, count }]) => {
+      ...[...this.durations].sort(byKey).flatMap(([key, { sum, count }]) => {
         const [method, route] = key.split('|') as [string, string];
         const labels = `method="${label(method)}",route="${label(route)}"`;
         return [
