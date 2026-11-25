@@ -67,7 +67,12 @@ describe('HmacTokenService (jose, HS256 only)', () => {
     const service = makeService();
     const token = await service.issueAccessToken(user, 'session-1', 'device-1', now);
     const [header, payload, signature] = token.split('.');
-    const tampered = `${header}.${payload}.${signature!.slice(0, -2)}AA`;
+    // Flip every bit of the first signature byte: replacing the last characters with a fixed
+    // value left the token unchanged whenever the random signature already ended with them.
+    const bytes = Buffer.from(signature!, 'base64url');
+    bytes[0] = bytes[0]! ^ 0xff;
+    const tampered = `${header}.${payload}.${bytes.toString('base64url')}`;
+    expect(tampered).not.toBe(token);
     await expect(service.verifyAccessToken(tampered, now)).resolves.toBeNull();
   });
 

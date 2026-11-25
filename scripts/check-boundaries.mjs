@@ -37,9 +37,10 @@ async function testFixture(name, elementType, importPath, shouldFail) {
     await mkdir(temp, { recursive: true });
     const fixture = join(temp, 'invalid.ts');
     await writeFile(fixture, `import '${importPath}';\n`);
-    console.log(`[DEBUG] Testing ${name}: fixture at ${fixture}`);
+    // ESLint output is printed only when the result is unexpected: the rejections these
+    // fixtures expect would otherwise reach CI logs as error lines, and GitHub's problem
+    // matcher turns them into failure annotations on a green run.
     const { status, output } = await runEslint(fixture);
-    console.log(`[DEBUG] ESLint status: ${status}, output: ${output}`);
     const passed = status === 0;
     if (shouldFail && passed) {
       process.stderr.write(`[FAIL] ${name}: fixture unexpectedly passed ESLint.\n${output}`);
