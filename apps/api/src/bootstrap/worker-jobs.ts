@@ -2,6 +2,7 @@ import type { CatalogMaintenanceApi } from '../modules/catalog/index.js';
 import type { IdentityMaintenanceApi } from '../modules/identity/index.js';
 import type { MessagingMaintenanceApi } from '../modules/messaging/index.js';
 import type { OrderingMaintenanceApi } from '../modules/ordering/index.js';
+import type { PaymentsMaintenanceApi } from '../modules/payments/index.js';
 import type { AppEnvironment } from '../shared/infra/env.js';
 import type { OutboxDispatcher } from '../shared/ports/outbox-dispatcher.js';
 import type { ScheduledJob } from '../shared/ports/job-scheduler.js';
@@ -11,6 +12,7 @@ export interface WorkerJobDependencies {
   readonly ordering: OrderingMaintenanceApi;
   readonly identity: IdentityMaintenanceApi;
   readonly messaging: MessagingMaintenanceApi;
+  readonly payments: PaymentsMaintenanceApi;
   readonly outbox: OutboxDispatcher;
 }
 
@@ -21,6 +23,7 @@ export type WorkerJobSchedule = Pick<
   | 'JOB_PURGE_PHOTOS_CRON'
   | 'JOB_RETENTION_CRON'
   | 'JOB_OUTBOX_DISPATCH_CRON'
+  | 'JOB_ISSUE_SETTLEMENTS_CRON'
 >;
 
 /**
@@ -62,6 +65,9 @@ export const workerJobs = (
     ),
     job('messaging.purge-processed-updates', schedule.JOB_RETENTION_CRON, () =>
       dependencies.messaging.purgeProcessedUpdates(),
+    ),
+    job('payments.issue-settlements', schedule.JOB_ISSUE_SETTLEMENTS_CRON, () =>
+      dependencies.payments.issueDueSettlements(),
     ),
     job(
       'shared.dispatch-outbox',

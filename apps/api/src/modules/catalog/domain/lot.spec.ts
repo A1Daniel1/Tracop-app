@@ -84,4 +84,19 @@ describe('Lot domain', () => {
     ]);
     expect(() => reservable.transition('cancelled', now)).not.toThrow();
   });
+
+  it('sells out only from reserved, emits LotSoldOut and is terminal', () => {
+    const lot = Lot.create(props, 'kg', now, 90);
+    lot.transition('published', now);
+    expect(() => lot.transition('sold_out', now)).toThrow('Transición');
+    lot.transition('reserved', now);
+    lot.drainEvents();
+    lot.transition('sold_out', now);
+    expect(lot.props.status).toBe('sold_out');
+    expect(lot.drainEvents()).toEqual([
+      { type: 'LotSoldOut', lotId: props.id, occurredAt: now.toISOString() },
+    ]);
+    for (const next of ['published', 'reserved', 'expired', 'cancelled'] as const)
+      expect(() => lot.transition(next, now)).toThrow('Transición');
+  });
 });

@@ -29,6 +29,7 @@ const environment = {
   JOB_PURGE_PHOTOS_CRON: '17 * * * *',
   JOB_RETENTION_CRON: '40 4 * * *',
   JOB_OUTBOX_DISPATCH_CRON: '* * * * *',
+  JOB_ISSUE_SETTLEMENTS_CRON: '*/15 * * * *',
 } as unknown as AppEnvironment;
 
 const lifecycle = (scheduler: FakeScheduler) => {
@@ -41,18 +42,19 @@ const lifecycle = (scheduler: FakeScheduler) => {
     { expireReservationsAndQuotes: async () => ({ reservations: 0, quotes: 0 }) },
     { purgeExpiredOtpCodes: zero, purgeEndedSessions: zero, purgeRateLimitWindows: zero },
     { purgeProcessedUpdates: zero },
+    { issueDueSettlements: zero },
     { dispatch: async () => ({ claimed: 0, published: 0, retried: 0, deadLettered: 0 }) },
   );
 };
 
 describe('WorkerLifecycle', () => {
-  it('starts the scheduler before registering the eight jobs and stops it on shutdown', async () => {
+  it('starts the scheduler before registering the nine jobs and stops it on shutdown', async () => {
     const scheduler = new FakeScheduler();
     const worker = lifecycle(scheduler);
     await worker.onApplicationBootstrap();
     expect(scheduler.events[0]).toBe('start');
-    expect(scheduler.jobs).toHaveLength(8);
-    expect(new Set(scheduler.jobs.map((job) => job.name)).size).toBe(8);
+    expect(scheduler.jobs).toHaveLength(9);
+    expect(new Set(scheduler.jobs.map((job) => job.name)).size).toBe(9);
     await worker.onApplicationShutdown();
     expect(scheduler.events.at(-1)).toBe('stop');
   });

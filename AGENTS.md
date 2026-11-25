@@ -283,23 +283,23 @@ type InboundMessage = {
 
 ## 9. Módulos
 
-| Módulo          | Responsabilidad                                                                                            | Publica eventos                                                                                                                                               | Offline                                       |
-| --------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
-| `identity`      | Registro, perfiles, roles, vinculación de canales, OTP, sesiones                                           | `UserRegistered`, `UserVerified`, `SessionRevoked`, `ChannelLinked`                                                                                           | Parcial                                       |
-| `catalog`       | Productos, categorías, propuestas de producto, lotes, reservas de stock, fotos, búsqueda                   | `LotPublished`, `LotReserved`, `LotAvailabilityRestored`, `LotExpired`, `LotCancelled`, `LotDeleted`, `ProductProposed`, `ProductApproved`, `ProductRejected` | Sí                                            |
-| `ordering`      | Pedidos, cotizaciones, reservas al aceptar, estados                                                        | `OrderRequested`, `OrderQuoted`, `OrderAccepted`, `OrderCancelled`, `OrderPickupScheduled`, `OrderInTransit`, `OrderDelivered`                                | No (solo en línea)                            |
-| `logistics`     | Perfiles de transportista, viajes por pedido, paradas, check-ins, incidencias                              | `TripPlanned`, `TripAssigned`, `TripStarted`, `TripCompleted`, `TripCancelled`, `PickupConfirmed`, `DeliveryConfirmed`, `IncidentOpened`, `IncidentResolved`  | Sí (viajes, check-ins e incidencias por sync) |
-| `payments`      | Cotización de costos, comprobantes, verificación, ledger, liquidación (planificado; aún no existe)         | `PaymentProofUploaded`, `PaymentVerified`, `SettlementIssued`, `PaymentDisputed`                                                                              | No                                            |
-| `notifications` | Plantillas, preferencias, enrutamiento por canal, reintentos, estado de envío (planificado; aún no existe) | `NotificationSent`, `NotificationFailed`                                                                                                                      | Bandeja local                                 |
-| `messaging`     | Webhooks y adaptadores de canal, normalización a `InboundMessage`, flujos conversacionales                 | —                                                                                                                                                             | No                                            |
-| `ai-assistant`  | Extracción de borradores desde texto/audio/foto; sugerencia de precios (planificado; aún no existe)        | `DraftGenerated`                                                                                                                                              | No                                            |
-| `trust`         | Calificaciones, reputación, verificación de proveedores (planificado; aún no existe)                       | `ProviderVerified`, `RatingSubmitted`                                                                                                                         | Lectura                                       |
-| `sync`          | Recepción idempotente de operaciones, cursores de pull, resolución de conflictos                           | — (no emite eventos)                                                                                                                                          | Núcleo offline                                |
-| `backoffice`    | Casos de uso de operación, métricas, parámetros, audit log (planificado; aún no existe)                    | —                                                                                                                                                             | No                                            |
+| Módulo          | Responsabilidad                                                                                            | Publica eventos                                                                                                                                                                                                         | Offline                                       |
+| --------------- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `identity`      | Registro, perfiles, roles, vinculación de canales, OTP, sesiones                                           | `UserRegistered`, `UserVerified`, `SessionRevoked`, `ChannelLinked`                                                                                                                                                     | Parcial                                       |
+| `catalog`       | Productos, categorías, propuestas de producto, lotes, reservas de stock, fotos, búsqueda                   | `LotPublished`, `LotReserved`, `LotAvailabilityRestored`, `LotSoldOut`, `LotExpired`, `LotCancelled`, `LotDeleted`, `ProductProposed`, `ProductApproved`, `ProductRejected`                                             | Sí                                            |
+| `ordering`      | Pedidos, cotizaciones, reservas al aceptar, estados                                                        | `OrderRequested`, `OrderQuoted`, `OrderAccepted`, `OrderCancelled`, `OrderPaymentPending`, `OrderPaid`, `OrderPickupScheduled`, `OrderInTransit`, `OrderDelivered`, `OrderDisputed`, `OrderClosed`                      | No (solo en línea)                            |
+| `logistics`     | Perfiles de transportista, viajes por pedido, paradas, check-ins, incidencias                              | `TripPlanned`, `TripAssigned`, `TripStarted`, `TripCompleted`, `TripCancelled`, `PickupConfirmed`, `DeliveryConfirmed`, `IncidentOpened`, `IncidentResolved`                                                            | Sí (viajes, check-ins e incidencias por sync) |
+| `payments`      | Medio de pago, comprobantes, verificación, disputas, ledger y liquidaciones                                | `PaymentInitiated`, `PaymentProofUploaded`, `PaymentVerified`, `PaymentRejected`, `PaymentHeld`, `PaymentDisputed`, `PaymentDisputeReleased`, `PaymentRefunded`, `PaymentSettled`, `SettlementIssued`, `SettlementPaid` | No                                            |
+| `notifications` | Plantillas, preferencias, enrutamiento por canal, reintentos, estado de envío (planificado; aún no existe) | `NotificationSent`, `NotificationFailed`                                                                                                                                                                                | Bandeja local                                 |
+| `messaging`     | Webhooks y adaptadores de canal, normalización a `InboundMessage`, flujos conversacionales                 | —                                                                                                                                                                                                                       | No                                            |
+| `ai-assistant`  | Extracción de borradores desde texto/audio/foto; sugerencia de precios (planificado; aún no existe)        | `DraftGenerated`                                                                                                                                                                                                        | No                                            |
+| `trust`         | Calificaciones, reputación, verificación de proveedores (planificado; aún no existe)                       | `ProviderVerified`, `RatingSubmitted`                                                                                                                                                                                   | Lectura                                       |
+| `sync`          | Recepción idempotente de operaciones, cursores de pull, resolución de conflictos                           | — (no emite eventos)                                                                                                                                                                                                    | Núcleo offline                                |
+| `backoffice`    | Casos de uso de operación, métricas, parámetros, audit log (planificado; aún no existe)                    | —                                                                                                                                                                                                                       | No                                            |
 
 **Regla:** si un módulo necesita datos de otro, usa su `index.ts` (consulta pública) o reacciona a su evento. Nunca su tabla.
 
-Los eventos se escriben en `shared.outbox_events` en la misma transacción que el cambio; el despachador del trabajador los entrega a los consumidores registrados ([ADR-016](docs/adr/ADR-016.md)). Hoy no hay consumidores: el primero será `notifications`.
+Los eventos se escriben en `shared.outbox_events` en la misma transacción que el cambio; el despachador del trabajador los entrega a los consumidores registrados ([ADR-016](docs/adr/ADR-016.md)). El único consumidor hoy es `payments.hold-on-delivery` (`OrderDelivered` retiene el pago); `notifications` será el siguiente.
 
 ---
 
@@ -372,7 +372,7 @@ PostgreSQL 16. **schema solo para módulos con datos propios.** Convenciones: `s
 - `products` (id uuid, category_id uuid, name text, search_text text, unit text, attributes jsonb, status text NOT NULL DEFAULT 'approved', proposed_by uuid nullable, reviewed_by uuid nullable, reviewed_at timestamptz nullable, rejection_reason text nullable, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, deleted_at timestamptz nullable). Nombre no vacío y máximo 120 caracteres; atributos es un objeto. `search_text` contiene el nombre normalizado para búsquedas. `status` ∈ `approved`, `pending_review`, `rejected`; `products_proposal_review_check` exige proponente y sin revisión en pendientes, ni proponente ni revisor en aprobados curados, y proponente, revisor y fecha en propuestas revisadas; `rejection_reason` obligatorio en rechazados. Índice único parcial (`category_id`, `search_text`) para `approved` y `pending_review` no eliminados (ver [ADR-015](docs/adr/ADR-015.md)).
 - `lots` (id uuid, provider_id uuid, product_id uuid, quantity numeric(12,3), unit text, unit_price bigint, quality_grade text nullable, available_from timestamptz, available_until timestamptz, location_lat double precision, location_lng double precision, status text, version integer, created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL, deleted_at timestamptz nullable). La cantidad del dominio se representa como `quantityMilli: bigint` (milésimas) y se convierte a/desde `numeric(12,3)` al persistir. El precio unitario es entero positivo en COP; la unidad del lote debe coincidir con la del producto. Coordenadas se restringen a los límites de Colombia; `quality_grade` admite texto opcional de hasta 100 caracteres sin vocabulario cerrado.
 - `lot_photos` (id uuid, lot_id uuid, media_ref text, created_at timestamptz NOT NULL, state text NOT NULL, content_type text nullable, size_bytes integer nullable, position integer NOT NULL, expires_at timestamptz NOT NULL, lease_token text nullable, lease_expires_at timestamptz nullable, deleted_at timestamptz nullable). `state` puede ser `pending`, `processing` o `ready`; las filas `ready` requieren `content_type = 'image/webp'` y `size_bytes` no nulo. Índices: `lot_id`, vencimiento para filas que no estén `ready` y `(lot_id, position)` para filas no eliminadas.
-- `lot_reservations` (id uuid, lot_id uuid, order_id uuid, quantity_milli numeric(12,3) > 0, status text, expires_at timestamptz ≥ created_at, created_at, updated_at). `status` ∈ `active`, `released`, `consumed`. Solo las reservas `active` no vencidas restan cantidad disponible.
+- `lot_reservations` (id uuid, lot_id uuid, order_id uuid, quantity_milli numeric(12,3) > 0, status text, expires_at timestamptz nullable ≥ created_at, created_at, updated_at). `status` ∈ `active`, `released`, `consumed`. Restan cantidad disponible las `consumed` y las `active` no vencidas; una `active` con `expires_at` nulo está retenida mientras se revisa un comprobante de pago y no vence.
 
 Unidades actualmente aceptadas por el catálogo: `kg`, `g`, `lb`, `und`, `docena`, `arroba`, `quintal`, `caja`, `mano`, `bulto`. Esta lista es **provisional**; el vocabulario de unidades y el vocabulario para `quality_grade` siguen pendientes de decisión (§23).
 
@@ -391,13 +391,14 @@ Unidades actualmente aceptadas por el catálogo: `kg`, `g`, `lb`, `und`, `docena
 - `checkins` (id, stop_id, trip_id, order_id, carrier_id, kind, client_ts, media_ref, created_at); único (stop_id, kind). **Sin coordenadas** (ver [ADR-013](docs/adr/ADR-013.md)).
 - `incidents` (id, order_id, trip_id, type, description, status, opened_at, closed_at, deleted_at); `status` ∈ `open`, `resolved`.
 
-**payments** (planificado; aún no existe)
+**payments**
 
-- `payments` (id, order_id, method, amount, status, proof_media_ref, verified_by, verified_at)
-- `ledger_entries` (id, transaction_id, account, debit, credit, order_id, created_at) — **inmutable; por transacción suma débitos = créditos**
-- `settlements` (id, beneficiary_id, order_id, amount, status, issued_at, paid_at)
-- `commission_rules` (id, scope, rate_bps, valid_from, valid_to) — tasa en puntos básicos
-- `freight_rates` (id, corridor, rate_per_kg, min_charge, valid_from, valid_to)
+- `payments` (id, order_id, buyer_id, provider_id, method, status, subtotal, freight, commission, total, provider_net — bigint COP con CHECK de consistencia; version, proof_incoming_key, proof_upload_expires_at, proof_key, proof_uploaded_at, reviewed_by, reviewed_at, rejection_reason, held_at, carrier_id, dispute_reason, created_at, updated_at). `method` ∈ `transfer`, `nequi`; `status` ∈ `pending`, `proof_uploaded`, `verified`, `held`, `settled`, `rejected`, `disputed`, `refunded`. Índice único parcial: un pago no rechazado por pedido.
+- `payment_events` (id, payment_id, order_id, type, actor_id, payload, occurred_at) — **append-only** (trigger), una fila por transición.
+- `ledger_transactions` (id, order_id, payment_id, kind, created_at) — único por (`order_id`, `kind`): idempotencia de cada asiento. `kind` ∈ `payment_verified`, `delivery_confirmed`, `settlement_paid_producer`, `settlement_paid_carrier`, `refund`.
+- `ledger_entries` (id, transaction_id, order_id, account, debit, credit, created_at) — **inmutable** (trigger) y **balanceado por transacción** (trigger diferido al confirmar); una sola cara positiva por línea.
+- `settlements` (id, payment_id, order_id, beneficiary_id, beneficiary_kind, amount > 0, status, issued_at, paid_at, paid_by, reference, version); único por (`payment_id`, `beneficiary_kind`); `status` ∈ `issued`, `paid`.
+- `commission_rules` y `freight_rates` siguen planificadas: hoy la comisión y el flete salen de `ORDER_COMMISSION_RATE_BPS` y `ORDER_FREIGHT_COP`.
 
 **notifications** (planificado; aún no existe)
 
@@ -449,13 +450,13 @@ Actualmente no hay implementada retención ni compactación para `sync.change_lo
 
 Las transiciones se validan en el **dominio**; un estado inválido lanza error de dominio, nunca se "corrige" en silencio.
 
-**Lote:** `draft → published | cancelled` · `published → reserved | expired | cancelled` · `reserved → published | expired | cancelled`. Un lote pasa a `reserved` cuando las reservas activas agotan su cantidad y vuelve a `published` al liberarse una reserva (`LotAvailabilityRestored`); solo se borra (lógicamente) en `draft`. `sold_out` existe como estado pero **ninguna transición lo alcanza todavía**: llegará con payments, cuando las reservas pasen a `consumed`.
+**Lote:** `draft → published | cancelled` · `published → reserved | expired | cancelled` · `reserved → published | expired | cancelled`. Un lote pasa a `reserved` cuando las reservas activas agotan su cantidad y vuelve a `published` al liberarse una reserva (`LotAvailabilityRestored`); solo se borra (lógicamente) en `draft`. Pasa de `reserved` a `sold_out` (`LotSoldOut`) cuando pagos verificados consumen toda su cantidad; `sold_out` es terminal.
 
-**Pedido:** `draft → requested → quoted → accepted → payment_pending → paid → pickup_scheduled → in_transit → delivered → closed`. Solo se cancela **antes del pago** (`draft`, `requested`, `quoted`, `accepted`, `payment_pending` `→ cancelled`); desde `paid` hasta `delivered` la única salida alternativa es `→ disputed → closed`. Hoy ningún caso de uso alcanza `payment_pending`, `paid`, `disputed` ni `closed` (llegarán con payments).
+**Pedido:** `draft → requested → quoted → accepted → payment_pending → paid → pickup_scheduled → in_transit → delivered → closed`. Solo se cancela **antes del pago** (`draft`, `requested`, `quoted`, `accepted`, `payment_pending` `→ cancelled`); desde `paid` hasta `delivered` la única salida alternativa es `→ disputed → closed`. payments lleva el pedido a `payment_pending` (medio elegido), `paid` (comprobante verificado), `disputed` (disputa del comprador) y `closed` (liquidado o disputa resuelta).
 
-**Cotización:** `active → accepted | expired | cancelled`. **Reserva de stock:** `active → released` (hoy) y `active → consumed` (definido, sin uso hasta payments).
+**Cotización:** `active → accepted | expired | cancelled`. **Reserva de stock:** `active → released | consumed`; mientras se revisa un comprobante queda `active` sin vencimiento (retenida).
 
-**Pago** (planificado): `pending → proof_uploaded → verified → held → settled` · `proof_uploaded → rejected` · `verified|held → disputed`
+**Pago:** `pending → proof_uploaded → verified → held → settled` · `proof_uploaded → rejected` · `verified | held → disputed` · `disputed → held` (liberada, solo tras la entrega) `| refunded`. **Liquidación:** `issued → paid`.
 
 **Viaje:** `planned → assigned → in_progress → completed`, y `planned | assigned | in_progress → cancelled`. Al crearlo, el viaje pasa de `planned` a `assigned` para su transportista en la misma operación.
 
@@ -655,7 +656,8 @@ La fuente de verdad es el esquema zod de `apps/api/src/shared/infra/env.ts` (val
 | Almacenamiento                | `S3_ENDPOINT`, `S3_PUBLIC_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_API_ACCESS_KEY`, `S3_API_SECRET_KEY`, `S3_POLICY_ACCESS_KEY`, `S3_POLICY_SECRET_KEY`; MinIO local: `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_CORS_ALLOWED_ORIGINS`                                                                         |
 | Sync                          | `SYNC_PUSH_MAX_BODY_BYTES`, `SYNC_PUSH_RATE_LIMIT`, `SYNC_PULL_RATE_LIMIT`, `SYNC_RATE_WINDOW_SECONDS`                                                                                                                                                                                                               |
 | Pedidos                       | `ORDER_QUOTE_TTL_HOURS`, `ORDER_RESERVATION_TTL_HOURS`, `ORDER_SUBTOTAL_ROUNDING`, `ORDER_COMMISSION_RATE_BPS`, `ORDER_FREIGHT_COP` (comisión y flete PROVISIONALES), `ORDER_RATE_LIMIT`, `ORDER_RATE_WINDOW_SECONDS`, `ORDER_LOCK_TIMEOUT_MS`, `ORDER_STATEMENT_TIMEOUT_MS`                                         |
-| Trabajador                    | `JOB_EXPIRE_LOTS_CRON`, `JOB_EXPIRE_ORDERS_CRON`, `JOB_PURGE_PHOTOS_CRON`, `JOB_RETENTION_CRON`, `JOB_OUTBOX_DISPATCH_CRON`, `OUTBOX_LEASE_SECONDS`, `OUTBOX_MAX_ATTEMPTS`, `OUTBOX_RETRY_BASE_SECONDS`, `OUTBOX_RETRY_MAX_SECONDS`                                                                                  |
+| Pagos (PROVISIONAL)           | `PAYMENT_REJECTION_GRACE_HOURS`, `PAYMENT_CLAIM_WINDOW_HOURS`, `PAYMENT_PROOF_MAX_BYTES`, `PAYMENT_PROOF_UPLOAD_URL_TTL_SECONDS`, `PAYMENT_PROOF_DOWNLOAD_URL_TTL_SECONDS`                                                                                                                                           |
+| Trabajador                    | `JOB_EXPIRE_LOTS_CRON`, `JOB_EXPIRE_ORDERS_CRON`, `JOB_PURGE_PHOTOS_CRON`, `JOB_RETENTION_CRON`, `JOB_OUTBOX_DISPATCH_CRON`, `JOB_ISSUE_SETTLEMENTS_CRON`, `OUTBOX_LEASE_SECONDS`, `OUTBOX_MAX_ATTEMPTS`, `OUTBOX_RETRY_BASE_SECONDS`, `OUTBOX_RETRY_MAX_SECONDS`                                                    |
 | Retención (PROVISIONAL)       | `OTP_RETENTION_DAYS`, `SESSION_RETENTION_DAYS`, `PROCESSED_UPDATES_RETENTION_DAYS`, `RATE_LIMIT_RETENTION_SECONDS`                                                                                                                                                                                                   |
 | Futuro (sin uso en el código) | `WHATSAPP_*`, `LLM_API_KEY`, `LLM_MODEL`, `FCM_CREDENTIALS`, `SMS_API_KEY`, `PRICE_REFERENCE_SOURCE`, `MAPS_API_KEY`                                                                                                                                                                                                 |
 
@@ -703,24 +705,25 @@ La fuente de verdad es el esquema zod de `apps/api/src/shared/infra/env.ts` (val
 
 ## 22. Decisiones de arquitectura vigentes (ADR resumidas)
 
-| ADR | Decisión                                                      | Tradeoff aceptado                                                            |
-| --- | ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| 001 | Monolito modular hexagonal                                    | Menos escalado independiente; mucho menos complejidad operativa en el piloto |
-| 002 | Cliente grueso offline-first con outbox y sync                | Más complejidad de sync y pruebas, a cambio de funcionar sin señal           |
-| 003 | **Sin blockchain en el piloto**; eventos con hash encadenado  | Sin "inmutabilidad total"; se puede anclar a una cadena después              |
-| 004 | **Telegram primero**, WhatsApp después vía el mismo puerto    | La demo valida el flujo pero no la adopción real                             |
-| 005 | LLM en el servidor con confirmación humana obligatoria        | Costo y latencia por uso; mitiga alucinaciones                               |
-| 006 | Pagos con conciliación manual en el piloto                    | Menos automatización, valida la transacción sin integrar pasarela            |
-| 007 | PostgreSQL con schema por módulo + pg-boss                    | Sin Redis ni broker; suficiente para el piloto                               |
-| 008 | Autenticación por teléfono + OTP con JWT y refresh rotativo   | `jose@4` fijado por dual CJS/ESM; ventana de gracia de refresh pendiente     |
-| 009 | Mensajería con Telegram (webhook/polling), puerto único       | Polling solo dev; OTP fire-and-forget; rate limit en memoria                 |
-| 010 | Núcleo de catálogo (taxonomía curada, lotes, búsqueda)        | Búsqueda filtra en memoria antes de paginar                                  |
-| 011 | Fotos de lote con POST prefirmado y re-codificación a WebP    | Dependencia de sharp (libvips, LGPL) aceptada provisionalmente               |
-| 012 | Idempotencia de sync y cursores serializados                  | Un lock global de secuencia serializa las escrituras del change log          |
-| 013 | Logística sin coordenadas; viaje creado por el transportista  | Zonas gruesas; ubicación exacta para el transportista pendiente              |
-| 014 | Pedidos de un proveedor; reserva al aceptar, vence a las 24 h | Sin pagos, un pedido aceptado se cancela al vencer la reserva                |
-| 015 | Propuestas de producto con revisión del personal              | Revisión manual; deduplicación por tokens con confirmación                   |
-| 016 | Trabajador con pg-boss y despachador del outbox con lease     | Entrega al menos una vez; consumidores idempotentes                          |
+| ADR | Decisión                                                       | Tradeoff aceptado                                                            |
+| --- | -------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 001 | Monolito modular hexagonal                                     | Menos escalado independiente; mucho menos complejidad operativa en el piloto |
+| 002 | Cliente grueso offline-first con outbox y sync                 | Más complejidad de sync y pruebas, a cambio de funcionar sin señal           |
+| 003 | **Sin blockchain en el piloto**; eventos con hash encadenado   | Sin "inmutabilidad total"; se puede anclar a una cadena después              |
+| 004 | **Telegram primero**, WhatsApp después vía el mismo puerto     | La demo valida el flujo pero no la adopción real                             |
+| 005 | LLM en el servidor con confirmación humana obligatoria         | Costo y latencia por uso; mitiga alucinaciones                               |
+| 006 | Pagos con conciliación manual en el piloto                     | Menos automatización, valida la transacción sin integrar pasarela            |
+| 007 | PostgreSQL con schema por módulo + pg-boss                     | Sin Redis ni broker; suficiente para el piloto                               |
+| 008 | Autenticación por teléfono + OTP con JWT y refresh rotativo    | `jose@4` fijado por dual CJS/ESM; ventana de gracia de refresh pendiente     |
+| 009 | Mensajería con Telegram (webhook/polling), puerto único        | Polling solo dev; OTP fire-and-forget; rate limit en memoria                 |
+| 010 | Núcleo de catálogo (taxonomía curada, lotes, búsqueda)         | Búsqueda filtra en memoria antes de paginar                                  |
+| 011 | Fotos de lote con POST prefirmado y re-codificación a WebP     | Dependencia de sharp (libvips, LGPL) aceptada provisionalmente               |
+| 012 | Idempotencia de sync y cursores serializados                   | Un lock global de secuencia serializa las escrituras del change log          |
+| 013 | Logística sin coordenadas; viaje creado por el transportista   | Zonas gruesas; ubicación exacta para el transportista pendiente              |
+| 014 | Pedidos de un proveedor; reserva al aceptar, vence a las 24 h  | Un pedido sin comprobante se cancela al vencer la reserva                    |
+| 015 | Propuestas de producto con revisión del personal               | Revisión manual; deduplicación por tokens con confirmación                   |
+| 016 | Trabajador con pg-boss y despachador del outbox con lease      | Entrega al menos una vez; consumidores idempotentes                          |
+| 017 | Pagos manuales con ledger inmutable y liquidación tras reclamo | Revisión humana de cada comprobante; reserva retenida mientras tanto         |
 
 ---
 
@@ -732,7 +735,7 @@ La fuente de verdad es el esquema zod de `apps/api/src/shared/infra/env.ts` (val
 1. **Porcentaje de comisión** y si se aplica por categoría o plan.
 2. **Quién asume la comisión** (propuesta por defecto: se descuenta al productor).
 3. **Tarifas de flete** del corredor piloto y si es por peso, distancia o fija.
-4. **Duración de la ventana de reclamo** antes de liquidar (propuesta: 24–48 h).
+4. **Duración de la ventana de reclamo** antes de liquidar (propuesta: 24–48 h). Implementada como `PAYMENT_CLAIM_WINDOW_HOURS` (48 h, PROVISIONAL); la ventana tras rechazar un comprobante es `PAYMENT_REJECTION_GRACE_HOURS` (4 h, PROVISIONAL).
 5. **Corredor, productos y comercios iniciales** del piloto.
 6. **Fuente de precios de referencia** para la sugerencia de precios.
 7. **Proveedor de SMS y de mapas.**

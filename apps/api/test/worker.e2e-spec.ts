@@ -11,6 +11,7 @@ const EXPECTED_JOBS = [
   'identity.purge-sessions',
   'messaging.purge-processed-updates',
   'ordering.expire-reservations-and-quotes',
+  'payments.issue-settlements',
   'shared.dispatch-outbox',
 ];
 
@@ -59,7 +60,7 @@ describePostgres('worker process (real pg-boss on PostgreSQL)', () => {
   });
   afterAll(async () => pool.end());
 
-  it('starts, registers the eight jobs, and stops gracefully on SIGTERM; twice in a row', async () => {
+  it('starts, registers the nine jobs, and stops gracefully on SIGTERM; twice in a row', async () => {
     for (let run = 0; run < 2; run += 1) {
       const worker = await startWorker();
       expect(worker.jobs).toEqual(EXPECTED_JOBS);

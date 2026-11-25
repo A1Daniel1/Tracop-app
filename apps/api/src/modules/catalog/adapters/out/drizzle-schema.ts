@@ -154,7 +154,7 @@ export const lotReservations = catalog.table(
     orderId: uuid('order_id').notNull(),
     quantityMilli: numeric('quantity_milli', { precision: 12, scale: 3 }).notNull(),
     status: text('status').notNull(),
-    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull(),
   },

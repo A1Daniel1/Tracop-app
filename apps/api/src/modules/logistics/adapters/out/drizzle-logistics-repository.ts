@@ -190,6 +190,19 @@ export class DrizzleLogisticsRepository implements LogisticsRepository {
     return row ? toStop(row) : null;
   }
 
+  async findDeliveringCarrierId(orderId: string): Promise<string | null> {
+    const result = await this.db.execute(sql`
+      SELECT t.carrier_id FROM logistics.trip_stops s
+      JOIN logistics.trips t ON t.id = s.trip_id
+      WHERE s.order_id = ${orderId}::uuid AND s.kind = 'delivery' AND s.completed_at IS NOT NULL
+        AND t.deleted_at IS NULL AND t.status <> 'cancelled'
+      ORDER BY s.completed_at DESC
+      LIMIT 1
+    `);
+    const row = one(result);
+    return row ? String(row.carrier_id) : null;
+  }
+
   async findStopByOrderAndKind(
     orderId: string,
     kind: TripStopProps['kind'],

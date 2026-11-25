@@ -97,6 +97,17 @@ const envSchema = z.object({
   ORDER_RATE_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   ORDER_LOCK_TIMEOUT_MS: z.coerce.number().int().positive().default(2_000),
   ORDER_STATEMENT_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+  // PROVISIONAL payment values (AGENTS §23): validate with the team before the pilot.
+  PAYMENT_REJECTION_GRACE_HOURS: z.coerce.number().int().positive().max(168).default(4),
+  PAYMENT_CLAIM_WINDOW_HOURS: z.coerce.number().int().positive().max(720).default(48),
+  PAYMENT_PROOF_MAX_BYTES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .max(10 * 1024 * 1024)
+    .default(5 * 1024 * 1024),
+  PAYMENT_PROOF_UPLOAD_URL_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  PAYMENT_PROOF_DOWNLOAD_URL_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   // PROVISIONAL retention values; validate with the team and Ley 1581 obligations.
   OTP_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(7),
   SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
@@ -107,6 +118,7 @@ const envSchema = z.object({
   JOB_PURGE_PHOTOS_CRON: z.string().trim().min(9).default('17 * * * *'),
   JOB_RETENTION_CRON: z.string().trim().min(9).default('40 4 * * *'),
   JOB_OUTBOX_DISPATCH_CRON: z.string().trim().min(9).default('* * * * *'),
+  JOB_ISSUE_SETTLEMENTS_CRON: z.string().trim().min(9).default('*/15 * * * *'),
   OUTBOX_LEASE_SECONDS: z.coerce.number().int().min(5).max(3600).default(60),
   OUTBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(20).default(5),
   OUTBOX_RETRY_BASE_SECONDS: z.coerce.number().int().positive().max(3600).default(5),

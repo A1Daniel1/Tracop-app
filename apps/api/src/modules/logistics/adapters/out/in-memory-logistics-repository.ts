@@ -71,6 +71,17 @@ export class InMemoryLogisticsRepository implements LogisticsRepository {
     );
   }
 
+  async findDeliveringCarrierId(orderId: string): Promise<string | null> {
+    const stop = [...this.stops.values()].find(
+      (candidate) =>
+        candidate.orderId === orderId &&
+        candidate.kind === 'delivery' &&
+        candidate.completedAt !== null &&
+        this.trips.get(candidate.tripId)?.status !== 'cancelled',
+    );
+    return stop ? (this.trips.get(stop.tripId)?.carrierId ?? null) : null;
+  }
+
   async completeStop(stopId: string, at: Date): Promise<void> {
     const stop = this.stops.get(stopId);
     if (stop) this.stops.set(stopId, { ...stop, completedAt: at });

@@ -42,6 +42,8 @@ export interface LogisticsRepository {
     orderId: string,
     kind: TripStopProps['kind'],
   ): Promise<TripStopProps | null>;
+  /** The carrier of the trip whose delivery stop for the order was completed, if any. */
+  findDeliveringCarrierId(orderId: string): Promise<string | null>;
   completeStop(stopId: string, at: Date): Promise<void>;
   insertCheckin(checkin: CheckinProps): Promise<CheckinProps>;
   findCheckinByStopAndKind(

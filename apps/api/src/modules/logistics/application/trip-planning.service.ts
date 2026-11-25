@@ -249,6 +249,11 @@ export class TripPlanningService {
     return this.repository.findStopsByTrip(tripId);
   }
 
+  /** Who delivered an order, for settling the freight; internal (no actor). */
+  async findDeliveringCarrier(orderId: string): Promise<string | null> {
+    return this.repository.findDeliveringCarrierId(orderId);
+  }
+
   async resolveConflicts(actor: LogisticsActor): Promise<readonly string[]> {
     this.requireOperator(actor);
     return this.repository.findConflictingOrderIds();

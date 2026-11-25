@@ -23,6 +23,13 @@ export interface LotReservationPort {
   ): Promise<void>;
   release(orderId: string): Promise<void>;
   findExpiredOrderIds(now: Date, limit: number): Promise<readonly string[]>;
+  /** Keeps the reservation while a payment proof is reviewed; fails if it already lapsed. */
+  hold(orderId: string): Promise<void>;
+  /** Gives a held reservation an expiry again (rejected proof). */
+  resumeExpiry(orderId: string, expiresAt: Date): Promise<void>;
+  /** The payment was verified: the reserved stock is sold. */
+  consume(orderId: string): Promise<void>;
+  isExpired(orderId: string, now: Date): Promise<boolean>;
 }
 
 export interface PricingPort {

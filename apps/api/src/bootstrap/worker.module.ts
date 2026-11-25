@@ -10,7 +10,11 @@ import {
   OUTBOX_DISPATCHER_SETTINGS,
   type OutboxDispatcherSettings,
 } from '../shared/ports/outbox-dispatcher.js';
-import { OUTBOX_SUBSCRIBERS } from '../shared/ports/outbox-subscriber.js';
+import { PAYMENTS_OUTBOX_SUBSCRIBER } from '../modules/payments/index.js';
+import {
+  OUTBOX_SUBSCRIBERS,
+  type OutboxSubscriberPort,
+} from '../shared/ports/outbox-subscriber.js';
 import { APPLICATION_MODULES } from './app.module.js';
 import { WorkerLifecycle } from './worker-lifecycle.js';
 
@@ -27,8 +31,11 @@ import { WorkerLifecycle } from './worker-lifecycle.js';
         retryMaxSeconds: environment.OUTBOX_RETRY_MAX_SECONDS,
       }),
     },
-    // No module consumes outbox events yet; notifications will register the first subscriber.
-    { provide: OUTBOX_SUBSCRIBERS, useValue: [] },
+    {
+      provide: OUTBOX_SUBSCRIBERS,
+      inject: [PAYMENTS_OUTBOX_SUBSCRIBER],
+      useFactory: (payments: OutboxSubscriberPort): readonly OutboxSubscriberPort[] => [payments],
+    },
     PostgresOutboxDispatcher,
     { provide: OUTBOX_DISPATCHER, useExisting: PostgresOutboxDispatcher },
     {

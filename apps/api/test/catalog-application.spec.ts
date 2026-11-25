@@ -143,6 +143,12 @@ describe('catalog application', () => {
             .map(([, item]) => item.orderId),
         ),
       ].slice(0, limit),
+    holdOrderReservations: async () => 0,
+    resumeOrderReservationExpiry: async () => 0,
+    consumeOrderReservations: async () => [],
+    countActiveOrderReservations: async () => 0,
+    isOrderReservationExpired: async () => false,
+    getConsumedQuantity: async () => 0n,
   };
   const uow: CatalogUnitOfWork = { run: async (operation) => operation() };
   const eventWriter: CatalogEventWriter = {

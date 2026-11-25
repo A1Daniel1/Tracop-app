@@ -58,6 +58,13 @@ const toLot = (row: typeof lots.$inferSelect): LotProps => ({
   version: row.version,
 });
 
+/**
+ * Reservations that subtract stock: consumed ones (sold) and active ones that have not lapsed.
+ * An active reservation with no expiry is held while its payment proof is reviewed.
+ */
+const countsAgainstStock = (now: Date) =>
+  sql`(r.status = 'consumed' OR (r.status = 'active' AND (r.expires_at IS NULL OR r.expires_at >= ${now})))`;
+
 @Injectable()
 export class DrizzleCategoryRepository implements CategoryRepository {
   constructor(
@@ -346,8 +353,7 @@ export class DrizzleLotRepository implements LotRepository {
           SELECT SUM(r.quantity_milli)
           FROM catalog.lot_reservations r
           WHERE r.lot_id = ${lots.id}
-            AND r.status = 'active'
-            AND r.expires_at >= ${now}
+            AND ${countsAgainstStock(now)}
         ), 0))::bigint)::text`,
       })
       .from(lots)
@@ -357,8 +363,7 @@ export class DrizzleLotRepository implements LotRepository {
           sql`${lots.quantity} * 1000 > COALESCE((SELECT SUM(r.quantity_milli)
             FROM catalog.lot_reservations r
             WHERE r.lot_id = ${lots.id}
-              AND r.status = 'active'
-              AND r.expires_at >= ${now}), 0)`,
+              AND ${countsAgainstStock(now)}), 0)`,
         ),
       )
       .orderBy(asc(lots.availableFrom), asc(lots.id));
@@ -383,7 +388,7 @@ export class DrizzleLotRepository implements LotRepository {
   async getAvailableQuantity(lotId: string, now: Date): Promise<bigint> {
     const result = await this.database.current().execute(sql`
       SELECT GREATEST(0::numeric, l.quantity * 1000 - COALESCE(SUM(r.quantity_milli) FILTER (
-        WHERE r.status = 'active' AND r.expires_at >= ${now}
+        WHERE ${countsAgainstStock(now)}
       ), 0))::bigint::text AS available_milli
       FROM catalog.lots l LEFT JOIN catalog.lot_reservations r ON r.lot_id = l.id
       WHERE l.id = ${lotId}::uuid AND l.deleted_at IS NULL
@@ -426,6 +431,61 @@ export class DrizzleLotRepository implements LotRepository {
       RETURNING id
     `);
     return result.rows.length ? 'created' : 'exists';
+  }
+
+  async holdOrderReservations(orderId: string, now: Date): Promise<number> {
+    const rows = await this.database.current().execute(sql`
+      UPDATE catalog.lot_reservations SET expires_at = NULL, updated_at = ${now}
+      WHERE order_id = ${orderId}::uuid AND status = 'active'
+        AND (expires_at IS NULL OR expires_at >= ${now})
+      RETURNING id
+    `);
+    return rows.rows.length;
+  }
+
+  async resumeOrderReservationExpiry(orderId: string, expiresAt: Date, now: Date): Promise<number> {
+    const rows = await this.database.current().execute(sql`
+      UPDATE catalog.lot_reservations SET expires_at = ${expiresAt}, updated_at = ${now}
+      WHERE order_id = ${orderId}::uuid AND status = 'active' AND expires_at IS NULL
+      RETURNING id
+    `);
+    return rows.rows.length;
+  }
+
+  async consumeOrderReservations(orderId: string, now: Date): Promise<readonly string[]> {
+    const rows = await this.database.current().execute(sql`
+      UPDATE catalog.lot_reservations SET status = 'consumed', updated_at = ${now}
+      WHERE order_id = ${orderId}::uuid AND status = 'active' AND expires_at IS NULL
+      RETURNING lot_id
+    `);
+    return [...new Set((rows.rows as { lot_id: string }[]).map(({ lot_id }) => lot_id))].sort(
+      (left, right) => left.localeCompare(right),
+    );
+  }
+
+  async countActiveOrderReservations(orderId: string): Promise<number> {
+    const rows = await this.database.current().execute(sql`
+      SELECT count(*)::int AS count FROM catalog.lot_reservations
+      WHERE order_id = ${orderId}::uuid AND status = 'active'
+    `);
+    return (rows.rows as { count: number }[])[0]?.count ?? 0;
+  }
+
+  async isOrderReservationExpired(orderId: string, now: Date): Promise<boolean> {
+    const rows = await this.database.current().execute(sql`
+      SELECT 1 FROM catalog.lot_reservations
+      WHERE order_id = ${orderId}::uuid AND status = 'active' AND expires_at < ${now}
+      LIMIT 1
+    `);
+    return rows.rows.length > 0;
+  }
+
+  async getConsumedQuantity(lotId: string): Promise<bigint> {
+    const rows = await this.database.current().execute(sql`
+      SELECT COALESCE(SUM(quantity_milli), 0)::bigint::text AS consumed_milli
+      FROM catalog.lot_reservations WHERE lot_id = ${lotId}::uuid AND status = 'consumed'
+    `);
+    return BigInt((rows.rows as { consumed_milli: string }[])[0]?.consumed_milli ?? '0');
   }
 
   async releaseOrderReservations(orderId: string, now: Date): Promise<readonly string[]> {
@@ -496,7 +556,7 @@ export class DrizzleLotRepository implements LotRepository {
             lt(lots.availableUntil, now),
             isNull(lots.deletedAt),
             sql`NOT EXISTS (SELECT 1 FROM catalog.lot_reservations r
-              WHERE r.lot_id = ${lots.id} AND r.status = 'active' AND r.expires_at >= ${now})`,
+              WHERE r.lot_id = ${lots.id} AND ${countsAgainstStock(now)})`,
           ),
         )
         .limit(limit)

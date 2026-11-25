@@ -46,9 +46,13 @@ export type OrderEvent = {
     | 'OrderQuoted'
     | 'OrderAccepted'
     | 'OrderCancelled'
+    | 'OrderPaymentPending'
+    | 'OrderPaid'
     | 'OrderPickupScheduled'
     | 'OrderInTransit'
-    | 'OrderDelivered';
+    | 'OrderDelivered'
+    | 'OrderDisputed'
+    | 'OrderClosed';
   readonly orderId: string;
   readonly occurredAt: string;
   readonly payload: Record<string, unknown>;
@@ -127,19 +131,19 @@ export class Order {
   }
 }
 
+const EVENT_TYPES: Partial<Record<OrderStatus, OrderEvent['type']>> = {
+  requested: 'OrderRequested',
+  quoted: 'OrderQuoted',
+  accepted: 'OrderAccepted',
+  cancelled: 'OrderCancelled',
+  payment_pending: 'OrderPaymentPending',
+  paid: 'OrderPaid',
+  pickup_scheduled: 'OrderPickupScheduled',
+  in_transit: 'OrderInTransit',
+  delivered: 'OrderDelivered',
+  disputed: 'OrderDisputed',
+  closed: 'OrderClosed',
+};
+
 const eventTypeFor = (status: OrderStatus): OrderEvent['type'] | null =>
-  status === 'requested'
-    ? 'OrderRequested'
-    : status === 'quoted'
-      ? 'OrderQuoted'
-      : status === 'accepted'
-        ? 'OrderAccepted'
-        : status === 'cancelled'
-          ? 'OrderCancelled'
-          : status === 'pickup_scheduled'
-            ? 'OrderPickupScheduled'
-            : status === 'in_transit'
-              ? 'OrderInTransit'
-              : status === 'delivered'
-                ? 'OrderDelivered'
-                : null;
+  EVENT_TYPES[status] ?? null;

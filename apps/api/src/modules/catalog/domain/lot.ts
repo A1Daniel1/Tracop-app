@@ -34,6 +34,7 @@ export type LotEvent =
   | { readonly type: 'LotReserved'; readonly lotId: string; readonly occurredAt: string }
   | { readonly type: 'LotExpired'; readonly lotId: string; readonly occurredAt: string }
   | { readonly type: 'LotDeleted'; readonly lotId: string; readonly occurredAt: string }
+  | { readonly type: 'LotSoldOut'; readonly lotId: string; readonly occurredAt: string }
   | {
       readonly type: 'LotAvailabilityRestored';
       readonly lotId: string;
@@ -65,7 +66,7 @@ export interface LotProps {
 const transitions: Readonly<Record<LotStatus, readonly LotStatus[]>> = {
   draft: ['published', 'cancelled'],
   published: ['reserved', 'expired', 'cancelled'],
-  reserved: ['published', 'expired', 'cancelled'],
+  reserved: ['published', 'sold_out', 'expired', 'cancelled'],
   sold_out: [],
   expired: [],
   cancelled: [],
@@ -127,6 +128,12 @@ export class Lot {
     if (next === 'reserved')
       this.pendingEvents.push({
         type: 'LotReserved',
+        lotId: this.props.id,
+        occurredAt: occurredAt.toISOString(),
+      });
+    if (next === 'sold_out')
+      this.pendingEvents.push({
+        type: 'LotSoldOut',
         lotId: this.props.id,
         occurredAt: occurredAt.toISOString(),
       });

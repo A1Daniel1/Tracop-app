@@ -5,3 +5,4 @@ export * from './schemas/catalog.js';
 export * from './schemas/sync.js';
 export * from './schemas/ordering.js';
 export * from './schemas/logistics.js';
+export * from './schemas/payments.js';

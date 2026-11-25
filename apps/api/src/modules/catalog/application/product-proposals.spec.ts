@@ -107,6 +107,12 @@ const createHarness = () => {
     reserveStock: async () => 'created',
     releaseOrderReservations: async () => [],
     findExpiredReservationOrderIds: async () => [],
+    holdOrderReservations: async () => 0,
+    resumeOrderReservationExpiry: async () => 0,
+    consumeOrderReservations: async () => [],
+    countActiveOrderReservations: async () => 0,
+    isOrderReservationExpired: async () => false,
+    getConsumedQuantity: async () => 0n,
   };
   const uow: CatalogUnitOfWork = { run: async (operation) => operation() };
   const eventWriter: CatalogEventWriter = { append: jest.fn(async () => undefined) };

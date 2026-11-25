@@ -43,6 +43,10 @@ describePostgres('GET /health', () => {
         throw bridgeFailure;
       },
       findExpiredReservationOrderIds: async () => [],
+      holdOrderReservations: async () => undefined,
+      resumeOrderReservationExpiry: async () => undefined,
+      consumeOrderReservations: async () => undefined,
+      isOrderReservationExpired: async () => false,
     });
     await expect(
       adapter.reserve('018f47a2-8b45-7cc2-9a1e-123456789abc', [], new Date()),
