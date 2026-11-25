@@ -14957,6 +14957,1814 @@
         "summary": "Reputación completa de un proveedor o transportista (operator, admin)",
         "tags": ["trust"]
       }
+    },
+    "/pricing/suggestion": {
+      "get": {
+        "description": "Percentiles 25–75 de los precios de referencia (DANE-SIPSA) y, con al menos 3 observaciones propias de 2 o más proveedores, también de los precios de TRACOP. Nunca un precio individual; con menos de 3 valores responde `insufficient_data`. Es solo una sugerencia, con su fuente y fecha.",
+        "operationId": "RecommendationsController_suggestion",
+        "parameters": [
+          {
+            "name": "unit",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "productId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": ["ok"]
+                        },
+                        "productId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "unit": {
+                          "type": "string",
+                          "enum": [
+                            "kg",
+                            "g",
+                            "lb",
+                            "und",
+                            "docena",
+                            "arroba",
+                            "quintal",
+                            "caja",
+                            "mano",
+                            "bulto"
+                          ]
+                        },
+                        "low": {
+                          "type": "string",
+                          "pattern": "^\\d{1,15}$"
+                        },
+                        "median": {
+                          "type": "string",
+                          "pattern": "^\\d{1,15}$"
+                        },
+                        "high": {
+                          "type": "string",
+                          "pattern": "^\\d{1,15}$"
+                        },
+                        "sources": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string",
+                                "enum": ["DANE-SIPSA", "TRACOP"]
+                              },
+                              "count": {
+                                "type": "integer",
+                                "minimum": 1,
+                                "maximum": 9007199254740991
+                              },
+                              "observedAt": {
+                                "type": "string",
+                                "format": "date-time",
+                                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                              }
+                            },
+                            "required": ["name", "count", "observedAt"],
+                            "additionalProperties": false
+                          }
+                        },
+                        "citation": {
+                          "nullable": true,
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "status",
+                        "productId",
+                        "unit",
+                        "low",
+                        "median",
+                        "high",
+                        "sources",
+                        "citation"
+                      ],
+                      "additionalProperties": false
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "type": "string",
+                          "enum": ["insufficient_data"]
+                        },
+                        "productId": {
+                          "type": "string",
+                          "format": "uuid",
+                          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                        },
+                        "unit": {
+                          "type": "string",
+                          "enum": [
+                            "kg",
+                            "g",
+                            "lb",
+                            "und",
+                            "docena",
+                            "arroba",
+                            "quintal",
+                            "caja",
+                            "mano",
+                            "bulto"
+                          ]
+                        }
+                      },
+                      "required": ["status", "productId", "unit"],
+                      "additionalProperties": false
+                    }
+                  ]
+                },
+                "example": {
+                  "status": "ok",
+                  "productId": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                  "unit": "bulto",
+                  "low": "85000",
+                  "median": "90000",
+                  "high": "96000",
+                  "sources": [
+                    {
+                      "name": "DANE-SIPSA",
+                      "count": 12,
+                      "observedAt": "2026-11-24T00:00:00.000Z"
+                    }
+                  ],
+                  "citation": "Fuente: Departamento Administrativo Nacional de Estadística: www.dane.gov.co"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "La solicitud no cumple el contrato o una regla de entrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "Solicitud inválida."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol autenticado no está autorizado para esta operación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "No tienes permiso para este recurso."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El recurso solicitado no existe o no es visible para este usuario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 404,
+                  "code": "not_found",
+                  "message": "Recurso no encontrado."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Se excedió un límite de solicitudes. Puede incluir la cabecera Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos hasta que se permita reintentar.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 429
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 429,
+                  "code": "rate_limited",
+                  "message": "Demasiadas solicitudes. Intenta nuevamente más tarde."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Rango de precio sugerido (productor, proveedor)",
+        "tags": ["recommendations"]
+      }
+    },
+    "/recommendations/lots": {
+      "get": {
+        "description": "Orden determinista por puntuación con razones en códigos (reorder, nearby, good_price, verified_provider, fresh). Solo lotes disponibles; usa solo el historial del propio comprador. La distancia es un entero en km desde el punto enviado (lat y lng juntos); no se devuelven coordenadas. cursor es opaco.",
+        "operationId": "RecommendationsController_recommendations",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "lotId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "productId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "unit": {
+                            "type": "string",
+                            "enum": [
+                              "kg",
+                              "g",
+                              "lb",
+                              "und",
+                              "docena",
+                              "arroba",
+                              "quintal",
+                              "caja",
+                              "mano",
+                              "bulto"
+                            ]
+                          },
+                          "unitPrice": {
+                            "type": "string",
+                            "pattern": "^\\d{1,15}$"
+                          },
+                          "distanceKm": {
+                            "nullable": true,
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 9007199254740991
+                          },
+                          "score": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 9007199254740991
+                          },
+                          "reasons": {
+                            "minItems": 1,
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "reorder",
+                                "nearby",
+                                "good_price",
+                                "verified_provider",
+                                "fresh"
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "lotId",
+                          "productId",
+                          "unit",
+                          "unitPrice",
+                          "distanceKm",
+                          "score",
+                          "reasons"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "nullable": true,
+                      "type": "string"
+                    }
+                  },
+                  "required": ["items", "nextCursor"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "items": [
+                    {
+                      "lotId": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                      "productId": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                      "unit": "bulto",
+                      "unitPrice": "88000",
+                      "distanceKm": 12,
+                      "score": 70,
+                      "reasons": ["reorder", "nearby", "good_price"]
+                    }
+                  ],
+                  "nextCursor": null
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "La solicitud no cumple el contrato o una regla de entrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "Solicitud inválida."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol autenticado no está autorizado para esta operación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "No tienes permiso para este recurso."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Se excedió un límite de solicitudes. Puede incluir la cabecera Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos hasta que se permita reintentar.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 429
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 429,
+                  "code": "rate_limited",
+                  "message": "Demasiadas solicitudes. Intenta nuevamente más tarde."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Lotes recomendados (comprador)",
+        "tags": ["recommendations"]
+      }
+    },
+    "/alerts": {
+      "post": {
+        "description": "Avisa cuando se publique un lote del producto dentro del radio y bajo el precio máximo. Idempotente por id. El centro se guarda redondeado a 2 decimales. Máximo de alertas por usuario.",
+        "operationId": "RecommendationsController_createAlert",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "productId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "maxPrice": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true,
+                    "maximum": 9007199254740991
+                  },
+                  "radiusKm": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 300
+                  },
+                  "lat": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "lng": {
+                    "type": "number",
+                    "minimum": -180,
+                    "maximum": 180
+                  }
+                },
+                "required": ["id", "productId", "maxPrice", "radiusKm", "lat", "lng"],
+                "additionalProperties": false
+              },
+              "examples": {
+                "synthetic": {
+                  "summary": "Ejemplo sintético",
+                  "value": {
+                    "id": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                    "productId": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                    "maxPrice": 90000,
+                    "radiusKm": 50,
+                    "lat": 4.65,
+                    "lng": -74.1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "productId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "maxPrice": {
+                      "type": "string",
+                      "pattern": "^\\d{1,15}$"
+                    },
+                    "radiusKm": {
+                      "type": "integer",
+                      "minimum": -9007199254740991,
+                      "maximum": 9007199254740991
+                    },
+                    "centerLat": {
+                      "type": "number"
+                    },
+                    "centerLng": {
+                      "type": "number"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "productId",
+                    "maxPrice",
+                    "radiusKm",
+                    "centerLat",
+                    "centerLng",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "id": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                  "productId": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                  "maxPrice": "90000",
+                  "radiusKm": 50,
+                  "centerLat": 4.65,
+                  "centerLng": -74.1,
+                  "createdAt": "2026-11-25T15:00:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "La solicitud no cumple el contrato o una regla de entrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "Solicitud inválida."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol autenticado no está autorizado para esta operación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "No tienes permiso para este recurso."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El recurso solicitado no existe o no es visible para este usuario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 404,
+                  "code": "not_found",
+                  "message": "Recurso no encontrado."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "La solicitud entra en conflicto con el estado actual del recurso.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 409
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 409,
+                  "code": "version_conflict",
+                  "message": "Conflicto de versión."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Se excedió un límite de solicitudes. Puede incluir la cabecera Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos hasta que se permita reintentar.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 429
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 429,
+                  "code": "rate_limited",
+                  "message": "Demasiadas solicitudes. Intenta nuevamente más tarde."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Crear una alerta de precio (comprador)",
+        "tags": ["recommendations"]
+      },
+      "get": {
+        "operationId": "RecommendationsController_listAlerts",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "productId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "maxPrice": {
+                            "type": "string",
+                            "pattern": "^\\d{1,15}$"
+                          },
+                          "radiusKm": {
+                            "type": "integer",
+                            "minimum": -9007199254740991,
+                            "maximum": 9007199254740991
+                          },
+                          "centerLat": {
+                            "type": "number"
+                          },
+                          "centerLng": {
+                            "type": "number"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "productId",
+                          "maxPrice",
+                          "radiusKm",
+                          "centerLat",
+                          "centerLng",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["items"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "items": []
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol autenticado no está autorizado para esta operación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "No tienes permiso para este recurso."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mis alertas de precio (comprador)",
+        "tags": ["recommendations"]
+      }
+    },
+    "/alerts/{id}": {
+      "delete": {
+        "operationId": "RecommendationsController_deleteAlert",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "La solicitud no cumple el contrato o una regla de entrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "Solicitud inválida."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol autenticado no está autorizado para esta operación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "No tienes permiso para este recurso."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El recurso solicitado no existe o no es visible para este usuario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 404,
+                  "code": "not_found",
+                  "message": "Recurso no encontrado."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Borrar una alerta propia (comprador); la de otro responde 404",
+        "tags": ["recommendations"]
+      }
+    },
+    "/pricing/mappings": {
+      "get": {
+        "operationId": "RecommendationsController_listMappings",
+        "parameters": [
+          {
+            "name": "productId",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "productId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "unit": {
+                            "type": "string",
+                            "enum": [
+                              "kg",
+                              "g",
+                              "lb",
+                              "und",
+                              "docena",
+                              "arroba",
+                              "quintal",
+                              "caja",
+                              "mano",
+                              "bulto"
+                            ]
+                          },
+                          "source": {
+                            "type": "string",
+                            "enum": ["DANE-SIPSA"]
+                          },
+                          "sourceProduct": {
+                            "type": "string"
+                          },
+                          "presentation": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "productId",
+                          "unit",
+                          "source",
+                          "sourceProduct",
+                          "presentation",
+                          "createdAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["items"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "items": []
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "La solicitud no cumple el contrato o una regla de entrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "Solicitud inválida."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol autenticado no está autorizado para esta operación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "No tienes permiso para este recurso."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Asociaciones producto ↔ fuente de precios (operator, admin)",
+        "tags": ["recommendations"]
+      },
+      "post": {
+        "description": "La unidad es la del producto del catálogo: el personal confirma que la presentación de la fuente corresponde a esa unidad; no se calcula ninguna equivalencia. Auditado.",
+        "operationId": "RecommendationsController_createMapping",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "productId": {
+                    "type": "string",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                  },
+                  "sourceProduct": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "presentation": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  }
+                },
+                "required": ["id", "productId", "sourceProduct", "presentation"],
+                "additionalProperties": false
+              },
+              "examples": {
+                "synthetic": {
+                  "summary": "Ejemplo sintético",
+                  "value": {
+                    "id": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                    "productId": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                    "sourceProduct": "Papa criolla limpia",
+                    "presentation": "bulto 50 kg"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "productId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "unit": {
+                      "type": "string",
+                      "enum": [
+                        "kg",
+                        "g",
+                        "lb",
+                        "und",
+                        "docena",
+                        "arroba",
+                        "quintal",
+                        "caja",
+                        "mano",
+                        "bulto"
+                      ]
+                    },
+                    "source": {
+                      "type": "string",
+                      "enum": ["DANE-SIPSA"]
+                    },
+                    "sourceProduct": {
+                      "type": "string"
+                    },
+                    "presentation": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "productId",
+                    "unit",
+                    "source",
+                    "sourceProduct",
+                    "presentation",
+                    "createdAt"
+                  ],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "id": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                  "productId": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                  "unit": "bulto",
+                  "source": "DANE-SIPSA",
+                  "sourceProduct": "papa criolla limpia",
+                  "presentation": "bulto 50 kg",
+                  "createdAt": "2026-11-25T15:00:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "La solicitud no cumple el contrato o una regla de entrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "Solicitud inválida."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol autenticado no está autorizado para esta operación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "No tienes permiso para este recurso."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El recurso solicitado no existe o no es visible para este usuario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 404,
+                  "code": "not_found",
+                  "message": "Recurso no encontrado."
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "La solicitud entra en conflicto con el estado actual del recurso.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 409
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 409,
+                  "code": "version_conflict",
+                  "message": "Conflicto de versión."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Asociar un producto del catálogo con un producto y presentación de DANE-SIPSA (operator, admin)",
+        "tags": ["recommendations"]
+      }
+    },
+    "/pricing/mappings/{id}": {
+      "delete": {
+        "operationId": "RecommendationsController_deleteMapping",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "400": {
+            "description": "La solicitud no cumple el contrato o una regla de entrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "Solicitud inválida."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol autenticado no está autorizado para esta operación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "No tienes permiso para este recurso."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El recurso solicitado no existe o no es visible para este usuario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 404,
+                  "code": "not_found",
+                  "message": "Recurso no encontrado."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Borrar una asociación (operator, admin). Auditado.",
+        "tags": ["recommendations"]
+      }
     }
   },
   "info": {

@@ -9,7 +9,9 @@ export {
   ASSISTANT_USER_PORT,
   DRAFT_CATALOG_PORT,
   LLM_PORT,
+  PRICE_SUGGESTION_PORT,
 } from './application/assistant-tokens.js';
+export { NullPriceSuggestionAdapter } from './adapters/out/null-price-suggestion.adapter.js';
 export { INBOX_NOTIFY_CHANNEL } from './adapters/out/drizzle-assistant-repositories.js';
 export { FakeLLMAdapter, fakeJson } from './adapters/out/fake-llm.adapter.js';
 export type {
@@ -31,6 +33,8 @@ export type {
   LLMPort,
   LLMRequest,
   LLMResult,
+  PriceSuggestion,
+  PriceSuggestionPort,
   ProviderLocation,
 } from './ports/assistant-ports.js';
 export type { DraftProduct } from './domain/lot-draft.js';

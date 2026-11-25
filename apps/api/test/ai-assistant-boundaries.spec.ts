@@ -40,6 +40,7 @@ describe('ai-assistant module boundaries', () => {
     expect(users).toEqual([
       'bootstrap/ai-assistant-bridge.module.ts -> modules/ai-assistant/index.js',
       'bootstrap/app.module.ts -> modules/ai-assistant/index.js',
+      'bootstrap/recommendations-bridge.module.ts -> modules/ai-assistant/index.js',
       'bootstrap/worker-jobs.ts -> modules/ai-assistant/index.js',
       'bootstrap/worker-lifecycle.ts -> modules/ai-assistant/index.js',
     ]);

@@ -11,7 +11,6 @@ import {
   DrizzleUsageRepository,
 } from './adapters/out/drizzle-assistant-repositories.js';
 import { FakeLLMAdapter } from './adapters/out/fake-llm.adapter.js';
-import { NullPriceSuggestionAdapter } from './adapters/out/null-price-suggestion.adapter.js';
 import { AiGateway, MinuteRateLimiter } from './application/ai-gateway.js';
 import {
   AssistantInbox,
@@ -43,7 +42,8 @@ import type {
 
 /**
  * The lot draft assistant. AI_CONSENT_PORT, ASSISTANT_USER_PORT, DRAFT_CATALOG_PORT and
- * ASSISTANT_CHANNEL_PORT come from bootstrap/ai-assistant-bridge.module.ts.
+ * ASSISTANT_CHANNEL_PORT come from bootstrap/ai-assistant-bridge.module.ts; PRICE_SUGGESTION_PORT
+ * from bootstrap/recommendations-bridge.module.ts.
  */
 @Module({
   providers: [
@@ -51,7 +51,6 @@ import type {
     DrizzleInboxRepository,
     DrizzleUsageRepository,
     { provide: ASSISTANT_CLOCK, useExisting: APP_CLOCK },
-    { provide: PRICE_SUGGESTION_PORT, useClass: NullPriceSuggestionAdapter },
     {
       provide: LLM_PORT,
       inject: [APP_ENVIRONMENT, APP_LOGGER],

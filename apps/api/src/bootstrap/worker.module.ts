@@ -13,6 +13,7 @@ import {
 import { NOTIFICATIONS_OUTBOX_SUBSCRIBER } from '../modules/notifications/index.js';
 import { PAYMENTS_OUTBOX_SUBSCRIBER } from '../modules/payments/index.js';
 import { TRUST_OUTBOX_SUBSCRIBER } from '../modules/trust/index.js';
+import { RECOMMENDATIONS_OUTBOX_SUBSCRIBERS } from '../modules/recommendations/index.js';
 import {
   OUTBOX_SUBSCRIBERS,
   type OutboxSubscriberPort,
@@ -39,12 +40,14 @@ import { WorkerLifecycle } from './worker-lifecycle.js';
         PAYMENTS_OUTBOX_SUBSCRIBER,
         NOTIFICATIONS_OUTBOX_SUBSCRIBER,
         TRUST_OUTBOX_SUBSCRIBER,
+        RECOMMENDATIONS_OUTBOX_SUBSCRIBERS,
       ],
       useFactory: (
         payments: OutboxSubscriberPort,
         notifications: OutboxSubscriberPort,
         trust: OutboxSubscriberPort,
-      ): readonly OutboxSubscriberPort[] => [payments, notifications, trust],
+        recommendations: readonly OutboxSubscriberPort[],
+      ): readonly OutboxSubscriberPort[] => [payments, notifications, trust, ...recommendations],
     },
     PostgresOutboxDispatcher,
     { provide: OUTBOX_DISPATCHER, useExisting: PostgresOutboxDispatcher },

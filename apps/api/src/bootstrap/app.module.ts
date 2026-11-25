@@ -1,4 +1,9 @@
 import {
+  AssistantPriceBridgeModule,
+  RecommendationsFactsBridgeModule,
+} from './recommendations-bridge.module.js';
+import { RecommendationsModule } from '../modules/recommendations/index.js';
+import {
   AiAssistantConversationBridgeModule,
   AiAssistantPortsBridgeModule,
 } from './ai-assistant-bridge.module.js';
@@ -86,6 +91,9 @@ export const APPLICATION_MODULES = [
   TrustDeliveryBridgeModule,
   ProviderTrustBridgeModule,
   TrustModule,
+  RecommendationsFactsBridgeModule,
+  AssistantPriceBridgeModule,
+  RecommendationsModule,
   AiAssistantPortsBridgeModule,
   AiAssistantConversationBridgeModule,
   AiAssistantModule,
