@@ -46,7 +46,9 @@ class HealthController {
 }
 
 /** Modules and bridges shared by the HTTP API and the worker process. */
+import { NotificationsModule } from '../modules/notifications/index.js';
 import { PaymentsModule } from '../modules/payments/index.js';
+import { NotificationsBridgeModule } from './notifications-bridge.module.js';
 import { PaymentsBridgeModule } from './payments-bridge.module.js';
 
 export const APPLICATION_MODULES = [
@@ -66,6 +68,8 @@ export const APPLICATION_MODULES = [
   LogisticsModule,
   PaymentsBridgeModule,
   PaymentsModule,
+  NotificationsBridgeModule,
+  NotificationsModule,
 ];
 
 @Module({

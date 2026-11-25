@@ -8,6 +8,10 @@ import type pino from 'pino';
 import { CATALOG_MAINTENANCE, type CatalogMaintenanceApi } from '../modules/catalog/index.js';
 import { IDENTITY_MAINTENANCE, type IdentityMaintenanceApi } from '../modules/identity/index.js';
 import { MESSAGING_MAINTENANCE, type MessagingMaintenanceApi } from '../modules/messaging/index.js';
+import {
+  NOTIFICATIONS_MAINTENANCE,
+  type NotificationsMaintenanceApi,
+} from '../modules/notifications/index.js';
 import { ORDERING_MAINTENANCE, type OrderingMaintenanceApi } from '../modules/ordering/index.js';
 import { PAYMENTS_MAINTENANCE, type PaymentsMaintenanceApi } from '../modules/payments/index.js';
 import type { AppEnvironment } from '../shared/infra/env.js';
@@ -28,6 +32,7 @@ export class WorkerLifecycle implements OnApplicationBootstrap, OnApplicationShu
     @Inject(IDENTITY_MAINTENANCE) private readonly identity: IdentityMaintenanceApi,
     @Inject(MESSAGING_MAINTENANCE) private readonly messaging: MessagingMaintenanceApi,
     @Inject(PAYMENTS_MAINTENANCE) private readonly payments: PaymentsMaintenanceApi,
+    @Inject(NOTIFICATIONS_MAINTENANCE) private readonly notifications: NotificationsMaintenanceApi,
     @Inject(OUTBOX_DISPATCHER) private readonly outbox: OutboxDispatcher,
   ) {}
 
@@ -40,6 +45,7 @@ export class WorkerLifecycle implements OnApplicationBootstrap, OnApplicationShu
         identity: this.identity,
         messaging: this.messaging,
         payments: this.payments,
+        notifications: this.notifications,
         outbox: this.outbox,
       },
       this.environment,
