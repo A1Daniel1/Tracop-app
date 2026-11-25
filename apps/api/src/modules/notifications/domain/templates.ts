@@ -2,7 +2,7 @@ import type { NotificationKind } from './notification.js';
 
 /**
  * Versioned in code (AGENTS §14). Texts carry only a short order reference and, for a
- * settlement, the recipient's own amount: never addresses, phones, names or another user's data.
+ * settlement or a price alert, an amount: never addresses, phones, names or another user's data.
  */
 export const TEMPLATE_VERSION = 'v1';
 
@@ -58,6 +58,10 @@ const ES_CO: Readonly<Record<NotificationKind, Template>> = {
   incident_opened: ({ orderRef }) => ({
     title: 'Nueva incidencia',
     body: `Se abrió una incidencia en el pedido ${orderRef}. Revísala en el backoffice.`,
+  }),
+  lot_alert: ({ amount }) => ({
+    title: 'Hay un lote para tu alerta',
+    body: `Se publicó un lote del producto de tu alerta a $${amount ?? '0'} COP. Míralo en la app.`,
   }),
 };
 

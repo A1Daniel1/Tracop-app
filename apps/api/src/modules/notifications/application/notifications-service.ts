@@ -44,6 +44,7 @@ export const NOTIFIED_EVENT_TYPES = [
   'SettlementIssued',
   'SettlementPaid',
   'IncidentOpened',
+  'PriceAlertMatched',
 ] as const;
 
 type Recipient = { readonly userId: string; readonly kind: NotificationKind };
@@ -81,9 +82,17 @@ export class NotificationsService {
    * (event, user), as at-least-once delivery requires. Returns how many notices it created.
    */
   async handleEvent(event: NotifiableEvent): Promise<number> {
-    const orderId = uuidOrNull(event.payload.orderId) ?? ORDER_AGGREGATE.exec(event.aggregate)?.[1];
-    if (!orderId) return 0;
-    const recipients = await this.recipientsFor(event, orderId);
+    // A price alert is not about an order: its only recipient is the alert's buyer.
+    const alertBuyer =
+      event.type === 'PriceAlertMatched' ? uuidOrNull(event.payload.buyerId) : null;
+    if (event.type === 'PriceAlertMatched' && !alertBuyer) return 0;
+    const orderId = alertBuyer
+      ? null
+      : (uuidOrNull(event.payload.orderId) ?? ORDER_AGGREGATE.exec(event.aggregate)?.[1] ?? null);
+    if (!alertBuyer && !orderId) return 0;
+    const recipients: readonly Recipient[] = alertBuyer
+      ? [{ userId: alertBuyer, kind: 'lot_alert' }]
+      : await this.recipientsFor(event, orderId!);
     if (!recipients.length) return 0;
     const contacts = new Map(
       (await this.directory.contacts(recipients.map(({ userId }) => userId))).map((contact) => [
@@ -99,7 +108,7 @@ export class NotificationsService {
       if (!contact) continue; // Inactive or unknown users are not notified.
       const now = this.clock.now();
       const rendered = renderNotification(recipient.kind, contact.locale, {
-        orderRef: orderReference(orderId),
+        orderRef: orderId ? orderReference(orderId) : '',
         ...(amount && /^\d+$/.test(amount) ? { amount: formatCop(BigInt(amount)) } : {}),
       });
       const entry: InboxEntry = {
