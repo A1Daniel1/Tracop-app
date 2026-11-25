@@ -240,3 +240,87 @@ El workflow ejecuta `pnpm test` antes del escaneo para generar los reportes LCOV
 - [ADR-022: recomendaciones, sugerencia de precios y alertas](docs/adr/ADR-022.md)
 - [Despliegue, demo y copias de seguridad](docs/DEPLOYMENT.md) · [Revisión de seguridad](docs/SECURITY-REVIEW.md) · [Prueba de carga](docs/LOAD-TEST.md) · [Retención de sync](docs/SYNC-RETENTION.md)
 - [Aviso de privacidad (texto pendiente)](docs/PRIVACY_NOTICE.md)
+
+## Despliegue
+
+La guía operativa completa (perfiles, imagen, copias de seguridad y checklist) está en [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Esta sección resume el despliegue de la **demo para jurados** sobre AWS con una cuenta de estudiante.
+
+### Arquitectura objetivo
+
+Una sola instancia **EC2** (t2.micro/t3.micro, free tier) con Docker Compose corre API + worker + PostgreSQL en contenedores; la imagen se compila en la propia instancia (**sin ECR**, por restricción del Learner Lab). El almacenamiento de objetos usa **AWS S3, no MinIO**: fotos y comprobantes en un bucket privado con URLs prefirmadas, y la versión web de la app en un bucket público. La infraestructura se define con **Terraform** (`terraform/`).
+
+```mermaid
+flowchart LR
+    subgraph EC2["EC2 — Docker Compose"]
+        API["API NestJS :3100<br/>/health /ready /auth /catalog /sync"]
+        WORKER["Worker<br/>pg-boss + outbox dispatcher"]
+        PG[("PostgreSQL 16<br/>outbox_events · change_log<br/>processed_operations · pg-boss")]
+        API --> PG
+        PG -. outbox .-> WORKER
+    end
+    subgraph AWS["Servicios AWS"]
+        S3M[("S3 · media<br/>fotos y comprobantes")]
+        S3W[("S3 · web<br/>Flutter Web")]
+    end
+    API -- StoragePort --> S3M
+```
+
+**Piezas clave**
+
+- **Cliente grueso** (app móvil): escribe en SQLite local y encola operaciones con `opId`; al reconectar hace `POST /sync/push` y `GET /sync/pull` (ver [MOBILE-INTEGRATION](docs/MOBILE-INTEGRATION.md)).
+- **Cola del lado del servidor**: el outbox (`outbox_events`) y pg-boss alimentan al worker, que expira lotes/reservas, despacha notificaciones y liquida pagos.
+- **Descarga**: `GET /sync/pull?cursor=seq` entrega los cambios de `change_log` desde el cursor; el cliente los aplica a SQLite.
+- **Storage en S3**: la API ya trae `S3StorageAdapter`; se configura con `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION` y las credenciales `S3_API_*` / `S3_POLICY_*`. El contenedor MinIO del demo local es solo para desarrollo; en AWS no se arranca.
+  > El estilo de direccionamiento se controla con `S3_FORCE_PATH_STYLE` (por defecto `true`, para MinIO). En AWS S3 se usa `false` (estilo virtual-hosted), ya configurado en `docker-compose.aws.yml`.
+
+### Pasos (demo para jurados)
+
+La EC2, el security group y la clave SSH se levantan con Terraform desde [`terraform/`](terraform/README.md). Los buckets S3 se crean con la AWS CLI (el Learner Lab niega `s3:GetObjectLockConfiguration`, que `aws_s3_bucket` consulta al leer el estado).
+
+```bash
+# 1) Lab iniciado y credenciales temporales de AWS Details en la máquina
+aws configure
+
+# 2) Crear los buckets S3 (comandos completos en terraform/README.md)
+aws s3api create-bucket --bucket tracop-media-demo --region us-east-1
+aws s3api create-bucket --bucket tracop-web-demo --region us-east-1
+
+# 3) Aplicar
+cd terraform
+terraform init
+terraform plan
+terraform apply
+```
+
+```bash
+# 4) Guardar la clave SSH y obtener la URL de la API
+terraform output -raw ssh_private_key_pem > tracop.pem
+chmod 600 tracop.pem
+terraform output -raw api_url
+```
+
+```bash
+# 5) OTP de los usuarios sintéticos (+573000000001..07, uno por rol)
+ssh -i tracop.pem ubuntu@$(terraform output -raw ssh_public_ip) \
+  'cd /opt/tracop && docker compose -f docker-compose.aws.yml --env-file .env.demo logs api'
+```
+
+```bash
+# 6) Verificar salud y disponibilidad
+curl -fsS "$(terraform output -raw api_url)/health"
+curl -fsS "$(terraform output -raw api_url)/ready"
+```
+
+El perfil `demo` usa solo datos sintéticos y el OTP se imprime en los logs del API para entrar sin Telegram real. El path de S3 contra AWS real no está verificado (ver [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)); quedó habilitado con `S3_FORCE_PATH_STYLE=false` y credenciales por instance role.
+
+> **Cuenta de estudiante**: una sola EC2 + S3 evitan RDS/ECS, que suelen estar restringidos o con costo. Sin dominio se usa HTTP; la web y la API deben compartir esquema para evitar *mixed content*. El entorno es efímero: al cerrar la sesión se resetea y `terraform apply` lo recrea (las IP y nombres de bucket cambian).
+
+### Pipeline (CI/CD)
+
+- `.github/workflows/ci.yml` corre lint, typecheck, test y build en cada push/PR.
+- `.github/workflows/deploy.yml` actualiza la EC2 por SSH (`git pull` + build + `up -d`), disparo manual. En Learner Lab la vía principal es `terraform apply`.
+
+### Ajustes de la cuenta
+
+1. **Instance profile**: el lab adjunta un rol a la EC2 para que la API acceda a S3. Por defecto se usa `LabInstanceProfile`; si el nombre difiere, verificalo en IAM → Roles y ajustá la variable `instance_profile`.
+2. **CORS de la web**: tras el primer `apply`, fijá `CORS_ALLOWED_ORIGINS` en la API con el origen que devuelve `terraform output -raw web_endpoint`, para que la Flutter Web pueda pegarle al backend.
