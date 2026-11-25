@@ -565,6 +565,21 @@ export class CatalogService {
     return this.transitionOwnedLot(actor, id, expectedVersion, 'cancelled');
   }
 
+  /**
+   * Facts of one lot for other modules through bootstrap (recommendations): product, unit,
+   * price, status and location. Never served over HTTP as is.
+   */
+  async getLotFacts(lotId: string): Promise<LotProps | null> {
+    return this.lots.findById(lotId);
+  }
+
+  /** The unit of an approved, not deleted product; null otherwise. */
+  async getApprovedProductUnit(productId: string): Promise<ProductProps['unit'] | null> {
+    const product = await this.products.findById(productId);
+    if (!product || (product.status ?? 'approved') !== 'approved') return null;
+    return product.unit;
+  }
+
   async getLotQuote(lotId: string): Promise<LotQuoteSnapshot> {
     const lot = await this.lots.findById(lotId);
     if (!lot) throw new DomainError('Lote no encontrado.', 'not_found');
