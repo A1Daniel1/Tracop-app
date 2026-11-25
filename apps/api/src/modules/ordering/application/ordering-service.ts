@@ -356,6 +356,9 @@ export class OrderingService {
       // Stock is reserved when the quote is accepted and held for ORDER_RESERVATION_TTL_HOURS;
       // an order not paid by then gives the stock back. Paid orders keep their reservation.
       if (!RESERVATION_EXPIRABLE_STATUSES.includes(aggregate.order.status)) return false;
+      // Re-check under the order lock: a payment proof may have held the reservation (it no
+      // longer lapses) after the expiry job listed this order.
+      if (!(await this.lotReservationPort.isExpired(input.orderId, input.now))) return false;
 
       const orderEntity = Order.reconstitute(aggregate.order);
       orderEntity.transition('cancelled', input.now, { reason: 'reservation_expired' });
@@ -370,6 +373,73 @@ export class OrderingService {
       await this.lotReservationPort.release(input.orderId);
       await this.recordOrderEvents(orderEvents);
 
+      return true;
+    });
+  }
+
+  /** Order data for payments; payments checks who may act on it. */
+  async getForPayment(orderId: string): Promise<OrderAggregate | null> {
+    return this.orderRepository.findById(orderId);
+  }
+
+  /**
+   * The buyer chose how to pay: an accepted order moves to payment_pending (a new payment
+   * after a rejected proof finds it there already). The reservation must still be live.
+   */
+  async startPayment(orderId: string, actorId: string): Promise<OrderAggregate> {
+    return this.mutateForPayment(orderId, async (aggregate, order, now) => {
+      if (aggregate.order.buyerId !== actorId)
+        throw new DomainError('Pedido no encontrado.', 'not_found');
+      if (await this.lotReservationPort.isExpired(orderId, now))
+        throw new DomainError('La reserva del pedido ya venció.', 'reservation_expired');
+      if (aggregate.order.status === 'payment_pending') return false;
+      if (aggregate.order.status !== 'accepted')
+        throw new DomainError('El pedido no admite pagos en su estado.', 'invalid_transition');
+      order.transition('payment_pending', now, { actorId });
+      return true;
+    });
+  }
+
+  /** A payment proof was uploaded: its order keeps the stock while it is reviewed. */
+  async holdStockForPaymentReview(orderId: string): Promise<void> {
+    await this.mutateForPayment(orderId, async (aggregate) => {
+      this.requirePaymentPending(aggregate);
+      await this.lotReservationPort.hold(orderId);
+      return false;
+    });
+  }
+
+  /** A payment proof was rejected: the reservation lapses again at `expiresAt`. */
+  async resumeStockExpiry(orderId: string, expiresAt: Date): Promise<void> {
+    await this.mutateForPayment(orderId, async (aggregate) => {
+      this.requirePaymentPending(aggregate);
+      await this.lotReservationPort.resumeExpiry(orderId, expiresAt);
+      return false;
+    });
+  }
+
+  /** The payment was verified: the order is paid and its reserved stock is sold. */
+  async markPaid(orderId: string, actorId: string): Promise<OrderAggregate> {
+    return this.mutateForPayment(orderId, async (aggregate, order, now) => {
+      this.requirePaymentPending(aggregate);
+      order.transition('paid', now, { actorId });
+      await this.lotReservationPort.consume(orderId);
+      return true;
+    });
+  }
+
+  /** The buyer disputed a paid order; logistics and settlement stop. */
+  async markDisputed(orderId: string, actorId: string): Promise<OrderAggregate> {
+    return this.mutateForPayment(orderId, async (_aggregate, order, now) => {
+      order.transition('disputed', now, { actorId });
+      return true;
+    });
+  }
+
+  /** Settled, or a dispute was resolved: the order is closed for good. */
+  async closeOrder(orderId: string, actorId: string | null): Promise<OrderAggregate> {
+    return this.mutateForPayment(orderId, async (_aggregate, order, now) => {
+      order.transition('closed', now, actorId ? { actorId } : {});
       return true;
     });
   }
@@ -456,6 +526,37 @@ export class OrderingService {
         quote: aggregate.quote,
       };
       await this.orderRepository.save(updated, enriched);
+      await this.recordOrderEvents(events);
+      return updated;
+    });
+  }
+
+  private requirePaymentPending(aggregate: OrderAggregate): void {
+    if (aggregate.order.status !== 'payment_pending')
+      throw new DomainError('El pedido no está pendiente de pago.', 'invalid_transition');
+  }
+
+  /**
+   * Locks the order, lets `change` decide whether it transitions (returning true), and saves
+   * the transition with its hash-chained events. Runs inside the caller's transaction.
+   */
+  private async mutateForPayment(
+    orderId: string,
+    change: (aggregate: OrderAggregate, order: Order, now: Date) => Promise<boolean>,
+  ): Promise<OrderAggregate> {
+    return this.uow.run(async () => {
+      const now = this.clock.now();
+      const aggregate = await this.orderRepository.findById(orderId, true);
+      if (!aggregate) throw new DomainError('Pedido no encontrado.', 'not_found');
+      const order = Order.reconstitute(aggregate.order);
+      if (!(await change(aggregate, order, now))) return aggregate;
+      const events = order.drainEvents();
+      const updated: OrderAggregate = {
+        order: order.props,
+        lines: aggregate.lines,
+        quote: aggregate.quote,
+      };
+      await this.orderRepository.save(updated, enrichEventsWithHash(events));
       await this.recordOrderEvents(events);
       return updated;
     });

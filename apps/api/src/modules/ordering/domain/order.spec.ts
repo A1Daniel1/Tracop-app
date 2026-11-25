@@ -29,6 +29,7 @@ describe('Order state machine', () => {
     expect(order.drainEvents().map(({ type }) => type)).toEqual([
       'OrderQuoted',
       'OrderAccepted',
+      'OrderPaymentPending',
       'OrderCancelled',
     ]);
   });

@@ -34,6 +34,10 @@ const createHarness = () => {
     reserve: jest.fn(async () => undefined),
     release: jest.fn(async () => undefined),
     findExpiredOrderIds: jest.fn(async () => []),
+    hold: jest.fn(async () => undefined),
+    resumeExpiry: jest.fn(async () => undefined),
+    consume: jest.fn(async () => undefined),
+    isExpired: jest.fn(async () => false),
   };
   const pricing = {
     configuration: { commissionRateBps: 0n, freightCop: 0n, subtotalRounding: 'half_up' as const },
@@ -256,5 +260,127 @@ describe('OrderingService', () => {
         expectedVersion: 3,
       }),
     ).rejects.toMatchObject({ code: 'insufficient_stock' });
+  });
+
+  describe('payment transitions', () => {
+    const orderId = '018f47a2-8b45-7cc2-9a1e-123456789abc';
+    const acceptedHarness = async () => {
+      const harness = createHarness();
+      await harness.service.createOrder(
+        { sub: 'buyer', role: 'buyer' },
+        {
+          id: orderId,
+          buyerId: 'buyer',
+          lines: [{ lotId: '018f47a2-8b45-7cc2-9a1e-123456789abd', quantityMilli: 1000n }],
+          deliveryAddress: 'Dirección',
+          deliveryWindow: null,
+        },
+      );
+      await harness.service.acceptQuote({
+        actor: { sub: 'buyer', role: 'buyer' },
+        orderId,
+        expectedVersion: 3,
+      });
+      harness.outbox.append.mockClear();
+      return harness;
+    };
+    const eventTypes = (harness: ReturnType<typeof createHarness>) =>
+      (harness.outbox.append.mock.calls as unknown as [readonly { type: string }[]][]).flatMap(
+        ([events]) => events.map((event) => event.type),
+      );
+
+    it('starts a payment once: accepted -> payment_pending, then a no-op', async () => {
+      const harness = await acceptedHarness();
+      const pending = await harness.service.startPayment(orderId, 'buyer');
+      expect(pending.order.status).toBe('payment_pending');
+      const again = await harness.service.startPayment(orderId, 'buyer');
+      expect(again.order.version).toBe(pending.order.version);
+      expect(eventTypes(harness)).toEqual(['OrderPaymentPending']);
+    });
+
+    it('answers not_found to anyone but the buyer and refuses a lapsed reservation', async () => {
+      const harness = await acceptedHarness();
+      await expect(harness.service.startPayment(orderId, 'provider')).rejects.toMatchObject({
+        code: 'not_found',
+      });
+      await expect(harness.service.startPayment('missing', 'buyer')).rejects.toMatchObject({
+        code: 'not_found',
+      });
+      harness.lotReservation.isExpired.mockResolvedValueOnce(true);
+      await expect(harness.service.startPayment(orderId, 'buyer')).rejects.toMatchObject({
+        code: 'reservation_expired',
+      });
+    });
+
+    it('refuses to start a payment before the quote is accepted', async () => {
+      const harness = createHarness();
+      await harness.service.createOrder(
+        { sub: 'buyer', role: 'buyer' },
+        {
+          id: orderId,
+          buyerId: 'buyer',
+          lines: [{ lotId: '018f47a2-8b45-7cc2-9a1e-123456789abd', quantityMilli: 1000n }],
+          deliveryAddress: 'Dirección',
+          deliveryWindow: null,
+        },
+      );
+      await expect(harness.service.startPayment(orderId, 'buyer')).rejects.toMatchObject({
+        code: 'invalid_transition',
+      });
+    });
+
+    it('holds, resumes and consumes the reservation only while payment is pending', async () => {
+      const harness = await acceptedHarness();
+      await expect(harness.service.holdStockForPaymentReview(orderId)).rejects.toMatchObject({
+        code: 'invalid_transition',
+      });
+      await harness.service.startPayment(orderId, 'buyer');
+      await harness.service.holdStockForPaymentReview(orderId);
+      expect(harness.lotReservation.hold).toHaveBeenCalledWith(orderId);
+      const graceEnd = new Date('2026-11-18T14:00:00.000Z');
+      await harness.service.resumeStockExpiry(orderId, graceEnd);
+      expect(harness.lotReservation.resumeExpiry).toHaveBeenCalledWith(orderId, graceEnd);
+
+      const paid = await harness.service.markPaid(orderId, 'finance');
+      expect(paid.order.status).toBe('paid');
+      expect(harness.lotReservation.consume).toHaveBeenCalledWith(orderId);
+      await expect(harness.service.markPaid(orderId, 'finance')).rejects.toMatchObject({
+        code: 'invalid_transition',
+      });
+    });
+
+    it('disputes a paid order and closes it, recording every transition', async () => {
+      const harness = await acceptedHarness();
+      await harness.service.startPayment(orderId, 'buyer');
+      await harness.service.markPaid(orderId, 'finance');
+      const disputed = await harness.service.markDisputed(orderId, 'buyer');
+      expect(disputed.order.status).toBe('disputed');
+      const closed = await harness.service.closeOrder(orderId, 'operator');
+      expect(closed.order.status).toBe('closed');
+      expect(eventTypes(harness)).toEqual([
+        'OrderPaymentPending',
+        'OrderPaid',
+        'OrderDisputed',
+        'OrderClosed',
+      ]);
+      await expect(harness.service.markDisputed(orderId, 'buyer')).rejects.toMatchObject({
+        code: 'invalid_transition',
+      });
+      expect((await harness.service.getForPayment(orderId))?.order.status).toBe('closed');
+    });
+
+    it('does not cancel an order whose reservation is held when the expiry job reaches it', async () => {
+      const harness = await acceptedHarness();
+      await harness.service.startPayment(orderId, 'buyer');
+      harness.lotReservation.findExpiredOrderIds.mockResolvedValueOnce([orderId] as never);
+      harness.lotReservation.isExpired.mockResolvedValueOnce(false);
+      expect(await harness.service.expireReservations(now, 10)).toBe(0);
+      expect((await harness.service.getForPayment(orderId))?.order.status).toBe('payment_pending');
+
+      harness.lotReservation.findExpiredOrderIds.mockResolvedValueOnce([orderId] as never);
+      harness.lotReservation.isExpired.mockResolvedValueOnce(true);
+      expect(await harness.service.expireReservations(now, 10)).toBe(1);
+      expect((await harness.service.getForPayment(orderId))?.order.status).toBe('cancelled');
+    });
   });
 });

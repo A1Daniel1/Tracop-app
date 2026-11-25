@@ -26,6 +26,7 @@ const domainStatus: Record<string, number> = {
   quote_expired: HttpStatus.CONFLICT,
   lot_unavailable: HttpStatus.CONFLICT,
   reservation_conflict: HttpStatus.CONFLICT,
+  reservation_expired: HttpStatus.CONFLICT,
   idempotency_conflict: HttpStatus.CONFLICT,
   idempotency_content_mismatch: HttpStatus.CONFLICT,
   duplicate_lot_line: HttpStatus.BAD_REQUEST,

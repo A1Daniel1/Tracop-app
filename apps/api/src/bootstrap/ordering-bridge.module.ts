@@ -45,6 +45,22 @@ export class CatalogLotReservationAdapter implements LotReservationPort {
   async findExpiredOrderIds(now: Date, limit: number): Promise<readonly string[]> {
     return this.api.findExpiredReservationOrderIds(now, limit);
   }
+
+  async hold(orderId: string): Promise<void> {
+    await this.api.holdOrderReservations(orderId);
+  }
+
+  async resumeExpiry(orderId: string, expiresAt: Date): Promise<void> {
+    await this.api.resumeOrderReservationExpiry(orderId, expiresAt);
+  }
+
+  async consume(orderId: string): Promise<void> {
+    await this.api.consumeOrderReservations(orderId);
+  }
+
+  async isExpired(orderId: string, now: Date): Promise<boolean> {
+    return this.api.isOrderReservationExpired(orderId, now);
+  }
 }
 
 export class OrderingProviderDirectoryAdapter implements ProviderDirectoryPort {
