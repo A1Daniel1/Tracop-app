@@ -1,5 +1,6 @@
 export { IdentityModule } from './identity.module.js';
 export { IdentityChannelModule } from './identity-channel.module.js';
+export { IdentityAssistantModule } from './identity-assistant.module.js';
 export { DevelopmentOtpSender, InMemoryOtpSender } from './adapters/out/otp-senders.js';
 export {
   CHANNEL_LINK_REPOSITORY,
@@ -10,6 +11,7 @@ export {
   IDENTITY_NOTIFICATION_DIRECTORY,
   OTP_SENDER,
   IDENTITY_MAINTENANCE,
+  IDENTITY_ASSISTANT,
 } from './ports/tokens.js';
 export { ProviderProfileService } from './application/provider-profile-service.js';
 export type { ProviderPublicSummary } from './domain/provider-profile.js';
@@ -25,3 +27,8 @@ export type {
   OtpSenderPort,
   IdentityMaintenanceApi,
 } from './ports/identity-ports.js';
+export type {
+  AiConsentChannel,
+  AssistantUserView,
+  IdentityAssistantApi,
+} from './ports/assistant-ports.js';
