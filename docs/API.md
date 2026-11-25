@@ -170,6 +170,20 @@ Detalle en [ADR-020](adr/ADR-020.md). Los valores marcados son parámetros PROVI
 
 Los compradores ven en la búsqueda y el detalle de lotes y en sus pedidos `provider: { displayName, municipality, department, verified, rating, ratingsCount }`, sin id del proveedor.
 
+## Precios, recomendaciones y alertas
+
+Detalle en [ADR-022](adr/ADR-022.md). Los valores son PROVISIONALES (`RECOMMENDATIONS_*`).
+
+| Método y ruta                                                      | Quién                  | Resultado                                                                                                                                                                                                                                          |
+| ------------------------------------------------------------------ | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /pricing/suggestion?productId=&unit=`                         | `producer`, `supplier` | 200 `{ status: "ok", low, median, high, sources, citation }` (COP como texto; P25, P50 y P75) o `{ status: "insufficient_data" }` con menos de 3 valores. Nunca precios individuales. 404 producto desconocido; 429.                               |
+| `GET /recommendations/lots?lat=&lng=&radiusKm=&limit=&cursor=`     | `buyer`                | 200 `{ items: [{ lotId, productId, unit, unitPrice, distanceKm, score, reasons }], nextCursor }`. Razones: `reorder`, `nearby`, `good_price`, `verified_provider`, `fresh`. `lat` y `lng` juntos; distancia entera, sin coordenadas; cursor opaco. |
+| `POST /alerts`                                                     | `buyer`                | `{ id: "<UUID v7>", productId, maxPrice, radiusKm (1–300), lat, lng }`. 201 (200 si se repite igual; 409 `alert_conflict` si cambia). El centro se guarda redondeado a 2 decimales. 409 `alert_limit` al superar el máximo.                        |
+| `GET /alerts` · `DELETE /alerts/{id}`                              | `buyer`                | Las propias; la alerta de otro responde 404.                                                                                                                                                                                                       |
+| `GET` · `POST /pricing/mappings` · `DELETE /pricing/mappings/{id}` | `operator`, `admin`    | Asociación producto del catálogo ↔ producto y presentación de DANE-SIPSA. Auditado.                                                                                                                                                                |
+
+Al publicarse un lote que coincide con una alerta, el comprador recibe el aviso `lot_alert` (bandeja y canales).
+
 ## Logística
 
 Todas las rutas `/logistics` exigen autenticación. El rol `carrier` gestiona su perfil, crea y opera **sus** viajes, registra check-ins y abre incidencias. El rol `operator` consulta transportistas y todos los viajes, detecta conflictos y reasigna; también puede cancelar viajes y resolver incidencias. Otros roles reciben HTTP 403.

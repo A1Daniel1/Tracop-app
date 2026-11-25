@@ -88,6 +88,12 @@ El comprador paga por transferencia o Nequi fuera de la app y sube una foto del 
 - Productores, proveedores y transportistas ven su reputación en `GET /trust/me`. Los comentarios llegan como textos sueltos: no tienen pedido ni fecha, y su orden no es cronológico a propósito.
 - El proveedor solicita la verificación con `POST /trust/verification-requests`; el estado aparece en `GET /trust/me` (`verification`).
 
+## Precios, recomendaciones y alertas
+
+- Al publicar, el productor puede pedir `GET /pricing/suggestion?productId=&unit=`. Muestren el rango (`low`–`high`) como sugerencia con su fuente y fecha, y la cita cuando venga (`citation`). Si llega `insufficient_data`, no muestren nada.
+- El comprador ve `GET /recommendations/lots`. Cada lote trae `reasons` en códigos; los textos los pone la app (por ejemplo `reorder` → «Ya lo compraste»). Para el detalle usen `GET /lots/{lotId}`. Envíen `lat` y `lng` juntos si quieren la razón `nearby`; reenvíen `nextCursor` tal cual.
+- Alertas: `POST /alerts` con un `id` UUID v7 generado por la app; el aviso llega a la bandeja como `lot_alert`.
+
 ## Errores y límites
 
 Formato: `{ statusCode, code?, message, details?, suggestions? }`; los 429 traen `Retry-After` (segundos). Errores de validación: 400 sin `code`. Cuerpo máximo: 64 KiB (256 KiB en `/sync/push`, 413 si se supera).
