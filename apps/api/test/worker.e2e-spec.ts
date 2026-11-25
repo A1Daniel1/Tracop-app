@@ -65,7 +65,7 @@ describePostgres('worker process (real pg-boss on PostgreSQL)', () => {
   });
   afterAll(async () => pool.end());
 
-  it('starts, registers the ten jobs, and stops gracefully on SIGTERM; twice in a row', async () => {
+  it('starts, registers the fourteen jobs, and stops gracefully on SIGTERM; twice in a row', async () => {
     for (let run = 0; run < 2; run += 1) {
       const worker = await startWorker();
       expect(worker.jobs).toEqual(EXPECTED_JOBS);
