@@ -43,7 +43,19 @@ export const telegramUpdateSchema = z
     edited_message: z.unknown().optional(),
     channel_post: z.unknown().optional(),
     my_chat_member: z.unknown().optional(),
-    callback_query: z.unknown().optional(),
+    callback_query: z
+      .object({
+        id: z.string().min(1).max(128),
+        from: z.object({ id: telegramIdSchema }).passthrough(),
+        message: z
+          .object({ chat: z.object({ id: telegramIdSchema, type: z.string() }).passthrough() })
+          .passthrough()
+          .optional(),
+        // Telegram caps callback_data at 64 bytes.
+        data: z.string().max(64).optional(),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 
