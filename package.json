@@ -33,6 +33,7 @@
     "storage:configure-cors": "pnpm --filter @tracop/api storage:configure-cors",
     "openapi:export": "pnpm --filter @tracop/api openapi:export",
     "openapi:check": "pnpm --filter @tracop/api openapi:check",
+    "docs:check-matrix": "node scripts/check-feature-matrix.mjs",
     "build": "turbo run build",
     "prepare": "husky"
   },
