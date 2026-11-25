@@ -7,6 +7,13 @@ const booleanFromString = z.enum(['true', 'false']).transform((value) => value =
 const optionalText = <T extends z.ZodType>(schema: T) =>
   z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
 
+const MIN_PRODUCTION_SECRET_LENGTH = 32;
+/** Markers of the repository's CI, test and example values, or of a value nobody generated. */
+const PLACEHOLDER_SECRET = /not-for-real|change-?me|example|placeholder|dummy|replace|secret-here/i;
+const MIN_DISTINCT_SECRET_CHARACTERS = 10;
+const isPlaceholderSecret = (secret: string): boolean =>
+  PLACEHOLDER_SECRET.test(secret) || new Set(secret).size < MIN_DISTINCT_SECRET_CHARACTERS;
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   // How the deployment is used. demo: synthetic data only (seed allowed, OTP codes on the console,
@@ -285,6 +292,31 @@ const parsedEnvironmentSchema = envSchema.superRefine((value, ctx) => {
       path: ['TELEGRAM_WEBHOOK_SECRET'],
       message: 'Required in production.',
     });
+  }
+  if (value.NODE_ENV === 'production') {
+    // CI, test and example values are public: production refuses them, trivial values and a
+    // secret reused for two purposes.
+    const secrets = {
+      JWT_SECRET: value.JWT_SECRET,
+      OTP_HMAC_SECRET: value.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: value.RATE_LIMIT_HMAC_SECRET,
+      TELEGRAM_WEBHOOK_SECRET: value.TELEGRAM_WEBHOOK_SECRET,
+      METRICS_TOKEN: value.METRICS_TOKEN,
+    };
+    const seen = new Map<string, string>();
+    for (const [key, secret] of Object.entries(secrets)) {
+      if (!secret) continue;
+      if (secret.length < MIN_PRODUCTION_SECRET_LENGTH || isPlaceholderSecret(secret))
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: `Production requires a random secret of at least ${MIN_PRODUCTION_SECRET_LENGTH} characters, not a placeholder or test value.`,
+        });
+      const other = seen.get(secret);
+      if (other)
+        ctx.addIssue({ code: 'custom', path: [key], message: `Must differ from ${other}.` });
+      else seen.set(secret, key);
+    }
   }
   const corsOrigins = value.CORS_ALLOWED_ORIGINS.split(',')
     .map((origin) => origin.trim())
