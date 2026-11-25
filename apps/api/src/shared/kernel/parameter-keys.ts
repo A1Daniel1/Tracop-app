@@ -7,5 +7,9 @@ export const PARAMETER_KEYS = [
   'payment.claim_window_hours',
   'payment.rejection_grace_hours',
   'catalog.product_proposal_pending_limit',
+  'trust.rating_window_days',
+  'trust.min_ratings_visible',
+  'trust.comment_max_length',
+  'trust.verification_cooldown_days',
 ] as const;
 export type ParameterKey = (typeof PARAMETER_KEYS)[number];

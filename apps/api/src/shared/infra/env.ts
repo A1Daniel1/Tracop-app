@@ -113,6 +113,14 @@ const envSchema = z.object({
   SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   PROCESSED_UPDATES_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(7),
   RATE_LIMIT_RETENTION_SECONDS: z.coerce.number().int().positive().default(86_400),
+  // PROVISIONAL trust values (AGENTS §23); editable by admins as run-time parameters.
+  TRUST_RATING_WINDOW_DAYS: z.coerce.number().int().min(1).max(90).default(7),
+  TRUST_MIN_RATINGS_VISIBLE: z.coerce.number().int().min(1).max(50).default(3),
+  TRUST_COMMENT_MAX_LENGTH: z.coerce.number().int().min(0).max(500).default(500),
+  TRUST_VERIFICATION_COOLDOWN_DAYS: z.coerce.number().int().min(0).max(365).default(7),
+  TRUST_RATING_RATE_LIMIT: z.coerce.number().int().positive().default(20),
+  TRUST_VERIFICATION_RATE_LIMIT: z.coerce.number().int().positive().default(5),
+  TRUST_RATE_WINDOW_SECONDS: z.coerce.number().int().positive().default(3600),
   // PROVISIONAL: how long a downloaded location pack may be kept by the app.
   LOGISTICS_LOCATION_MAX_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(24),
   LOGISTICS_LOCATION_RATE_LIMIT: z.coerce.number().int().positive().default(30),

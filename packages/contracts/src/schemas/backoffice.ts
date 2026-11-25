@@ -10,12 +10,16 @@ export const parameterKeySchema = z.enum([
   'payment.claim_window_hours',
   'payment.rejection_grace_hours',
   'catalog.product_proposal_pending_limit',
+  'trust.rating_window_days',
+  'trust.min_ratings_visible',
+  'trust.comment_max_length',
+  'trust.verification_cooldown_days',
 ]);
 
 export const parameterResponseSchema = z
   .object({
     key: parameterKeySchema,
-    unit: z.enum(['bps', 'cop', 'hours', 'count']),
+    unit: z.enum(['bps', 'cop', 'hours', 'days', 'count', 'characters']),
     value: integerString,
     defaultValue: integerString,
     min: integerString,

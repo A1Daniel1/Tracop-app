@@ -18,6 +18,10 @@ const defaults: ParameterDefaults = {
   'payment.claim_window_hours': 48n,
   'payment.rejection_grace_hours': 4n,
   'catalog.product_proposal_pending_limit': 5n,
+  'trust.rating_window_days': 7n,
+  'trust.min_ratings_visible': 3n,
+  'trust.comment_max_length': 500n,
+  'trust.verification_cooldown_days': 7n,
 };
 
 const metrics: BackofficeMetrics = {
@@ -58,7 +62,7 @@ describe('BackofficeService', () => {
   it('lists every parameter with its default to the staff', async () => {
     const h = harness();
     const items = await h.service.listParameters({ sub: 'f', role: 'finance' });
-    expect(items).toHaveLength(7);
+    expect(items).toHaveLength(11);
     expect(items[0]).toMatchObject({
       key: 'order.commission_rate_bps',
       value: 0n,

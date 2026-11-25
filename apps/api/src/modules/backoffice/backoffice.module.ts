@@ -45,6 +45,10 @@ import {
         'catalog.product_proposal_pending_limit': BigInt(
           env.CATALOG_PRODUCT_PROPOSAL_PENDING_LIMIT,
         ),
+        'trust.rating_window_days': BigInt(env.TRUST_RATING_WINDOW_DAYS),
+        'trust.min_ratings_visible': BigInt(env.TRUST_MIN_RATINGS_VISIBLE),
+        'trust.comment_max_length': BigInt(env.TRUST_COMMENT_MAX_LENGTH),
+        'trust.verification_cooldown_days': BigInt(env.TRUST_VERIFICATION_COOLDOWN_DAYS),
       }),
     },
     {

@@ -47,7 +47,7 @@ describePostgres('backoffice parameters and audit log (Nest + PostgreSQL)', () =
       .get('/backoffice/parameters')
       .set({ Authorization: `Bearer ${finance.token}` })
       .expect(200);
-    expect(listed.body.items).toHaveLength(7);
+    expect(listed.body.items).toHaveLength(11);
     expect(
       listed.body.items.find((item: { key: string }) => item.key === 'payment.claim_window_hours'),
     ).toMatchObject({ value: '48', defaultValue: '48', provisional: true, updatedAt: null });
