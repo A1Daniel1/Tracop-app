@@ -126,7 +126,8 @@ describe('templates', () => {
         amount: '45.000',
       });
       expect(title.length).toBeGreaterThan(0);
-      expect(body).toContain('#01A21018');
+      // Order notices carry the order reference; a price alert carries only the lot's price.
+      expect(body).toContain(kind === 'lot_alert' ? '$45.000 COP' : '#01A21018');
     }
   });
 

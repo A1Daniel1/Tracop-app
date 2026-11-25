@@ -70,7 +70,7 @@ const parseDraftAction = (
 ): { shortCode: number; version: number; op: string } | null => {
   const match = /^d:([0-9a-z]{1,10}):(\d{1,9}):([a-z_0-9]{1,24})$/.exec(action);
   if (!match) return null;
-  return { shortCode: parseInt(match[1]!, 36), version: Number(match[2]), op: match[3]! };
+  return { shortCode: Number.parseInt(match[1]!, 36), version: Number(match[2]), op: match[3]! };
 };
 
 type Prepared =

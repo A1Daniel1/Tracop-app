@@ -237,4 +237,5 @@ El workflow ejecuta `pnpm test` antes del escaneo para generar los reportes LCOV
 - [ADR-019: audit log, parámetros y métricas](docs/adr/ADR-019.md)
 - [ADR-020: calificaciones, reputación y verificación](docs/adr/ADR-020.md)
 - [ADR-021: asistente de IA para borradores de lote por Telegram](docs/adr/ADR-021.md)
+- [ADR-022: recomendaciones, sugerencia de precios y alertas](docs/adr/ADR-022.md)
 - [Aviso de privacidad (texto pendiente)](docs/PRIVACY_NOTICE.md)

@@ -5,7 +5,15 @@
  */
 import { isWithinColombia } from '../../../shared/kernel/geo.js';
 import { availabilityWindow, bogotaDay, parseDay } from './dates.js';
-import { parseCop, parseQuantityMilli, parseUnit, totalCop, unitPriceFrom } from './parsing.js';
+import {
+  formatCop,
+  formatQuantity,
+  parseCop,
+  parseQuantityMilli,
+  parseUnit,
+  totalCop,
+  unitPriceFrom,
+} from './parsing.js';
 
 // Wednesday 25 November 2026, 10:00 in Bogotá.
 const NOW = new Date('2026-11-25T15:00:00.000Z');
@@ -133,6 +141,24 @@ describe('deterministic evaluation set', () => {
     expect(unitPriceFrom(100_000n, 'total', 3_000n)).toBeNull();
     expect(unitPriceFrom(500_000_000n, 'unit', 1_000n)).toBeNull(); // order of magnitude guard
     expect(totalCop(80_000n, 2_500n)).toBe(200_000n);
+  });
+
+  it('formats pesos and quantities for the confirmation', () => {
+    expect([0n, 999n, 1_000n, 80_000n, 1_500_000n, 100_000_000n].map(formatCop)).toEqual([
+      '$0',
+      '$999',
+      '$1.000',
+      '$80.000',
+      '$1.500.000',
+      '$100.000.000',
+    ]);
+    expect([2_000n, 2_500n, 2_050n, 1n, 500n].map(formatQuantity)).toEqual([
+      '2',
+      '2,5',
+      '2,05',
+      '0,001',
+      '0,5',
+    ]);
   });
 
   it('keeps availability within the horizon and in order', () => {

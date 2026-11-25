@@ -36,6 +36,7 @@ describe('trust module boundaries', () => {
       .sort();
     expect(users).toEqual([
       'bootstrap/app.module.ts',
+      'bootstrap/recommendations-bridge.module.ts',
       'bootstrap/trust-bridge.module.ts',
       'bootstrap/worker.module.ts',
     ]);

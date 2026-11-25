@@ -11,6 +11,7 @@ export const NOTIFICATION_KINDS = [
   'settlement_issued',
   'settlement_paid',
   'incident_opened',
+  'lot_alert',
 ] as const;
 export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 
