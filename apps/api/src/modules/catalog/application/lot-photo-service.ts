@@ -218,8 +218,10 @@ export class LotPhotoService {
 
   async reorder(actor: Actor, lotId: string, photoIds: readonly string[]): Promise<void> {
     this.requireProvider(actor);
-    const changed = await this.photos.reorder({ lotId, ownerId: actor.sub, photoIds });
-    if (!changed) throw new DomainError('El orden de fotos no es válido.', 'photo_order_invalid');
+    const result = await this.photos.reorder({ lotId, ownerId: actor.sub, photoIds });
+    if (result === 'not_found') throw new DomainError('Lote no encontrado.', 'not_found');
+    if (result === 'invalid')
+      throw new DomainError('El orden de fotos no es válido.', 'photo_order_invalid');
   }
 
   async photosForLots(

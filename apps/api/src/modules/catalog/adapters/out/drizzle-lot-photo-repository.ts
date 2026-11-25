@@ -65,9 +65,10 @@ export class DrizzleLotPhotoRepository implements LotPhotoRepository {
         await client.query('ROLLBACK');
         return { kind: 'not_found' };
       }
+      // Someone else's lot answers as a missing one: a third party gets 404, never 409.
       if (ownerLot.provider_id !== input.ownerId) {
         await client.query('ROLLBACK');
-        return { kind: 'conflict' };
+        return { kind: 'not_found' };
       }
       if (ownerLot.status !== 'draft' && ownerLot.status !== 'published') {
         await client.query('ROLLBACK');
@@ -283,7 +284,7 @@ export class DrizzleLotPhotoRepository implements LotPhotoRepository {
     readonly lotId: string;
     readonly ownerId: string;
     readonly photoIds: readonly string[];
-  }): Promise<boolean> {
+  }): Promise<'reordered' | 'not_found' | 'invalid'> {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
@@ -292,9 +293,13 @@ export class DrizzleLotPhotoRepository implements LotPhotoRepository {
          AND deleted_at IS NULL FOR UPDATE`,
         [input.lotId, input.ownerId],
       );
-      if (!['draft', 'published'].includes(lot.rows[0]?.status ?? '')) {
+      if (!lot.rows[0]) {
         await client.query('ROLLBACK');
-        return false;
+        return 'not_found';
+      }
+      if (!['draft', 'published'].includes(lot.rows[0].status)) {
+        await client.query('ROLLBACK');
+        return 'invalid';
       }
       const ready = await client.query<{ id: string }>(
         `SELECT id FROM catalog.lot_photos WHERE lot_id = $1 AND state = 'ready' AND deleted_at IS NULL`,
@@ -306,7 +311,7 @@ export class DrizzleLotPhotoRepository implements LotPhotoRepository {
         ready.rows.some(({ id }) => !input.photoIds.includes(id))
       ) {
         await client.query('ROLLBACK');
-        return false;
+        return 'invalid';
       }
       await client.query(
         `UPDATE catalog.lot_photos photos SET position = ordered.ordinality::integer
@@ -316,7 +321,7 @@ export class DrizzleLotPhotoRepository implements LotPhotoRepository {
         [input.lotId, input.photoIds],
       );
       await client.query('COMMIT');
-      return true;
+      return 'reordered';
     } catch (error) {
       await safeRollback(client);
       throw error;

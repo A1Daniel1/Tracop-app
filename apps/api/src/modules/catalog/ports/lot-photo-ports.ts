@@ -44,11 +44,12 @@ export interface LotPhotoRepository {
     ownerId: string,
     now: Date,
   ): Promise<LotPhotoProps | null>;
+  /** `not_found` when the lot does not exist or belongs to someone else (a third party gets 404). */
   reorder(input: {
     readonly lotId: string;
     readonly ownerId: string;
     readonly photoIds: readonly string[];
-  }): Promise<boolean>;
+  }): Promise<'reordered' | 'not_found' | 'invalid'>;
   listKnownObjectKeys(): Promise<ReadonlySet<string>>;
   expirePending(now: Date): Promise<readonly LotPhotoProps[]>;
   softDelete(photoId: string, now: Date): Promise<void>;
