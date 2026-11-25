@@ -65,6 +65,9 @@ const measure = (
   const sorted = samples.map(({ ms }) => ms).sort((left, right) => left - right);
   const at = (q: number) => sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] ?? 0;
   const errors = samples.filter(({ ok }) => !ok).length;
+  // Every user holds a valid session: a 401 means the instrument broke, not the API.
+  if (samples.some(({ status }) => status === 401))
+    throw new Error(`${path} with ${lots} lots and ${users} users got 401: the run is invalid`);
   const p95 = round(at(0.95));
   return {
     path,
@@ -160,6 +163,8 @@ const main = async (): Promise<void> => {
       SYNC_PULL_RATE_LIMIT: '1000000',
       OTP_IP_REQUEST_LIMIT: '100000',
       OTP_IP_VERIFY_LIMIT: '100000',
+      // Long runs outlast the 15 min access token: an expired session would be measured as 401.
+      ACCESS_TOKEN_TTL_SECONDS: '86400',
     });
     const { Test } = await import('@nestjs/testing');
     const { AppModule } = await import('../src/bootstrap/app.module.js');
