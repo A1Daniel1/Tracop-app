@@ -579,6 +579,7 @@ neto productor  = subtotal − commission                      // propuesta por 
 - **Auditoría:** `backoffice.audit_log` en la misma transacción que cada acción del personal (catálogo, pagos, logística, parámetros, alta de personal), con la IP solo como HMAC ([ADR-019](docs/adr/ADR-019.md)).
 - **Registro de eventos con hash encadenado** en `order_events`: cada evento incluye el hash del anterior. Cubre trazabilidad sin blockchain.
 - Logs sin PII; enmascarar teléfonos y comprobantes.
+- **Cabeceras:** `helmet` en todas las respuestas (CSP `default-src 'none'` para la API, HSTS, `nosniff`, sin `X-Powered-By`); revisión en [docs/SECURITY-REVIEW.md](docs/SECURITY-REVIEW.md).
 - **Operación:** `GET /health` (vivo), `GET /ready` (base de datos y latido del trabajador; 503 si falla), `GET /metrics` en texto Prometheus solo con `Authorization: Bearer <METRICS_TOKEN>` (sin token configurado, 404). Cada petición deja una línea de log estructurada (`requestId`, método, plantilla de ruta, estado y duración) y la cabecera `X-Request-Id`; nunca la ruta concreta, la consulta ni el cuerpo.
 - **Regla de capas:** `eslint-plugin-boundaries` con `default: 'disallow'` y `eslint-import-resolver-typescript`; `test/eslint-layers.spec.ts` comprueba que rechaza imports prohibidos.
 
@@ -648,6 +649,7 @@ pnpm db:check-migrations          # numeración única y contigua (lo exige el C
 pnpm db:seed                      # datos sintéticos; solo NODE_ENV=development
 pnpm dev                          # API en modo watch
 pnpm --filter @tracop/api worker  # trabajador de tareas periódicas y outbox (dist: worker:start; en desarrollo: worker:dev)
+pnpm --filter @tracop/api load:test  # prueba de carga básica (búsqueda y push de sync) con Testcontainers; ver docs/LOAD-TEST.md
 pnpm outbox:status                # eventos pendientes, en reintento y fallidos por tipo, entregas por consumidor y latido (solo recuentos)
 pnpm lint                         # ESLint + check-boundaries
 pnpm typecheck                    # tsc en todo el monorepo
