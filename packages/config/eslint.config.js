@@ -60,6 +60,57 @@ const CROSS_MODULE_IMPORTS = {
   message: 'Cross-module imports are only allowed via the module public API (modules/*/index.ts).',
 };
 
+// Allowed dependencies between layers. With default 'disallow' anything not listed is an error
+// (with 'allow', these allow-lists never rejected anything and the rule passed silently).
+const LAYER_RULES = [
+  { from: 'domain', allow: ['domain', 'kernel'] },
+  {
+    from: 'application',
+    allow: ['application', 'domain', 'ports', 'shared-ports', 'kernel'],
+  },
+  { from: 'ports', allow: ['ports', 'domain', 'shared-ports', 'kernel'] },
+  {
+    from: 'adapters-in',
+    allow: [
+      'adapters-in',
+      'application',
+      'ports',
+      'domain',
+      'shared-ports',
+      'kernel',
+      'infrastructure',
+      'module-public',
+    ],
+  },
+  {
+    from: 'adapters-out',
+    allow: [
+      'adapters-out',
+      'ports',
+      'domain',
+      'shared-ports',
+      'kernel',
+      'infrastructure',
+      'module-public',
+    ],
+  },
+  { from: 'module-public', allow: ['module-public', 'application', 'domain', 'ports'] },
+  {
+    from: 'bootstrap',
+    allow: ['module-public', 'kernel', 'infrastructure', 'shared-ports'],
+  },
+  { from: 'kernel', allow: ['kernel'] },
+  { from: 'shared-ports', allow: ['shared-ports', 'kernel'] },
+  { from: 'infrastructure', allow: ['infrastructure', 'kernel', 'shared-ports'] },
+];
+
+/** Tests of a layer may also use that module's in-memory or fake adapters. */
+const TEST_LAYER_RULES = LAYER_RULES.map((rule) =>
+  ['domain', 'application', 'ports'].includes(rule.from)
+    ? { ...rule, allow: [...rule.allow, 'adapters-out', 'adapters-in'] }
+    : rule,
+);
+
 export default [
   { ignores: ['**/dist/**', '**/coverage/**', '**/node_modules/**'] },
   eslint.configs.recommended,
@@ -71,6 +122,12 @@ export default [
     },
     plugins: { boundaries },
     settings: {
+      // Without a TypeScript resolver the `.js` specifiers of our ESM imports do not resolve to
+      // their `.ts` files, and boundaries cannot classify them: its rules would pass silently.
+      'import/resolver': {
+        typescript: { project: resolve(repoRoot, '../tsconfig.json'), alwaysTryTypes: true },
+        node: true,
+      },
       'boundaries/root-path': repoRoot,
       'boundaries/elements': [
         { type: 'domain', pattern: 'modules/*/domain/**' },
@@ -87,51 +144,14 @@ export default [
     },
     rules: {
       'no-undef': 'error',
-      'boundaries/element-types': [
-        'error',
-        {
-          default: 'allow',
-          rules: [
-            { from: 'domain', allow: ['domain', 'kernel'] },
-            {
-              from: 'application',
-              allow: ['application', 'domain', 'ports', 'shared-ports', 'kernel'],
-            },
-            { from: 'ports', allow: ['ports', 'domain', 'shared-ports', 'kernel'] },
-            {
-              from: 'adapters-in',
-              allow: [
-                'adapters-in',
-                'application',
-                'ports',
-                'domain',
-                'shared-ports',
-                'kernel',
-                'infrastructure',
-                'module-public',
-              ],
-            },
-            {
-              from: 'adapters-out',
-              allow: [
-                'adapters-out',
-                'ports',
-                'domain',
-                'shared-ports',
-                'kernel',
-                'infrastructure',
-                'module-public',
-              ],
-            },
-            { from: 'module-public', allow: ['module-public', 'application', 'domain', 'ports'] },
-            {
-              from: 'bootstrap',
-              allow: ['module-public', 'kernel', 'infrastructure', 'shared-ports'],
-            },
-          ],
-        },
-      ],
+      'boundaries/element-types': ['error', { default: 'disallow', rules: LAYER_RULES }],
       'boundaries/no-private': ['error', { allowUncles: false }],
+    },
+  },
+  {
+    files: ['**/*.spec.ts', '**/*.test.ts'],
+    rules: {
+      'boundaries/element-types': ['error', { default: 'disallow', rules: TEST_LAYER_RULES }],
     },
   },
   {
