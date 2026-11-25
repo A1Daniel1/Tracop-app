@@ -26,6 +26,7 @@ const environmentKeys = [
   'S3_POLICY_ACCESS_KEY',
   'S3_POLICY_SECRET_KEY',
   'AI_ENABLED',
+  'APP_PROFILE',
   'LLM_PROVIDER',
   'LLM_MODEL',
   'LLM_API_KEY',
@@ -265,6 +266,30 @@ describe('runtime environment validation', () => {
       AI_ENABLED: true,
       LLM_MODEL: 'some-model',
     });
+  });
+
+  it('keeps the demo profile away from production and production away from other NODE_ENV', () => {
+    Object.assign(process.env, {
+      NODE_ENV: 'development',
+      DATABASE_URL: 'postgres://localhost/test',
+      JWT_SECRET: 'j'.repeat(32),
+      OTP_HMAC_SECRET: 'o'.repeat(32),
+      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      OTP_SENDER: 'console',
+    });
+    delete process.env.APP_PROFILE;
+    expect(loadAppEnvironment('/tmp/tracop-no-env').APP_PROFILE).toBe('development');
+    process.env.APP_PROFILE = 'demo';
+    expect(loadAppEnvironment('/tmp/tracop-no-env').APP_PROFILE).toBe('demo');
+    process.env.APP_PROFILE = 'production';
+    expect(() => loadAppEnvironment('/tmp/tracop-no-env')).toThrow(
+      'APP_PROFILE=production requires NODE_ENV=production',
+    );
+    process.env.APP_PROFILE = 'demo';
+    process.env.NODE_ENV = 'production';
+    expect(() => loadAppEnvironment('/tmp/tracop-no-env')).toThrow(
+      'The demo profile never runs with NODE_ENV=production',
+    );
   });
 
   it('accepts an empty CORS allowlist', () => {

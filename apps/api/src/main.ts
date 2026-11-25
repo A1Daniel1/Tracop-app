@@ -21,7 +21,8 @@ const bootstrap = async (): Promise<void> => {
   app.useLogger(new NestPinoLogger(app.get(APP_LOGGER)));
   app.getHttpAdapter().getInstance().set('trust proxy', environment.TRUST_PROXY);
   app.enableShutdownHooks();
-  setupSwagger(app, environment.NODE_ENV);
+  // The interactive docs are only for local development, never in the demo or production.
+  if (environment.APP_PROFILE === 'development') setupSwagger(app, environment.NODE_ENV);
   await app.listen(environment.PORT);
 };
 

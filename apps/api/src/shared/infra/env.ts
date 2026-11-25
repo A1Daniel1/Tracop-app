@@ -9,6 +9,9 @@ const optionalText = <T extends z.ZodType>(schema: T) =>
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  // How the deployment is used. demo: synthetic data only (seed allowed, OTP codes on the console,
+  // no Swagger) and never with NODE_ENV=production; production requires NODE_ENV=production.
+  APP_PROFILE: z.enum(['development', 'demo', 'production']).default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: z.string().min(1),
   JWT_SECRET: z.string().min(32),
@@ -218,6 +221,18 @@ const parsedEnvironmentSchema = envSchema.superRefine((value, ctx) => {
         ctx.addIssue({ code: 'custom', path: [key], message: 'Required when AI_ENABLED=true.' });
     }
   }
+  if (value.APP_PROFILE === 'production' && value.NODE_ENV !== 'production')
+    ctx.addIssue({
+      code: 'custom',
+      path: ['APP_PROFILE'],
+      message: 'APP_PROFILE=production requires NODE_ENV=production.',
+    });
+  if (value.APP_PROFILE === 'demo' && value.NODE_ENV === 'production')
+    ctx.addIssue({
+      code: 'custom',
+      path: ['APP_PROFILE'],
+      message: 'The demo profile never runs with NODE_ENV=production.',
+    });
   const requiresTelegram = value.NODE_ENV === 'production' || value.OTP_SENDER === 'telegram';
 
   if (requiresTelegram && !value.TELEGRAM_BOT_TOKEN) {

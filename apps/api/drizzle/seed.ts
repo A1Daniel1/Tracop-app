@@ -8,8 +8,10 @@ import { User, type UserEvent, type UserRole } from '../src/modules/identity/dom
 
 const envPath = resolve('../../.env');
 if (existsSync(envPath)) loadEnvFile(envPath);
-if (process.env.NODE_ENV !== 'development')
-  throw new Error('db:seed is only allowed in development.');
+// Synthetic data only: local development or the demo profile, never production.
+const profile = process.env.APP_PROFILE ?? 'development';
+if (process.env.NODE_ENV === 'production' || !['development', 'demo'].includes(profile))
+  throw new Error('db:seed is only allowed in development or in the demo profile.');
 if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required.');
 
 const roles: readonly UserRole[] = [
