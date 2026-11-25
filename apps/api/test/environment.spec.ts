@@ -1,4 +1,13 @@
+import { randomBytes } from 'node:crypto';
 import { loadAppEnvironment } from '../src/shared/infra/env.js';
+
+/** Random, distinct secrets: production refuses trivial, reused or test values. */
+const STRONG = {
+  JWT_SECRET: randomBytes(32).toString('base64url'),
+  OTP_HMAC_SECRET: randomBytes(32).toString('base64url'),
+  RATE_LIMIT_HMAC_SECRET: randomBytes(32).toString('base64url'),
+  TELEGRAM_WEBHOOK_SECRET: randomBytes(32).toString('base64url'),
+} as const;
 
 const environmentKeys = [
   'NODE_ENV',
@@ -64,9 +73,9 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'production',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'console',
       ...productionS3,
     });
@@ -77,9 +86,9 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'production',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'telegram',
       TELEGRAM_MODE: 'webhook',
       ...productionS3,
@@ -93,13 +102,13 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'production',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'telegram',
       TELEGRAM_MODE: 'webhook',
       TELEGRAM_BOT_TOKEN: '123456:token',
-      TELEGRAM_WEBHOOK_SECRET: 'secret',
+      TELEGRAM_WEBHOOK_SECRET: STRONG.TELEGRAM_WEBHOOK_SECRET,
       ...productionS3,
     });
     delete process.env.TELEGRAM_BOT_USERNAME;
@@ -110,9 +119,9 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'test',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'console',
       TELEGRAM_MODE: 'polling',
     });
@@ -123,9 +132,9 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'development',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'console',
       TELEGRAM_MODE: 'webhook',
       TELEGRAM_BOT_TOKEN: '',
@@ -142,9 +151,9 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'test',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'console',
       TELEGRAM_MODE: 'webhook',
       TELEGRAM_BOT_USERNAME: 'tracop_test_bot',
@@ -158,9 +167,9 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'test',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'console',
       TRUST_PROXY: 'true',
       ALLOWED_COUNTRY_CODES: '57,1',
@@ -174,9 +183,9 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'test',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'console',
       TELEGRAM_MODE: 'webhook',
       S3_ENDPOINT: 'http://127.0.0.1:9000',
@@ -199,9 +208,9 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'test',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'console',
       TELEGRAM_MODE: 'webhook',
       S3_ENDPOINT: 'http://minio:9000',
@@ -217,9 +226,9 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'test',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'console',
       OTP_IP_WINDOW_SECONDS: '900',
       RATE_LIMIT_RETENTION_SECONDS: '600',
@@ -233,9 +242,9 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'test',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'console',
     });
     for (const key of [
@@ -272,9 +281,9 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'development',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'console',
     });
     delete process.env.APP_PROFILE;
@@ -296,9 +305,9 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'test',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'console',
       CORS_ALLOWED_ORIGINS: '',
     });
@@ -309,12 +318,12 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'production',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'telegram',
       TELEGRAM_BOT_TOKEN: '123456:token',
-      TELEGRAM_WEBHOOK_SECRET: 'secret',
+      TELEGRAM_WEBHOOK_SECRET: STRONG.TELEGRAM_WEBHOOK_SECRET,
       TELEGRAM_BOT_USERNAME: 'tracop_test_bot',
       CORS_ALLOWED_ORIGINS: 'https://*.example.test',
       ...productionS3,
@@ -330,12 +339,12 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'production',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'telegram',
       TELEGRAM_BOT_TOKEN: '123456:token',
-      TELEGRAM_WEBHOOK_SECRET: 'secret',
+      TELEGRAM_WEBHOOK_SECRET: STRONG.TELEGRAM_WEBHOOK_SECRET,
       TELEGRAM_BOT_USERNAME: 'tracop_test_bot',
       CORS_ALLOWED_ORIGINS: origin,
       ...productionS3,
@@ -347,12 +356,12 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'production',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'telegram',
       TELEGRAM_BOT_TOKEN: '123456:token',
-      TELEGRAM_WEBHOOK_SECRET: 'secret',
+      TELEGRAM_WEBHOOK_SECRET: STRONG.TELEGRAM_WEBHOOK_SECRET,
       TELEGRAM_BOT_USERNAME: 'tracop_test_bot',
       CORS_ALLOWED_ORIGINS: ' https://app.example.test , https://backoffice.example.test ',
       ...productionS3,
@@ -363,17 +372,45 @@ describe('runtime environment validation', () => {
     ]);
   });
 
+  it('refuses trivial, placeholder, short or reused secrets in production', () => {
+    // Regression: production started with 'j'.repeat(32), with the CI values
+    // (…-not-for-real-use-…) and with one secret used for JWT and OTP at once.
+    const production = {
+      NODE_ENV: 'production',
+      APP_PROFILE: 'production',
+      DATABASE_URL: 'postgres://localhost/test',
+      ...STRONG,
+      OTP_SENDER: 'telegram',
+      TELEGRAM_MODE: 'webhook',
+      TELEGRAM_BOT_TOKEN: '123456:token',
+      TELEGRAM_BOT_USERNAME: 'tracop_test_bot',
+      ...productionS3,
+    };
+    Object.assign(process.env, production);
+    expect(() => loadAppEnvironment('/tmp/tracop-no-env')).not.toThrow();
+    for (const [key, value, message] of [
+      ['JWT_SECRET', 'j'.repeat(32), /at least 32 characters, not a placeholder/],
+      ['OTP_HMAC_SECRET', 'test-otp-hmac-secret-not-for-real-use-00000000', /not a placeholder/],
+      ['RATE_LIMIT_HMAC_SECRET', 'replace-with-a-random-value-of-32-bytes', /not a placeholder/],
+      ['TELEGRAM_WEBHOOK_SECRET', 'short_secret', /at least 32 characters/],
+      ['OTP_HMAC_SECRET', STRONG.JWT_SECRET, /Must differ from JWT_SECRET/],
+    ] as const) {
+      Object.assign(process.env, production, { [key]: value });
+      expect(() => loadAppEnvironment('/tmp/tracop-no-env')).toThrow(message);
+    }
+  });
+
   it('requires the complete S3 configuration in production', () => {
     Object.assign(process.env, {
       NODE_ENV: 'production',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'telegram',
       TELEGRAM_MODE: 'webhook',
       TELEGRAM_BOT_TOKEN: '123456:token',
-      TELEGRAM_WEBHOOK_SECRET: 'secret',
+      TELEGRAM_WEBHOOK_SECRET: STRONG.TELEGRAM_WEBHOOK_SECRET,
       TELEGRAM_BOT_USERNAME: 'tracop_test_bot',
       S3_ENDPOINT: '',
       S3_BUCKET: '',
@@ -392,13 +429,13 @@ describe('runtime environment validation', () => {
       Object.assign(process.env, {
         NODE_ENV: 'production',
         DATABASE_URL: 'postgres://localhost/test',
-        JWT_SECRET: 'j'.repeat(32),
-        OTP_HMAC_SECRET: 'o'.repeat(32),
-        RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+        JWT_SECRET: STRONG.JWT_SECRET,
+        OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+        RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
         OTP_SENDER: 'telegram',
         TELEGRAM_MODE: 'webhook',
         TELEGRAM_BOT_TOKEN: '123456:token',
-        TELEGRAM_WEBHOOK_SECRET: 'secret',
+        TELEGRAM_WEBHOOK_SECRET: STRONG.TELEGRAM_WEBHOOK_SECRET,
         TELEGRAM_BOT_USERNAME: 'tracop_test_bot',
         S3_ENDPOINT: 'https://s3.example.test',
         S3_PUBLIC_ENDPOINT: 'https://files.example.test',
@@ -419,13 +456,13 @@ describe('runtime environment validation', () => {
     Object.assign(process.env, {
       NODE_ENV: 'production',
       DATABASE_URL: 'postgres://localhost/test',
-      JWT_SECRET: 'j'.repeat(32),
-      OTP_HMAC_SECRET: 'o'.repeat(32),
-      RATE_LIMIT_HMAC_SECRET: 'r'.repeat(32),
+      JWT_SECRET: STRONG.JWT_SECRET,
+      OTP_HMAC_SECRET: STRONG.OTP_HMAC_SECRET,
+      RATE_LIMIT_HMAC_SECRET: STRONG.RATE_LIMIT_HMAC_SECRET,
       OTP_SENDER: 'telegram',
       TELEGRAM_MODE: 'webhook',
       TELEGRAM_BOT_TOKEN: '123456:token',
-      TELEGRAM_WEBHOOK_SECRET: 'secret',
+      TELEGRAM_WEBHOOK_SECRET: STRONG.TELEGRAM_WEBHOOK_SECRET,
       TELEGRAM_BOT_USERNAME: 'tracop_test_bot',
       S3_ENDPOINT: 'https://s3.example.test',
       S3_BUCKET: 'tracop-test',
