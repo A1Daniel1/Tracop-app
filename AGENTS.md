@@ -433,6 +433,7 @@ Actualmente no hay implementada retención ni compactación para `sync.change_lo
 - `outbox_events` (id, aggregate, type, payload jsonb, created_at, published_at, attempts, next_attempt_at, last_error, failed_at, locked_until, lease_token). `next_attempt_at` NULL significa «pendiente ya»; `failed_at` marca la cola de fallidos; `locked_until` y `lease_token` van juntos (lease del despachador).
 - `outbox_deliveries` (consumer, event_id → outbox_events, delivered_at); PK (consumer, event_id): idempotencia por consumidor (ver [ADR-016](docs/adr/ADR-016.md)).
 - `schema_migrations` (id, applied_at) — metadata técnica del runner de migraciones
+- `worker_heartbeats` (worker_id PK `host:pid`, beat_at): latido de cada proceso del trabajador (trabajo `shared.worker-heartbeat`, cada minuto); `GET /ready` responde 503 si el más reciente supera `READY_WORKER_MAX_AGE_SECONDS`.
 
 **ai_assistant**
 
@@ -578,6 +579,8 @@ neto productor  = subtotal − commission                      // propuesta por 
 - **Auditoría:** `backoffice.audit_log` en la misma transacción que cada acción del personal (catálogo, pagos, logística, parámetros, alta de personal), con la IP solo como HMAC ([ADR-019](docs/adr/ADR-019.md)).
 - **Registro de eventos con hash encadenado** en `order_events`: cada evento incluye el hash del anterior. Cubre trazabilidad sin blockchain.
 - Logs sin PII; enmascarar teléfonos y comprobantes.
+- **Operación:** `GET /health` (vivo), `GET /ready` (base de datos y latido del trabajador; 503 si falla), `GET /metrics` en texto Prometheus solo con `Authorization: Bearer <METRICS_TOKEN>` (sin token configurado, 404). Cada petición deja una línea de log estructurada (`requestId`, método, plantilla de ruta, estado y duración) y la cabecera `X-Request-Id`; nunca la ruta concreta, la consulta ni el cuerpo.
+- **Regla de capas:** `eslint-plugin-boundaries` con `default: 'disallow'` y `eslint-import-resolver-typescript`; `test/eslint-layers.spec.ts` comprueba que rechaza imports prohibidos.
 
 ---
 
@@ -644,7 +647,8 @@ pnpm db:migrate                   # aplica las migraciones escritas a mano (driz
 pnpm db:check-migrations          # numeración única y contigua (lo exige el CI)
 pnpm db:seed                      # datos sintéticos; solo NODE_ENV=development
 pnpm dev                          # API en modo watch
-pnpm --filter @tracop/api worker  # trabajador de tareas periódicas y outbox (dist: worker:start)
+pnpm --filter @tracop/api worker  # trabajador de tareas periódicas y outbox (dist: worker:start; en desarrollo: worker:dev)
+pnpm outbox:status                # eventos pendientes, en reintento y fallidos por tipo, entregas por consumidor y latido (solo recuentos)
 pnpm lint                         # ESLint + check-boundaries
 pnpm typecheck                    # tsc en todo el monorepo
 pnpm test                         # todas las pruebas (Testcontainers si hay Docker)
@@ -682,7 +686,7 @@ La fuente de verdad es el esquema zod de `apps/api/src/shared/infra/env.ts` (val
 | Logística                     | `LOGISTICS_LOCATION_MAX_TTL_HOURS` (24, PROVISIONAL), `LOGISTICS_LOCATION_RATE_LIMIT`, `LOGISTICS_LOCATION_RATE_WINDOW_SECONDS`                                                                                                                                                                                                                                                                                                                                        |
 | Pagos (PROVISIONAL)           | `PAYMENT_REJECTION_GRACE_HOURS`, `PAYMENT_CLAIM_WINDOW_HOURS`, `PAYMENT_PROOF_MAX_BYTES`, `PAYMENT_PROOF_UPLOAD_URL_TTL_SECONDS`, `PAYMENT_PROOF_DOWNLOAD_URL_TTL_SECONDS`                                                                                                                                                                                                                                                                                             |
 | Notificaciones                | `NOTIFICATIONS_MAX_ATTEMPTS`, `NOTIFICATIONS_RETRY_BASE_SECONDS`, `NOTIFICATIONS_RETRY_MAX_SECONDS`, `NOTIFICATIONS_LEASE_SECONDS`                                                                                                                                                                                                                                                                                                                                     |
-| Trabajador                    | `JOB_EXPIRE_LOTS_CRON`, `JOB_EXPIRE_ORDERS_CRON`, `JOB_PURGE_PHOTOS_CRON`, `JOB_RETENTION_CRON`, `JOB_OUTBOX_DISPATCH_CRON`, `JOB_ISSUE_SETTLEMENTS_CRON`, `JOB_SEND_NOTIFICATIONS_CRON`, `OUTBOX_LEASE_SECONDS`, `OUTBOX_MAX_ATTEMPTS`, `OUTBOX_RETRY_BASE_SECONDS`, `OUTBOX_RETRY_MAX_SECONDS`                                                                                                                                                                       |
+| Trabajador                    | `JOB_EXPIRE_LOTS_CRON`, `JOB_EXPIRE_ORDERS_CRON`, `JOB_PURGE_PHOTOS_CRON`, `JOB_RETENTION_CRON`, `JOB_OUTBOX_DISPATCH_CRON`, `JOB_ISSUE_SETTLEMENTS_CRON`, `JOB_SEND_NOTIFICATIONS_CRON`, `JOB_WORKER_HEARTBEAT_CRON`, `READY_WORKER_MAX_AGE_SECONDS`, `METRICS_TOKEN`, `OUTBOX_LEASE_SECONDS`, `OUTBOX_MAX_ATTEMPTS`, `OUTBOX_RETRY_BASE_SECONDS`, `OUTBOX_RETRY_MAX_SECONDS`                                                                                         |
 | Retención (PROVISIONAL)       | `OTP_RETENTION_DAYS`, `SESSION_RETENTION_DAYS`, `PROCESSED_UPDATES_RETENTION_DAYS`, `RATE_LIMIT_RETENTION_SECONDS`                                                                                                                                                                                                                                                                                                                                                     |
 | IA (PROVISIONAL)              | `AI_ENABLED` (false), `LLM_PROVIDER`, `LLM_MODEL` (sin valor por defecto), `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_TIMEOUT_MS`, `LLM_MAX_OUTPUT_TOKENS`, `AI_CONSENT_VERSION`, `AI_DAILY_REQUESTS_PER_USER`, `AI_REQUESTS_PER_MINUTE`, `AI_MONTHLY_TOKEN_CAP`, `AI_DRAFT_TTL_MINUTES`, `AI_FINISHED_DRAFT_RETENTION_DAYS`, `AI_USAGE_RETENTION_DAYS`, `AI_INBOX_LEASE_SECONDS`, `AI_INBOX_MAX_ATTEMPTS`, `JOB_AI_INBOX_CRON`, `JOB_AI_MAINTENANCE_CRON`                    |
 | Recomendaciones (PROVISIONAL) | `RECOMMENDATIONS_REFERENCE_MAX_AGE_DAYS`, `RECOMMENDATIONS_OBSERVATION_WINDOW_DAYS`, `RECOMMENDATIONS_MIN_SAMPLE`, `RECOMMENDATIONS_MIN_OWN_OBSERVATIONS`, `RECOMMENDATIONS_MIN_OWN_PROVIDERS`, `RECOMMENDATIONS_WEIGHT_*`, `RECOMMENDATIONS_NEARBY_KM`, `RECOMMENDATIONS_FRESH_HOURS`, `RECOMMENDATIONS_CANDIDATE_LIMIT`, `RECOMMENDATIONS_DEFAULT_RADIUS_KM`, `RECOMMENDATIONS_ALERTS_PER_USER`, `RECOMMENDATIONS_RATE_LIMIT`, `RECOMMENDATIONS_RATE_WINDOW_SECONDS` |
