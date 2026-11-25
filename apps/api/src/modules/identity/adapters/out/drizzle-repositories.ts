@@ -133,6 +133,15 @@ export class DrizzleChannelLinkRepository implements ChannelLinkRepository {
   async create(link: ChannelLinkProps): Promise<void> {
     await this.database.current().insert(channelLinks).values(link);
   }
+
+  async deleteForUser(userId: string, channel: string): Promise<ChannelLinkProps | null> {
+    const [row] = await this.database
+      .current()
+      .delete(channelLinks)
+      .where(and(eq(channelLinks.userId, userId), eq(channelLinks.channel, channel)))
+      .returning();
+    return row ? mapChannelLink(row) : null;
+  }
 }
 
 @Injectable()
@@ -299,6 +308,43 @@ export class DrizzleSessionRepository implements SessionRepository {
       .returning();
     return rows.map(mapSession);
   }
+  async findActiveSuccessor(
+    familyId: string,
+    since: Date,
+    rotatedId: string,
+  ): Promise<SessionProps | null> {
+    const [used] = await this.database
+      .current()
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.familyId, familyId),
+          sql`${sessions.rotatedAt} IS NOT NULL`,
+          sql`${sessions.createdAt} >= ${since}`,
+          sql`${sessions.id} <> ${rotatedId}`,
+        ),
+      )
+      .limit(1);
+    if (used) return null;
+    const [row] = await this.database
+      .current()
+      .select()
+      .from(sessions)
+      .where(
+        and(
+          eq(sessions.familyId, familyId),
+          isNull(sessions.rotatedAt),
+          isNull(sessions.revokedAt),
+          sql`${sessions.createdAt} >= ${since}`,
+        ),
+      )
+      .orderBy(desc(sessions.createdAt))
+      .limit(1)
+      .for('update');
+    return row ? mapSession(row) : null;
+  }
+
   async revokeSession(id: string, now: Date, reason: string): Promise<SessionProps | null> {
     const [row] = await this.database
       .current()

@@ -358,7 +358,7 @@ PostgreSQL 16. **schema solo para módulos con datos propios.** Convenciones: `s
 
 **identity**
 
-- `users` (id, role, full_name, phone, status, locale, phone_verified_at, created_at, updated_at, deleted_at)
+- `users` (id, role, full_name, phone, status, locale, phone_verified_at, created_at, updated_at, deleted_at); `status` ∈ `pending_verification`, `active`, `suspended`, `expired`. Un registro sin verificar tras `UNVERIFIED_RETENTION_HOURS` (24, PROVISIONAL) pasa a `expired`: su teléfono se reemplaza por un HMAC (el número queda libre) y el nombre se borra; los consentimientos se conservan.
 - `channel_links` (id, user_id, channel, channel_user_id, verified_at) — único por (`channel`, `channel_user_id`)
 - `devices` (id, user_id, platform, push_token, last_seen_at, created_at) — único por dispositivo/usuario
 - `otp_codes` (id, user_id, code_hash, purpose, attempts, max_attempts, expires_at, consumed_at, created_at)
@@ -672,7 +672,7 @@ La fuente de verdad es el esquema zod de `apps/api/src/shared/infra/env.ts` (val
 | Grupo                         | Variables                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Base                          | `NODE_ENV`, `PORT`, `DATABASE_URL`, `POSTGRES_*` (docker-compose), `SUPPORTED_LOCALES`, `TRUST_PROXY`, `CORS_ALLOWED_ORIGINS`                                                                                                                                                                                                                                                                                                                                          |
-| Identidad                     | `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_CLOCK_TOLERANCE_SECONDS`, `OTP_HMAC_SECRET`, `RATE_LIMIT_HMAC_SECRET`, `PRIVACY_POLICY_VERSION`, `ALLOWED_COUNTRY_CODES`, `OTP_*` (longitud, vigencia, intentos y límites por teléfono e IP), `ACCESS_TOKEN_TTL_SECONDS`, `REFRESH_TOKEN_TTL_SECONDS`, `OTP_SENDER`                                                                                                                                                   |
+| Identidad                     | `JWT_SECRET`, `JWT_ISSUER`, `JWT_AUDIENCE`, `JWT_CLOCK_TOLERANCE_SECONDS`, `OTP_HMAC_SECRET`, `RATE_LIMIT_HMAC_SECRET`, `PRIVACY_POLICY_VERSION`, `ALLOWED_COUNTRY_CODES`, `OTP_*` (longitud, vigencia, intentos y límites por teléfono e IP), `ACCESS_TOKEN_TTL_SECONDS`, `REFRESH_TOKEN_TTL_SECONDS`, `REFRESH_GRACE_SECONDS`, `UNVERIFIED_RETENTION_HOURS`, `JOB_EXPIRE_UNVERIFIED_CRON`, `OTP_SENDER`                                                              |
 | Mensajería                    | `TELEGRAM_MODE`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_API_ROOT`, `TELEGRAM_WEBHOOK_PROCESS_TIMEOUT_MS`, `TELEGRAM_RATE_LIMIT_*`                                                                                                                                                                                                                                                                                         |
 | Catálogo                      | `CATALOG_LOT_MAX_HORIZON_DAYS`, `CATALOG_SEARCH_*`, `CATALOG_PRODUCT_PROPOSAL_*` (pendientes y límite de frecuencia, PROVISIONALES), `CATALOG_PHOTO_*`                                                                                                                                                                                                                                                                                                                 |
 | Almacenamiento                | `S3_ENDPOINT`, `S3_PUBLIC_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_API_ACCESS_KEY`, `S3_API_SECRET_KEY`, `S3_POLICY_ACCESS_KEY`, `S3_POLICY_SECRET_KEY`; MinIO local: `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_CORS_ALLOWED_ORIGINS`                                                                                                                                                                                                                           |
@@ -732,30 +732,30 @@ La fuente de verdad es el esquema zod de `apps/api/src/shared/infra/env.ts` (val
 
 ## 22. Decisiones de arquitectura vigentes (ADR resumidas)
 
-| ADR | Decisión                                                                      | Tradeoff aceptado                                                            |
-| --- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| 001 | Monolito modular hexagonal                                                    | Menos escalado independiente; mucho menos complejidad operativa en el piloto |
-| 002 | Cliente grueso offline-first con outbox y sync                                | Más complejidad de sync y pruebas, a cambio de funcionar sin señal           |
-| 003 | **Sin blockchain en el piloto**; eventos con hash encadenado                  | Sin "inmutabilidad total"; se puede anclar a una cadena después              |
-| 004 | **Telegram primero**, WhatsApp después vía el mismo puerto                    | La demo valida el flujo pero no la adopción real                             |
-| 005 | LLM en el servidor con confirmación humana obligatoria                        | Costo y latencia por uso; mitiga alucinaciones                               |
-| 006 | Pagos con conciliación manual en el piloto                                    | Menos automatización, valida la transacción sin integrar pasarela            |
-| 007 | PostgreSQL con schema por módulo + pg-boss                                    | Sin Redis ni broker; suficiente para el piloto                               |
-| 008 | Autenticación por teléfono + OTP con JWT y refresh rotativo                   | `jose@4` fijado por dual CJS/ESM; ventana de gracia de refresh pendiente     |
-| 009 | Mensajería con Telegram (webhook/polling), puerto único                       | Polling solo dev; OTP fire-and-forget; rate limit en memoria                 |
-| 010 | Núcleo de catálogo (taxonomía curada, lotes, búsqueda)                        | Búsqueda filtra en memoria antes de paginar                                  |
-| 011 | Fotos de lote con POST prefirmado y re-codificación a WebP                    | Dependencia de sharp (libvips, LGPL) aceptada provisionalmente               |
-| 012 | Idempotencia de sync y cursores serializados                                  | Un lock global de secuencia serializa las escrituras del change log          |
-| 013 | Logística sin coordenadas en su schema; viaje creado por el transportista     | Ubicación exacta solo para el asignado y el personal, en línea, auditada     |
-| 014 | Pedidos de un proveedor; reserva al aceptar, vence a las 24 h                 | Un pedido sin comprobante se cancela al vencer la reserva                    |
-| 015 | Propuestas de producto con revisión del personal                              | Revisión manual; deduplicación por tokens con confirmación                   |
-| 016 | Trabajador con pg-boss y despachador del outbox con lease                     | Entrega al menos una vez; consumidores idempotentes                          |
-| 017 | Pagos manuales con ledger inmutable y liquidación tras reclamo                | Revisión humana de cada comprobante; reserva retenida mientras tanto         |
-| 018 | Notificaciones desde el outbox; bandeja siempre, canales tras un puerto       | Push y SMS sin proveedor (skipped); sin escalado ni resúmenes aún            |
-| 019 | Audit log transaccional, parámetros editables y métricas al vuelo             | Una consulta corta por parámetro en cada uso; sin snapshots de métricas      |
-| 020 | Calificaciones solo del comprador con pago verificado; verificación manual    | Colusión comprador-proveedor posible; sin documentos (§23.8)                 |
-| 021 | Asistente de IA por Telegram: solo extrae; publica la aplicación al confirmar | Precisión real solo medible fuera de CI; límite por minuto por proceso       |
-| 022 | Recomendaciones y precios por reglas y percentiles; DANE-SIPSA por CSV manual | Formato XLSX sin verificar; uso comercial de datos DANE por confirmar        |
+| ADR | Decisión                                                                      | Tradeoff aceptado                                                                                                  |
+| --- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| 001 | Monolito modular hexagonal                                                    | Menos escalado independiente; mucho menos complejidad operativa en el piloto                                       |
+| 002 | Cliente grueso offline-first con outbox y sync                                | Más complejidad de sync y pruebas, a cambio de funcionar sin señal                                                 |
+| 003 | **Sin blockchain en el piloto**; eventos con hash encadenado                  | Sin "inmutabilidad total"; se puede anclar a una cadena después                                                    |
+| 004 | **Telegram primero**, WhatsApp después vía el mismo puerto                    | La demo valida el flujo pero no la adopción real                                                                   |
+| 005 | LLM en el servidor con confirmación humana obligatoria                        | Costo y latencia por uso; mitiga alucinaciones                                                                     |
+| 006 | Pagos con conciliación manual en el piloto                                    | Menos automatización, valida la transacción sin integrar pasarela                                                  |
+| 007 | PostgreSQL con schema por módulo + pg-boss                                    | Sin Redis ni broker; suficiente para el piloto                                                                     |
+| 008 | Autenticación por teléfono + OTP con JWT y refresh rotativo                   | `jose@4` fijado por dual CJS/ESM; gracia de refresh de `REFRESH_GRACE_SECONDS` (30 s) solo si el sucesor no se usó |
+| 009 | Mensajería con Telegram (webhook/polling), puerto único                       | Polling solo dev; OTP fire-and-forget; rate limit en memoria                                                       |
+| 010 | Núcleo de catálogo (taxonomía curada, lotes, búsqueda)                        | Búsqueda filtra en memoria antes de paginar                                                                        |
+| 011 | Fotos de lote con POST prefirmado y re-codificación a WebP                    | Dependencia de sharp (libvips, LGPL) aceptada provisionalmente                                                     |
+| 012 | Idempotencia de sync y cursores serializados                                  | Un lock global de secuencia serializa las escrituras del change log                                                |
+| 013 | Logística sin coordenadas en su schema; viaje creado por el transportista     | Ubicación exacta solo para el asignado y el personal, en línea, auditada                                           |
+| 014 | Pedidos de un proveedor; reserva al aceptar, vence a las 24 h                 | Un pedido sin comprobante se cancela al vencer la reserva                                                          |
+| 015 | Propuestas de producto con revisión del personal                              | Revisión manual; deduplicación por tokens con confirmación                                                         |
+| 016 | Trabajador con pg-boss y despachador del outbox con lease                     | Entrega al menos una vez; consumidores idempotentes                                                                |
+| 017 | Pagos manuales con ledger inmutable y liquidación tras reclamo                | Revisión humana de cada comprobante; reserva retenida mientras tanto                                               |
+| 018 | Notificaciones desde el outbox; bandeja siempre, canales tras un puerto       | Push y SMS sin proveedor (skipped); sin escalado ni resúmenes aún                                                  |
+| 019 | Audit log transaccional, parámetros editables y métricas al vuelo             | Una consulta corta por parámetro en cada uso; sin snapshots de métricas                                            |
+| 020 | Calificaciones solo del comprador con pago verificado; verificación manual    | Colusión comprador-proveedor posible; sin documentos (§23.8)                                                       |
+| 021 | Asistente de IA por Telegram: solo extrae; publica la aplicación al confirmar | Precisión real solo medible fuera de CI; límite por minuto por proceso                                             |
+| 022 | Recomendaciones y precios por reglas y percentiles; DANE-SIPSA por CSV manual | Formato XLSX sin verificar; uso comercial de datos DANE por confirmar                                              |
 
 ---
 

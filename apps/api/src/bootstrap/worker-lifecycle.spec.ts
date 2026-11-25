@@ -33,6 +33,7 @@ const environment = {
   JOB_SEND_NOTIFICATIONS_CRON: '* * * * *',
   JOB_AI_INBOX_CRON: '* * * * *',
   JOB_AI_MAINTENANCE_CRON: '*/10 * * * *',
+  JOB_EXPIRE_UNVERIFIED_CRON: '23 * * * *',
 } as unknown as AppEnvironment;
 
 const lifecycle = (scheduler: FakeScheduler) => {
@@ -43,7 +44,12 @@ const lifecycle = (scheduler: FakeScheduler) => {
     pino({ level: 'silent' }),
     { expireLots: zero, purgeOrphanPhotos: zero },
     { expireReservationsAndQuotes: async () => ({ reservations: 0, quotes: 0 }) },
-    { purgeExpiredOtpCodes: zero, purgeEndedSessions: zero, purgeRateLimitWindows: zero },
+    {
+      purgeExpiredOtpCodes: zero,
+      purgeEndedSessions: zero,
+      purgeRateLimitWindows: zero,
+      expireUnverifiedRegistrations: zero,
+    },
     { purgeProcessedUpdates: zero },
     { issueDueSettlements: zero },
     { sendDueNotifications: async () => ({ sent: 0, retried: 0, failed: 0 }) },
@@ -54,13 +60,13 @@ const lifecycle = (scheduler: FakeScheduler) => {
 };
 
 describe('WorkerLifecycle', () => {
-  it('starts the scheduler before registering the twelve jobs and stops it on shutdown', async () => {
+  it('starts the scheduler before registering the thirteen jobs and stops it on shutdown', async () => {
     const scheduler = new FakeScheduler();
     const worker = lifecycle(scheduler);
     await worker.onApplicationBootstrap();
     expect(scheduler.events[0]).toBe('start');
-    expect(scheduler.jobs).toHaveLength(12);
-    expect(new Set(scheduler.jobs.map((job) => job.name)).size).toBe(12);
+    expect(scheduler.jobs).toHaveLength(13);
+    expect(new Set(scheduler.jobs.map((job) => job.name)).size).toBe(13);
     await worker.onApplicationShutdown();
     expect(scheduler.events.at(-1)).toBe('stop');
   });

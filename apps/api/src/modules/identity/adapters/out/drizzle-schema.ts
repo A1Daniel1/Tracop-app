@@ -38,7 +38,7 @@ export const users = identity.table(
     ),
     check(
       'users_status_check',
-      sql`${table.status} IN ('pending_verification','active','suspended')`,
+      sql`${table.status} IN ('pending_verification','active','suspended','expired')`,
     ),
   ],
 );

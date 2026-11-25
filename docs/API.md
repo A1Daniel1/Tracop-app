@@ -8,6 +8,8 @@ This document records behavior currently implemented by the API. It is not a sta
 - Endpoints may restrict roles in addition to requiring authentication. A missing/invalid credential returns HTTP 401; a role mismatch returns HTTP 403.
 - `POST /auth/refresh` is public and accepts `refreshToken` and `deviceId` in the JSON body. It returns a new access token and refresh token. Refresh tokens are stored as hashes.
 - Rotation binds the token to its device and session family. Reuse of an already rotated token revokes the family and returns an invalid-session error. The access-token lifetime defaults to 900 seconds and refresh-token lifetime to 2,592,000 seconds; both are configurable through environment variables.
+- Grace window: retrying a just-rotated refresh token from the same device within `REFRESH_GRACE_SECONDS` (30 s, PROVISIONAL) returns a new pair and revokes the unused successor (`grace_replaced`); outside the window, or once the successor was used, it is reuse and the family is revoked.
+- `POST /staff/users/{userId}/channels/{channel}/unlink` (`operator`, `admin`; `telegram` or `whatsapp`): removes the user's messaging link, 204; audited as `channel.unlink` without the phone; 404 when there is no such link.
 - Do not put refresh tokens in URLs or logs.
 
 ## HTTP errors

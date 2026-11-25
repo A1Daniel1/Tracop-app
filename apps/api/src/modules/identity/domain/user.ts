@@ -10,7 +10,7 @@ export const SELF_REGISTERABLE_ROLES: readonly UserRole[] = [
   'buyer',
   'carrier',
 ];
-export type UserStatus = 'pending_verification' | 'active' | 'suspended';
+export type UserStatus = 'pending_verification' | 'active' | 'suspended' | 'expired';
 
 export const DEFAULT_SUPPORTED_LOCALES: readonly string[] = ['es-CO', 'en'];
 export const FULL_NAME_MIN_LENGTH = 2;

@@ -74,6 +74,8 @@ import {
           otpRetentionDays: env.OTP_RETENTION_DAYS,
           sessionRetentionDays: env.SESSION_RETENTION_DAYS,
           rateLimitRetentionSeconds: env.RATE_LIMIT_RETENTION_SECONDS,
+          unverifiedRetentionHours: env.UNVERIFIED_RETENTION_HOURS,
+          pseudonymSecret: env.RATE_LIMIT_HMAC_SECRET,
         }),
     },
   ],

@@ -50,6 +50,13 @@ class MemoryChannelLinkRepository implements ChannelLinkRepository {
     this.links.push(link);
   }
 
+  async deleteForUser(userId: string, channel: string): Promise<ChannelLinkProps | null> {
+    const index = this.links.findIndex(
+      (link) => link.userId === userId && link.channel === channel,
+    );
+    return index < 0 ? null : (this.links.splice(index, 1)[0] ?? null);
+  }
+
   constructor(private readonly users: Map<string, { phone: PhoneNumber }>) {}
 }
 

@@ -10,6 +10,7 @@ const schedule = {
   JOB_SEND_NOTIFICATIONS_CRON: '* * * * *',
   JOB_AI_INBOX_CRON: '* * * * *',
   JOB_AI_MAINTENANCE_CRON: '*/10 * * * *',
+  JOB_EXPIRE_UNVERIFIED_CRON: '23 * * * *',
 };
 
 const dependencies = () => {
@@ -32,6 +33,7 @@ const dependencies = () => {
       purgeExpiredOtpCodes: record('identity.otp', 3),
       purgeEndedSessions: record('identity.sessions', 4),
       purgeRateLimitWindows: record('identity.rate', 5),
+      expireUnverifiedRegistrations: record('identity.unverified', 8),
     },
     messaging: { purgeProcessedUpdates: record('messaging.updates', 6) },
     payments: { issueDueSettlements: record('payments.settlements', 7) },
@@ -55,7 +57,7 @@ const dependencies = () => {
 };
 
 describe('workerJobs', () => {
-  it('declares the twelve periodic jobs with their schedules and limits', () => {
+  it('declares the thirteen periodic jobs with their schedules and limits', () => {
     const jobs = workerJobs(dependencies().deps, schedule);
     expect(
       jobs.map(({ name, cron, timeoutSeconds, retryLimit }) => [
@@ -71,6 +73,7 @@ describe('workerJobs', () => {
       ['identity.purge-otp-codes', '40 4 * * *', 240, 3],
       ['identity.purge-rate-limit-windows', '40 4 * * *', 240, 3],
       ['identity.purge-sessions', '40 4 * * *', 240, 3],
+      ['identity.expire-unverified', '23 * * * *', 240, 3],
       ['messaging.purge-processed-updates', '40 4 * * *', 240, 3],
       ['payments.issue-settlements', '*/15 * * * *', 240, 3],
       ['notifications.send-due', '* * * * *', 50, 3],
@@ -92,6 +95,7 @@ describe('workerJobs', () => {
       'identity.otp',
       'identity.rate',
       'identity.sessions',
+      'identity.unverified',
       'messaging.updates',
       'payments.settlements',
       'notifications.send',

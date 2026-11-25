@@ -32,6 +32,7 @@ export type WorkerJobSchedule = Pick<
   | 'JOB_SEND_NOTIFICATIONS_CRON'
   | 'JOB_AI_INBOX_CRON'
   | 'JOB_AI_MAINTENANCE_CRON'
+  | 'JOB_EXPIRE_UNVERIFIED_CRON'
 >;
 
 /**
@@ -70,6 +71,9 @@ export const workerJobs = (
     ),
     job('identity.purge-sessions', schedule.JOB_RETENTION_CRON, () =>
       dependencies.identity.purgeEndedSessions(),
+    ),
+    job('identity.expire-unverified', schedule.JOB_EXPIRE_UNVERIFIED_CRON, () =>
+      dependencies.identity.expireUnverifiedRegistrations(),
     ),
     job('messaging.purge-processed-updates', schedule.JOB_RETENTION_CRON, () =>
       dependencies.messaging.purgeProcessedUpdates(),

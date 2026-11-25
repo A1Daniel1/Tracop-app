@@ -34,6 +34,12 @@ const envSchema = z.object({
   OTP_IP_WINDOW_SECONDS: z.coerce.number().int().positive().default(600),
   ACCESS_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(900),
   REFRESH_TOKEN_TTL_SECONDS: z.coerce.number().int().positive().default(2_592_000),
+  // PROVISIONAL: a refresh retried this soon after its rotation (lost response on a weak
+  // network) gets a fresh pair instead of revoking the family; 0 disables the grace.
+  REFRESH_GRACE_SECONDS: z.coerce.number().int().min(0).max(120).default(30),
+  // PROVISIONAL: registrations never verified are expired after these hours.
+  UNVERIFIED_RETENTION_HOURS: z.coerce.number().int().min(1).max(720).default(24),
+  JOB_EXPIRE_UNVERIFIED_CRON: z.string().trim().min(9).default('23 * * * *'),
   OTP_SENDER: z.enum(['console', 'telegram']).default('console'),
   TELEGRAM_MODE: z.enum(['webhook', 'polling']).default('webhook'),
   TELEGRAM_BOT_TOKEN: optionalText(z.string().min(1)),
