@@ -48,6 +48,8 @@ class HealthController {
 /** Modules and bridges shared by the HTTP API and the worker process. */
 import { BackofficeModule } from '../modules/backoffice/index.js';
 import { BackofficeBridgeModule } from './backoffice-bridge.module.js';
+import { ProviderTrustBridgeModule, TrustDeliveryBridgeModule } from './trust-bridge.module.js';
+import { TrustModule } from '../modules/trust/index.js';
 import { LogisticsLocationBridgeModule } from './logistics-location-bridge.module.js';
 import { NotificationsModule } from '../modules/notifications/index.js';
 import { PaymentsModule } from '../modules/payments/index.js';
@@ -76,6 +78,9 @@ export const APPLICATION_MODULES = [
   NotificationsBridgeModule,
   NotificationsModule,
   BackofficeBridgeModule,
+  TrustDeliveryBridgeModule,
+  ProviderTrustBridgeModule,
+  TrustModule,
 ];
 
 @Module({

@@ -184,3 +184,17 @@ export const CATALOG_EVENT_WRITER = Symbol('CATALOG_EVENT_WRITER');
 export const PROVIDER_DIRECTORY = Symbol('PROVIDER_DIRECTORY');
 export const CATALOG_CLOCK = Symbol('CATALOG_CLOCK');
 export const CHANGE_RECORDER = Symbol('CHANGE_RECORDER');
+
+/** Public trust of providers (verified badge, visible rating), from trust via bootstrap. */
+export interface ProviderTrustSummary {
+  readonly verified: boolean;
+  readonly rating: string | null;
+  readonly ratingsCount: number;
+}
+
+export interface ProviderTrustPort {
+  /** At most 50 distinct ids per call; unknown providers come back unverified and unrated. */
+  get(providerIds: readonly string[]): Promise<ReadonlyMap<string, ProviderTrustSummary>>;
+}
+
+export const PROVIDER_TRUST = Symbol('PROVIDER_TRUST');

@@ -1,9 +1,9 @@
 import type { LotProps } from '../../domain/lot.js';
-import type { ProviderPublicSummary } from '../../ports/catalog-ports.js';
+import type { ProviderPublicSummary, ProviderTrustSummary } from '../../ports/catalog-ports.js';
 
 export const serializeLotForViewer = (
   lot: LotProps & { readonly availableQuantityMilli?: bigint },
-  provider: ProviderPublicSummary,
+  provider: ProviderPublicSummary & ProviderTrustSummary,
   viewerId: string,
   distanceKm?: number,
 ): Record<string, unknown> => {
