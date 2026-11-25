@@ -11,6 +11,7 @@ const schedule = {
   JOB_AI_INBOX_CRON: '* * * * *',
   JOB_AI_MAINTENANCE_CRON: '*/10 * * * *',
   JOB_EXPIRE_UNVERIFIED_CRON: '23 * * * *',
+  JOB_WORKER_HEARTBEAT_CRON: '* * * * *',
 };
 
 const dependencies = () => {
@@ -52,12 +53,13 @@ const dependencies = () => {
     assistantMaintenance: {
       run: record('assistant.maintenance', { expired: 0, purgedDrafts: 0, purgedUsage: 0 }),
     },
+    heartbeat: record('shared.heartbeat', undefined),
   };
   return { deps, calls };
 };
 
 describe('workerJobs', () => {
-  it('declares the thirteen periodic jobs with their schedules and limits', () => {
+  it('declares the fourteen periodic jobs with their schedules and limits', () => {
     const jobs = workerJobs(dependencies().deps, schedule);
     expect(
       jobs.map(({ name, cron, timeoutSeconds, retryLimit }) => [
@@ -80,6 +82,7 @@ describe('workerJobs', () => {
       ['shared.dispatch-outbox', '* * * * *', 50, 3],
       ['ai-assistant.drain-inbox', '* * * * *', 50, 3],
       ['ai-assistant.maintenance', '*/10 * * * *', 240, 3],
+      ['shared.worker-heartbeat', '* * * * *', 30, 3],
     ]);
     expect(jobs.map((job) => job.name)).not.toContain('sync.compact-change-log');
   });
@@ -102,6 +105,7 @@ describe('workerJobs', () => {
       'outbox.dispatch',
       'assistant.inbox',
       'assistant.maintenance',
+      'shared.heartbeat',
     ]);
     expect(results.slice(0, 3)).toEqual([1, { reservations: 0, quotes: 0 }, 2]);
   });

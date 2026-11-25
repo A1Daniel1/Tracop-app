@@ -22,5 +22,5 @@ export const resetPostgresFixtures = async (pool: Pool): Promise<void> => {
     catalog.lot_reservations, catalog.lot_photos, catalog.lots, catalog.products, catalog.categories,
     identity.provider_profiles, identity.consents, identity.otp_codes, identity.sessions, identity.devices,
     identity.channel_links, identity.users, identity.rate_limit_counters,
-    messaging.processed_updates, shared.outbox_events CASCADE`);
+    messaging.processed_updates, shared.worker_heartbeats, shared.outbox_events CASCADE`);
 };

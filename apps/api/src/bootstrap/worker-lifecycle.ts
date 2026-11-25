@@ -24,7 +24,11 @@ import { ORDERING_MAINTENANCE, type OrderingMaintenanceApi } from '../modules/or
 import { PAYMENTS_MAINTENANCE, type PaymentsMaintenanceApi } from '../modules/payments/index.js';
 import type { AppEnvironment } from '../shared/infra/env.js';
 import { APP_ENVIRONMENT, APP_LOGGER } from '../shared/infra/tokens.js';
+import { hostname } from 'node:os';
 import { JOB_SCHEDULER, type JobSchedulerPort } from '../shared/ports/job-scheduler.js';
+import { OPERATIONS_PROBE, type OperationsProbe } from '../shared/ports/operations.js';
+import { APP_CLOCK } from '../shared/infra/tokens.js';
+import type { Clock } from '../shared/kernel/clock.js';
 import { OUTBOX_DISPATCHER, type OutboxDispatcher } from '../shared/ports/outbox-dispatcher.js';
 import { workerJobs } from './worker-jobs.js';
 
@@ -44,7 +48,12 @@ export class WorkerLifecycle implements OnApplicationBootstrap, OnApplicationShu
     @Inject(OUTBOX_DISPATCHER) private readonly outbox: OutboxDispatcher,
     @Inject(ASSISTANT_INBOX_PROCESSOR) private readonly assistantInbox: InboxProcessor,
     @Inject(ASSISTANT_MAINTENANCE) private readonly assistantMaintenance: AssistantMaintenance,
+    @Inject(OPERATIONS_PROBE) private readonly operations: OperationsProbe,
+    @Inject(APP_CLOCK) private readonly clock: Clock,
   ) {}
+
+  /** Stable per process: host and pid, no personal data. */
+  private readonly workerId = `${hostname()}:${process.pid}`;
 
   private listener: PostgresNotificationListener | null = null;
 
@@ -61,10 +70,13 @@ export class WorkerLifecycle implements OnApplicationBootstrap, OnApplicationShu
         outbox: this.outbox,
         assistantInbox: this.assistantInbox,
         assistantMaintenance: this.assistantMaintenance,
+        heartbeat: () => this.operations.beat(this.workerId, this.clock.now()),
       },
       this.environment,
     );
     for (const job of jobs) await this.scheduler.schedule(job);
+    // A first beat right away, so /ready does not wait for the first minute.
+    await this.operations.beat(this.workerId, this.clock.now()).catch(() => undefined);
     if (this.environment.DATABASE_URL)
       this.listener = new PostgresNotificationListener(
         this.environment.DATABASE_URL,

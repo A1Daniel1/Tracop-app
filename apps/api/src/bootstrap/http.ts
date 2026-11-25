@@ -1,6 +1,8 @@
 import type { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { NextFunction, Request, Response } from 'express';
+import type pino from 'pino';
+import type { HttpMetrics } from '../shared/infra/http-metrics.js';
 import { newRequestContext, runWithRequestContext } from '../shared/infra/request-context.js';
 
 export const WEBHOOK_BODY_LIMIT = '64kb';
@@ -9,11 +11,36 @@ export const configureHttp = (
   app: INestApplication,
   syncPushBodyLimitBytes = 256 * 1024,
   allowedCorsOrigins: readonly string[] = [],
+  /** Request logs and metrics; main.ts passes both, minimal test apps may omit them. */
+  observability: { readonly logger?: pino.Logger; readonly metrics?: HttpMetrics } = {},
 ): void => {
   const expressApp = app as NestExpressApplication;
-  // Every request gets a context (request id, client IP honoring TRUST_PROXY) for the audit log.
-  expressApp.use((request: Request, _response: Response, next: NextFunction) => {
-    runWithRequestContext(newRequestContext(request.ip), next);
+  const { logger, metrics } = observability;
+  // Every request gets a context (request id, client IP honoring TRUST_PROXY) for the audit log,
+  // and one structured log line plus metrics when it finishes: method, route template, status
+  // and duration. Never the concrete path, query, body or IP.
+  expressApp.use((request: Request, response: Response, next: NextFunction) => {
+    const context = newRequestContext(request.ip);
+    const startedAt = process.hrtime.bigint();
+    response.setHeader('X-Request-Id', context.requestId);
+    response.on('finish', () => {
+      const durationMs = Number(process.hrtime.bigint() - startedAt) / 1e6;
+      const routePath = (request as Request & { route?: { path?: string } }).route?.path;
+      const route = routePath ? `${request.baseUrl}${routePath}` : 'unmatched';
+      metrics?.record(request.method, route, response.statusCode, durationMs);
+      logger?.info(
+        {
+          event: 'http_request',
+          requestId: context.requestId,
+          method: request.method,
+          route,
+          status: response.statusCode,
+          durationMs: Math.round(durationMs),
+        },
+        'HTTP request.',
+      );
+    });
+    runWithRequestContext(context, next);
   });
   expressApp.use((request: Request, response: Response, next: NextFunction) => {
     if (request.path === '/webhooks/telegram') {
