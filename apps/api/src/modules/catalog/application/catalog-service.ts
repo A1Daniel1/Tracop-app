@@ -540,6 +540,55 @@ export class CatalogService {
     });
   }
 
+  /**
+   * A payment proof is under review: the order's reservations stop lapsing and keep the stock.
+   * Fails if they already lapsed or were released.
+   */
+  async holdOrderReservations(orderId: string): Promise<void> {
+    await this.uow.run(async () => {
+      const now = this.clock.now();
+      const lotIds = await this.lots.findOrderReservationLotIds(orderId);
+      await this.lots.lockForReservation(lotIds);
+      const active = await this.lots.countActiveOrderReservations(orderId);
+      if (active === 0 || (await this.lots.holdOrderReservations(orderId, now)) !== active)
+        throw new DomainError('La reserva del pedido ya venció.', 'reservation_expired');
+    });
+  }
+
+  /** A rejected proof gives the held reservations a new expiry. */
+  async resumeOrderReservationExpiry(orderId: string, expiresAt: Date): Promise<void> {
+    await this.uow.run(async () => {
+      const lotIds = await this.lots.findOrderReservationLotIds(orderId);
+      await this.lots.lockForReservation(lotIds);
+      await this.lots.resumeOrderReservationExpiry(orderId, expiresAt, this.clock.now());
+    });
+  }
+
+  /**
+   * A verified payment consumes the held reservations: the stock stays subtracted for good and
+   * a lot whose whole quantity was consumed becomes sold_out.
+   */
+  async consumeOrderReservations(orderId: string): Promise<void> {
+    await this.uow.run(async () => {
+      const now = this.clock.now();
+      const lotIds = await this.lots.findOrderReservationLotIds(orderId);
+      const lockedLots = await this.lots.lockForReservation(lotIds);
+      const active = await this.lots.countActiveOrderReservations(orderId);
+      const consumedLotIds = await this.lots.consumeOrderReservations(orderId, now);
+      if (active === 0 || consumedLotIds.length !== lotIds.length)
+        throw new DomainError('La reserva del pedido no está retenida.', 'reservation_conflict');
+      for (const lot of lockedLots) {
+        if (lot.status !== 'reserved') continue;
+        if ((await this.lots.getConsumedQuantity(lot.id)) >= lot.quantityMilli)
+          await this.changeLotStatus(lot, 'sold_out', now);
+      }
+    });
+  }
+
+  async isOrderReservationExpired(orderId: string, now: Date): Promise<boolean> {
+    return this.lots.isOrderReservationExpired(orderId, now);
+  }
+
   async findExpiredReservationOrderIds(
     now = this.clock.now(),
     limit = 100,
@@ -549,7 +598,7 @@ export class CatalogService {
 
   private async changeLotStatus(
     lot: LotProps,
-    status: 'reserved' | 'published' | 'expired',
+    status: 'reserved' | 'published' | 'expired' | 'sold_out',
     now: Date,
   ): Promise<void> {
     const entity = Lot.reconstitute(lot);

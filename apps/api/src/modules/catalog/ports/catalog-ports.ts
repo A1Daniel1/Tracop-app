@@ -60,6 +60,15 @@ export interface LotRepository {
   }): Promise<'created' | 'exists'>;
   releaseOrderReservations(orderId: string, now: Date): Promise<readonly string[]>;
   findExpiredReservationOrderIds(now: Date, limit: number): Promise<readonly string[]>;
+  /** Removes the expiry of the order's live reservations; returns how many were held. */
+  holdOrderReservations(orderId: string, now: Date): Promise<number>;
+  /** Gives held reservations an expiry again; returns how many changed. */
+  resumeOrderReservationExpiry(orderId: string, expiresAt: Date, now: Date): Promise<number>;
+  /** Marks held reservations as consumed; returns the affected lot ids, sorted. */
+  consumeOrderReservations(orderId: string, now: Date): Promise<readonly string[]>;
+  countActiveOrderReservations(orderId: string): Promise<number>;
+  isOrderReservationExpired(orderId: string, now: Date): Promise<boolean>;
+  getConsumedQuantity(lotId: string): Promise<bigint>;
 }
 export interface CatalogUnitOfWork {
   run<T>(operation: () => Promise<T>): Promise<T>;
@@ -115,6 +124,10 @@ export interface CatalogOrderingApi {
   }): Promise<void>;
   releaseOrderReservations(orderId: string): Promise<void>;
   findExpiredReservationOrderIds(now: Date, limit: number): Promise<readonly string[]>;
+  holdOrderReservations(orderId: string): Promise<void>;
+  resumeOrderReservationExpiry(orderId: string, expiresAt: Date): Promise<void>;
+  consumeOrderReservations(orderId: string): Promise<void>;
+  isOrderReservationExpired(orderId: string, now: Date): Promise<boolean>;
 }
 
 export const CATALOG_ORDERING_API = Symbol('CATALOG_ORDERING_API');
