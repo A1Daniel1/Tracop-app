@@ -1,6 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { NextFunction, Request, Response } from 'express';
+import helmet from 'helmet';
 import type pino from 'pino';
 import type { HttpMetrics } from '../shared/infra/http-metrics.js';
 import { newRequestContext, runWithRequestContext } from '../shared/infra/request-context.js';
@@ -15,6 +16,25 @@ export const configureHttp = (
   observability: { readonly logger?: pino.Logger; readonly metrics?: HttpMetrics } = {},
 ): void => {
   const expressApp = app as NestExpressApplication;
+  // Security headers. The API only returns JSON, so the content policy forbids everything;
+  // Swagger UI (/docs, outside production) needs its own scripts and styles.
+  const apiHeaders = helmet({
+    contentSecurityPolicy: {
+      useDefaults: false,
+      directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"], baseUri: ["'none'"] },
+    },
+    strictTransportSecurity: { maxAge: 31_536_000, includeSubDomains: true },
+    referrerPolicy: { policy: 'no-referrer' },
+  });
+  const docsHeaders = helmet({ strictTransportSecurity: false });
+  expressApp.disable('x-powered-by');
+  expressApp.use((request: Request, response: Response, next: NextFunction) =>
+    (request.path === '/docs' || request.path.startsWith('/docs/') ? docsHeaders : apiHeaders)(
+      request,
+      response,
+      next,
+    ),
+  );
   const { logger, metrics } = observability;
   // Every request gets a context (request id, client IP honoring TRUST_PROXY) for the audit log,
   // and one structured log line plus metrics when it finishes: method, route template, status
