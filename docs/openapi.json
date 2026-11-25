@@ -7752,6 +7752,471 @@
         "tags": ["logistics"]
       }
     },
+    "/logistics/trips/{id}/stops/{stopId}/location": {
+      "get": {
+        "description": "Recogida: coordenadas de los lotes del pedido (`points`, sin duplicados, máximo 20). Entrega: dirección completa (`address`). Solo con el viaje `assigned` o `in_progress` y la parada sin completar; cualquier otro caso responde 404. Auditado (`location.view`) y con límite de tasa. No guardar en caché ni en registros.",
+        "operationId": "TripLocationController_stopLocation",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stopId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "stopId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": ["pickup", "delivery"]
+                    },
+                    "orderId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "points": {
+                      "maxItems": 20,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "lat": {
+                            "type": "number",
+                            "minimum": -4.3,
+                            "maximum": 13.7
+                          },
+                          "lng": {
+                            "type": "number",
+                            "minimum": -81.8,
+                            "maximum": -66.9
+                          }
+                        },
+                        "required": ["lat", "lng"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "address": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["stopId", "kind", "orderId"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "stopId": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                  "kind": "pickup",
+                  "orderId": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                  "points": [
+                    {
+                      "lat": 5.53,
+                      "lng": -73.36
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "La solicitud no cumple el contrato o una regla de entrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "Solicitud inválida."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El recurso solicitado no existe o no es visible para este usuario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 404,
+                  "code": "not_found",
+                  "message": "Recurso no encontrado."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Se excedió un límite de solicitudes. Puede incluir la cabecera Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos hasta que se permita reintentar.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 429
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 429,
+                  "code": "rate_limited",
+                  "message": "Demasiadas solicitudes. Intenta nuevamente más tarde."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ubicación exacta de una parada (transportista asignado, operator, admin)",
+        "tags": ["logistics"]
+      }
+    },
+    "/logistics/trips/{id}/location-pack": {
+      "get": {
+        "description": "Mismas reglas que la ubicación de una parada. `expiresAt` es el menor entre el fin previsto del viaje y `LOGISTICS_LOCATION_MAX_TTL_HOURS` (24 h, PROVISIONAL): la app debe guardarlo cifrado y borrarlo al completar o cancelar el viaje y al llegar `expiresAt`.",
+        "operationId": "TripLocationController_locationPack",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tripId": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "stops": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "stopId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": ["pickup", "delivery"]
+                          },
+                          "orderId": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "points": {
+                            "maxItems": 20,
+                            "type": "array",
+                            "items": {
+                              "type": "object",
+                              "properties": {
+                                "lat": {
+                                  "type": "number",
+                                  "minimum": -4.3,
+                                  "maximum": 13.7
+                                },
+                                "lng": {
+                                  "type": "number",
+                                  "minimum": -81.8,
+                                  "maximum": -66.9
+                                }
+                              },
+                              "required": ["lat", "lng"],
+                              "additionalProperties": false
+                            }
+                          },
+                          "address": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["stopId", "kind", "orderId"],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["tripId", "expiresAt", "stops"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "tripId": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                  "expiresAt": "2026-11-26T15:00:00.000Z",
+                  "stops": [
+                    {
+                      "stopId": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                      "kind": "delivery",
+                      "orderId": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                      "address": "Calle 1 # 2-3, Bogotá"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "La solicitud no cumple el contrato o una regla de entrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "Solicitud inválida."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El recurso solicitado no existe o no es visible para este usuario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 404,
+                  "code": "not_found",
+                  "message": "Recurso no encontrado."
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Se excedió un límite de solicitudes. Puede incluir la cabecera Retry-After.",
+            "headers": {
+              "Retry-After": {
+                "description": "Segundos hasta que se permita reintentar.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 429
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 429,
+                  "code": "rate_limited",
+                  "message": "Demasiadas solicitudes. Intenta nuevamente más tarde."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Ubicaciones de las paradas pendientes, para trabajar sin señal",
+        "tags": ["logistics"]
+      }
+    },
     "/orders/{orderId}/payment": {
       "post": {
         "description": "Crea el pago `pending` y pasa el pedido a `payment_pending`. Idempotente por pedido: mientras el pedido tenga un pago abierto se devuelve ese mismo pago con 200.",
