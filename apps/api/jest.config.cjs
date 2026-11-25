@@ -54,6 +54,9 @@ if (hasSourceInLayer('application')) {
   coverageThreshold['./src/modules/trust/application/**/*.ts'] = {
     lines: 80,
   };
+  coverageThreshold['./src/modules/ai-assistant/application/**/*.ts'] = {
+    lines: 80,
+  };
 }
 if (hasSourceInLayer('domain')) {
   coverageThreshold['./src/modules/ordering/domain/**/*.ts'] = {
@@ -72,6 +75,9 @@ if (hasSourceInLayer('domain')) {
     lines: 90,
   };
   coverageThreshold['./src/modules/trust/domain/**/*.ts'] = {
+    lines: 90,
+  };
+  coverageThreshold['./src/modules/ai-assistant/domain/**/*.ts'] = {
     lines: 90,
   };
 }
@@ -116,6 +122,8 @@ module.exports = {
     'src/modules/backoffice/application/**/*.ts',
     'src/modules/trust/domain/**/*.ts',
     'src/modules/trust/application/**/*.ts',
+    'src/modules/ai-assistant/domain/**/*.ts',
+    'src/modules/ai-assistant/application/**/*.ts',
     'src/modules/messaging/application/**/*.ts',
     'src/modules/sync/application/**/*.ts',
     'src/shared/auth/**/*.ts',

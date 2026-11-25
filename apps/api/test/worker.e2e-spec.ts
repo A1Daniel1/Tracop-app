@@ -4,6 +4,8 @@ import pg from 'pg';
 import { describePostgres } from './postgres-suite.js';
 
 const EXPECTED_JOBS = [
+  'ai-assistant.drain-inbox',
+  'ai-assistant.maintenance',
   'catalog.expire-lots',
   'catalog.purge-orphan-photos',
   'identity.purge-otp-codes',

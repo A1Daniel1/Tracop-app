@@ -1,3 +1,8 @@
+import {
+  AiAssistantConversationBridgeModule,
+  AiAssistantPortsBridgeModule,
+} from './ai-assistant-bridge.module.js';
+import { AiAssistantModule } from '../modules/ai-assistant/index.js';
 import { Controller, Get, Module } from '@nestjs/common';
 import { IdentityModule } from '../modules/identity/index.js';
 import { MessagingModule } from '../modules/messaging/index.js';
@@ -81,6 +86,9 @@ export const APPLICATION_MODULES = [
   TrustDeliveryBridgeModule,
   ProviderTrustBridgeModule,
   TrustModule,
+  AiAssistantPortsBridgeModule,
+  AiAssistantConversationBridgeModule,
+  AiAssistantModule,
 ];
 
 @Module({

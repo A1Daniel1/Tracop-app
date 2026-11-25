@@ -8,6 +8,8 @@ const schedule = {
   JOB_OUTBOX_DISPATCH_CRON: '* * * * *',
   JOB_ISSUE_SETTLEMENTS_CRON: '*/15 * * * *',
   JOB_SEND_NOTIFICATIONS_CRON: '* * * * *',
+  JOB_AI_INBOX_CRON: '* * * * *',
+  JOB_AI_MAINTENANCE_CRON: '*/10 * * * *',
 };
 
 const dependencies = () => {
@@ -44,12 +46,16 @@ const dependencies = () => {
         deadLettered: 0,
       }),
     },
+    assistantInbox: { drain: record('assistant.inbox', { handled: 0, failed: 0, dropped: 0 }) },
+    assistantMaintenance: {
+      run: record('assistant.maintenance', { expired: 0, purgedDrafts: 0, purgedUsage: 0 }),
+    },
   };
   return { deps, calls };
 };
 
 describe('workerJobs', () => {
-  it('declares the ten periodic jobs with their schedules and limits', () => {
+  it('declares the twelve periodic jobs with their schedules and limits', () => {
     const jobs = workerJobs(dependencies().deps, schedule);
     expect(
       jobs.map(({ name, cron, timeoutSeconds, retryLimit }) => [
@@ -69,6 +75,8 @@ describe('workerJobs', () => {
       ['payments.issue-settlements', '*/15 * * * *', 240, 3],
       ['notifications.send-due', '* * * * *', 50, 3],
       ['shared.dispatch-outbox', '* * * * *', 50, 3],
+      ['ai-assistant.drain-inbox', '* * * * *', 50, 3],
+      ['ai-assistant.maintenance', '*/10 * * * *', 240, 3],
     ]);
     expect(jobs.map((job) => job.name)).not.toContain('sync.compact-change-log');
   });
@@ -88,6 +96,8 @@ describe('workerJobs', () => {
       'payments.settlements',
       'notifications.send',
       'outbox.dispatch',
+      'assistant.inbox',
+      'assistant.maintenance',
     ]);
     expect(results.slice(0, 3)).toEqual([1, { reservations: 0, quotes: 0 }, 2]);
   });
