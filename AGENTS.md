@@ -295,7 +295,7 @@ type InboundMessage = {
 | `ai-assistant`  | Extracción de borradores desde texto/audio/foto; sugerencia de precios (planificado; aún no existe) | `DraftGenerated`                                                                                                                                                                                                        | No                                            |
 | `trust`         | Calificaciones, reputación, verificación de proveedores (planificado; aún no existe)                | `ProviderVerified`, `RatingSubmitted`                                                                                                                                                                                   | Lectura                                       |
 | `sync`          | Recepción idempotente de operaciones, cursores de pull, resolución de conflictos                    | — (no emite eventos)                                                                                                                                                                                                    | Núcleo offline                                |
-| `backoffice`    | Casos de uso de operación, métricas, parámetros, audit log (planificado; aún no existe)             | —                                                                                                                                                                                                                       | No                                            |
+| `backoffice`    | Audit log, parámetros de negocio editables y métricas operativas                                    | —                                                                                                                                                                                                                       | No                                            |
 
 **Regla:** si un módulo necesita datos de otro, usa su `index.ts` (consulta pública) o reacciona a su evento. Nunca su tabla.
 
@@ -420,10 +420,10 @@ Unidades actualmente aceptadas por el catálogo: `kg`, `g`, `lb`, `und`, `docena
 
 Actualmente no hay implementada retención ni compactación para `sync.change_log` ni `sync.processed_operations`; se deben definir e implementar más adelante, sin asumir un periodo de retención.
 
-**backoffice** (planificado; aún no existe)
+**backoffice**
 
-- `audit_log` (id, actor_id, action, entity, entity_id, before jsonb, after jsonb, at, ip)
-- `parameters` (key, value jsonb, updated_by, updated_at)
+- `audit_log` (id, actor_id nullable, actor_role, action, entity, entity_id, before jsonb, after jsonb, at, ip_hash, request_id) — **append-only** (trigger). En lugar de la IP se guarda su HMAC-SHA256 (`RATE_LIMIT_HMAC_SECRET`); `before`/`after` solo con los campos que cambian, sin datos personales.
+- `parameters` (key PK, value texto entero, updated_by, updated_at). Claves: `order.commission_rate_bps`, `order.freight_cop`, `order.quote_ttl_hours`, `order.reservation_ttl_hours`, `payment.claim_window_hours`, `payment.rejection_grace_hours`, `catalog.product_proposal_pending_limit`. Sin fila rige la variable de entorno.
 
 **shared**
 
@@ -474,7 +474,7 @@ total comprador = subtotal + freight
 neto productor  = subtotal − commission                      // propuesta por defecto
 ```
 
-> Quién asume la comisión y su porcentaje son **decisiones abiertas** (§23). Implementa la tasa y el responsable como **parámetros**, no como constantes.
+> Quién asume la comisión y su porcentaje son **decisiones abiertas** (§23). La tasa y el flete son parámetros editables por `admin` (`order.commission_rate_bps`, `order.freight_cop`, ver [ADR-019](docs/adr/ADR-019.md)), con la variable de entorno como valor por defecto; hoy la comisión se descuenta al productor.
 
 ### Flujo del piloto
 
@@ -497,7 +497,7 @@ neto productor  = subtotal − commission                      // propuesta por 
 
 - Operaciones de pago **idempotentes** (clave por pedido + tipo).
 - `PaymentPort` es la única puerta a medios de pago; el dominio no conoce Nequi, PSE ni pasarelas.
-- Todo cambio de estado de pago escribe en `audit_log`.
+- Toda acción del personal sobre pagos (verificar, rechazar, resolver disputa, pagar liquidación) escribe en `backoffice.audit_log` en la misma transacción ([ADR-019](docs/adr/ADR-019.md)); las transiciones de pago quedan además en `payments.payment_events`.
 
 ---
 
@@ -557,7 +557,7 @@ neto productor  = subtotal − commission                      // propuesta por 
 - **API:** rate limiting, validación de entrada con zod en cada borde, tamaño máximo de cargas, CORS restrictivo.
 - **Archivos:** URLs prefirmadas con expiración; validar tipo y tamaño; sin ejecución de contenido subido.
 - **Dependencias:** auditoría automática en CI; fijar versiones; revisar dependencias nuevas.
-- **Auditoría:** `audit_log` para acciones del backoffice y cambios de pago.
+- **Auditoría:** `backoffice.audit_log` en la misma transacción que cada acción del personal (catálogo, pagos, logística, parámetros, alta de personal), con la IP solo como HMAC ([ADR-019](docs/adr/ADR-019.md)).
 - **Registro de eventos con hash encadenado** en `order_events`: cada evento incluye el hash del anterior. Cubre trazabilidad sin blockchain.
 - Logs sin PII; enmascarar teléfonos y comprobantes.
 
@@ -728,6 +728,7 @@ La fuente de verdad es el esquema zod de `apps/api/src/shared/infra/env.ts` (val
 | 016 | Trabajador con pg-boss y despachador del outbox con lease               | Entrega al menos una vez; consumidores idempotentes                          |
 | 017 | Pagos manuales con ledger inmutable y liquidación tras reclamo          | Revisión humana de cada comprobante; reserva retenida mientras tanto         |
 | 018 | Notificaciones desde el outbox; bandeja siempre, canales tras un puerto | Push y SMS sin proveedor (skipped); sin escalado ni resúmenes aún            |
+| 019 | Audit log transaccional, parámetros editables y métricas al vuelo       | Una consulta corta por parámetro en cada uso; sin snapshots de métricas      |
 
 ---
 

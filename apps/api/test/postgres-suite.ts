@@ -4,7 +4,8 @@ export const describePostgres =
   process.env.TRACOP_TESTCONTAINER_AVAILABLE === 'true' ? describe : describe.skip;
 
 export const resetPostgresFixtures = async (pool: Pool): Promise<void> => {
-  await pool.query(`TRUNCATE notifications.deliveries, notifications.inbox,
+  await pool.query(`TRUNCATE backoffice.audit_log, backoffice.parameters,
+    notifications.deliveries, notifications.inbox,
     notifications.preferences, payments.ledger_entries, payments.ledger_transactions,
     payments.settlements, payments.payment_events, payments.payments,
     sync.processed_operations, sync.change_log,

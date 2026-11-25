@@ -1,6 +1,6 @@
 import type { OrderEvent, OrderLineProps, OrderProps } from '../domain/order.js';
 import type { QuoteProps } from '../domain/quote.js';
-import type { PricingConfiguration, QuoteAmounts } from '../domain/pricing.js';
+import type { QuoteAmounts } from '../domain/pricing.js';
 
 export interface LotQuoteSnapshot {
   readonly id: string;
@@ -32,9 +32,11 @@ export interface LotReservationPort {
   isExpired(orderId: string, now: Date): Promise<boolean>;
 }
 
+/** Quotes with the current commission and freight (run-time parameters, AGENTS §23). */
 export interface PricingPort {
-  readonly configuration: PricingConfiguration;
-  calculate(lines: readonly Pick<OrderLineProps, 'unitPrice' | 'quantityMilli'>[]): QuoteAmounts;
+  calculate(
+    lines: readonly Pick<OrderLineProps, 'unitPrice' | 'quantityMilli'>[],
+  ): Promise<QuoteAmounts>;
 }
 
 export interface OrderAggregate {
@@ -59,6 +61,14 @@ export interface OrderRepository {
   ): Promise<{ items: readonly OrderAggregate[]; nextCursor?: string }>;
   findExpiredQuoteIds(now: Date, limit: number): Promise<readonly string[]>;
   listByStatus?(status: OrderProps['status'], limit: number): Promise<readonly OrderAggregate[]>;
+  metrics?(): Promise<OrderingMetrics>;
+}
+
+export interface OrderingMetrics {
+  /** Orders per status (every status, zero included). */
+  readonly byStatus: Readonly<Record<string, number>>;
+  /** Sum of quote totals of orders paid or beyond (not cancelled, disputed or refunded). */
+  readonly paidTotalCop: bigint;
 }
 
 export interface OrderingUnitOfWork {

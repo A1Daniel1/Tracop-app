@@ -1,6 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { NextFunction, Request, Response } from 'express';
+import { newRequestContext, runWithRequestContext } from '../shared/infra/request-context.js';
 
 export const WEBHOOK_BODY_LIMIT = '64kb';
 
@@ -10,6 +11,10 @@ export const configureHttp = (
   allowedCorsOrigins: readonly string[] = [],
 ): void => {
   const expressApp = app as NestExpressApplication;
+  // Every request gets a context (request id, client IP honoring TRUST_PROXY) for the audit log.
+  expressApp.use((request: Request, _response: Response, next: NextFunction) => {
+    runWithRequestContext(newRequestContext(request.ip), next);
+  });
   expressApp.use((request: Request, response: Response, next: NextFunction) => {
     if (request.path === '/webhooks/telegram') {
       next();

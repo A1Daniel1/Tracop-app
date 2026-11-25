@@ -1,6 +1,7 @@
 export { PaymentsModule } from './payments.module.js';
 export {
   PAYMENTS_MAINTENANCE,
+  PAYMENTS_METRICS,
   PAYMENTS_OUTBOX_SUBSCRIBER,
   PAYMENTS_SERVICE,
   type PaymentsMaintenanceApi,
@@ -16,6 +17,8 @@ export {
   type DeliveringCarrierPort,
   type PaymentOrderPort,
   type PaymentOrderSnapshot,
+  type PaymentsMetrics,
+  type PaymentsMetricsQuery,
 } from './ports/payments-ports.js';
 export {
   PAYMENT_METHODS,

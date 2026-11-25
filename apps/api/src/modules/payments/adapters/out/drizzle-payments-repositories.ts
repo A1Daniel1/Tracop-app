@@ -13,6 +13,8 @@ import type { SettlementProps } from '../../domain/settlement.js';
 import type {
   LedgerRepository,
   PaymentRepository,
+  PaymentsMetrics,
+  PaymentsMetricsQuery,
   SettlementRepository,
   StoredLedgerEntry,
 } from '../../ports/payments-ports.js';
@@ -266,5 +268,43 @@ export class DrizzleSettlementRepository implements SettlementRepository {
       .orderBy(desc(settlementsTable.issuedAt), desc(settlementsTable.id))
       .limit(filter.limit);
     return rows.map(toSettlement);
+  }
+}
+
+@Injectable()
+export class DrizzlePaymentsMetricsQuery implements PaymentsMetricsQuery {
+  constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
+
+  async snapshot(): Promise<PaymentsMetrics> {
+    const payments = await this.database.current().execute(sql`
+      SELECT
+        count(*) FILTER (WHERE status = 'proof_uploaded')::int AS proofs,
+        min(proof_uploaded_at) FILTER (WHERE status = 'proof_uploaded') AS oldest,
+        count(*) FILTER (WHERE status = 'disputed')::int AS disputes
+      FROM payments.payments
+    `);
+    const settlements = await this.database.current().execute(sql`
+      SELECT status, count(*)::int AS count, COALESCE(sum(amount), 0)::text AS amount
+      FROM payments.settlements GROUP BY status
+    `);
+    const row = payments.rows[0] as {
+      proofs: number;
+      oldest: Date | string | null;
+      disputes: number;
+    };
+    const byStatus = new Map(
+      (settlements.rows as { status: string; count: number; amount: string }[]).map((r) => [
+        r.status,
+        { count: r.count, amountCop: BigInt(r.amount) },
+      ]),
+    );
+    const none = { count: 0, amountCop: 0n };
+    return {
+      proofsAwaitingReview: row.proofs,
+      oldestProofUploadedAt: row.oldest ? new Date(row.oldest) : null,
+      openDisputes: row.disputes,
+      settlementsIssued: byStatus.get('issued') ?? none,
+      settlementsPaid: byStatus.get('paid') ?? none,
+    };
   }
 }

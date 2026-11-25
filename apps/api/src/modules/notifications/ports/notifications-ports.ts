@@ -100,6 +100,13 @@ export interface NotificationChangeRecorder {
   }): Promise<void>;
 }
 
+/** Deliveries per status, for the backoffice. */
+export interface NotificationsMetricsQuery {
+  deliveriesByStatus(): Promise<
+    Readonly<Record<'pending' | 'sent' | 'failed' | 'skipped', number>>
+  >;
+}
+
 export interface NotificationsUnitOfWork {
   run<T>(operation: () => Promise<T>): Promise<T>;
 }

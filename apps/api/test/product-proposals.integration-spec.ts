@@ -173,7 +173,15 @@ describePostgres('Product proposals PostgreSQL concurrency', () => {
     ]);
     expect(await changesFor(thirdParty, 'buyer', proposal.product.id)).toEqual([]);
 
-    await catalog.approveProductProposal({ sub: uuidv7(), role: 'operator' }, proposal.product.id);
+    const reviewer = uuidv7();
+    await catalog.approveProductProposal({ sub: reviewer, role: 'operator' }, proposal.product.id);
+    const audit = await pool.query<{ actor_id: string; action: string; after: unknown }>(
+      `SELECT actor_id, action, after FROM backoffice.audit_log WHERE entity_id = $1`,
+      [proposal.product.id],
+    );
+    expect(audit.rows).toEqual([
+      { actor_id: reviewer, action: 'product_proposal.approve', after: { status: 'approved' } },
+    ]);
     const approvedForThird = await changesFor(thirdParty, 'buyer', proposal.product.id);
     expect(approvedForThird.map((change) => change.op)).toEqual(['upsert']);
     expect(Object.keys(approvedForThird[0]!.payload).sort()).toEqual(PUBLIC_PRODUCT_KEYS);

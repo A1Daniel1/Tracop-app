@@ -1,7 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
+import {
+  PARAMETER_READER,
+  type ParameterReader,
+} from '../../../../shared/ports/parameter-reader.js';
 import { and, asc, desc, eq, gt, isNull, lt, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../../../shared/infra/database.js';
-import type { OrderAggregate, OrderRepository, PricingPort } from '../../ports/ordering-ports.js';
+import type {
+  OrderAggregate,
+  OrderingMetrics,
+  OrderRepository,
+  PricingPort,
+} from '../../ports/ordering-ports.js';
+import { ORDER_STATES } from '../../domain/order.js';
 import type { OrderEvent, OrderLineProps, OrderProps } from '../../domain/order.js';
 import type { PricingConfiguration, QuoteAmounts } from '../../domain/pricing.js';
 import type { QuoteProps } from '../../domain/quote.js';
@@ -57,6 +67,26 @@ const toQuoteProps = (row: typeof quotes.$inferSelect): QuoteProps => ({
 @Injectable()
 export class DrizzleOrderRepository implements OrderRepository {
   constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
+
+  async metrics(): Promise<OrderingMetrics> {
+    const counts = await this.database.current().execute(sql`
+      SELECT status, count(*)::int AS count FROM ordering.orders
+      WHERE deleted_at IS NULL GROUP BY status
+    `);
+    const paid = await this.database.current().execute(sql`
+      SELECT COALESCE(sum(q.total), 0)::text AS total
+      FROM ordering.orders o JOIN ordering.quotes q ON q.order_id = o.id
+      WHERE o.deleted_at IS NULL
+        AND o.status IN ('paid', 'pickup_scheduled', 'in_transit', 'delivered', 'closed')
+    `);
+    const byStatus: Record<string, number> = Object.fromEntries(ORDER_STATES.map((s) => [s, 0]));
+    for (const row of counts.rows as { status: string; count: number }[])
+      byStatus[row.status] = row.count;
+    return {
+      byStatus,
+      paidTotalCop: BigInt((paid.rows as { total: string }[])[0]?.total ?? '0'),
+    };
+  }
 
   async findById(id: string, lock = false): Promise<OrderAggregate | null> {
     const db = this.database.current();
@@ -304,30 +334,30 @@ export class DrizzleOrderRepository implements OrderRepository {
   }
 }
 
-@Injectable()
-export class EnvPricingPort implements PricingPort {
-  readonly configuration: PricingConfiguration;
+/** Commission and freight are read when each order is quoted, so a change applies forward. */
+export class ParameterPricingPort implements PricingPort {
   constructor(
-    @Inject('ORDER_COMMISSION_RATE_BPS') commissionRateBps: bigint,
-    @Inject('ORDER_FREIGHT_COP') freightCop: bigint,
-    @Inject('ORDER_SUBTOTAL_ROUNDING') subtotalRounding: 'half_up' | 'floor' | 'ceil',
-  ) {
-    this.configuration = { commissionRateBps, freightCop, subtotalRounding };
-  }
+    private readonly parameters: ParameterReader,
+    private readonly subtotalRounding: 'half_up' | 'floor' | 'ceil',
+  ) {}
 
-  calculate(lines: readonly Pick<OrderLineProps, 'unitPrice' | 'quantityMilli'>[]): QuoteAmounts {
-    return calculateQuoteAmounts(lines, this.configuration);
+  async calculate(
+    lines: readonly Pick<OrderLineProps, 'unitPrice' | 'quantityMilli'>[],
+  ): Promise<QuoteAmounts> {
+    const configuration: PricingConfiguration = {
+      commissionRateBps: await this.parameters.get('order.commission_rate_bps'),
+      freightCop: await this.parameters.get('order.freight_cop'),
+      subtotalRounding: this.subtotalRounding,
+    };
+    return calculateQuoteAmounts(lines, configuration);
   }
 }
 
 import { PRICING_PORT } from '../../ports/ordering-ports.js';
 
-export const envPricingPortProvider = {
+export const parameterPricingPortProvider = {
   provide: PRICING_PORT,
-  useFactory: (
-    commissionRateBps: bigint,
-    freightCop: bigint,
-    subtotalRounding: 'half_up' | 'floor' | 'ceil',
-  ) => new EnvPricingPort(commissionRateBps, freightCop, subtotalRounding),
-  inject: ['ORDER_COMMISSION_RATE_BPS', 'ORDER_FREIGHT_COP', 'ORDER_SUBTOTAL_ROUNDING'],
+  useFactory: (parameters: ParameterReader, subtotalRounding: 'half_up' | 'floor' | 'ceil') =>
+    new ParameterPricingPort(parameters, subtotalRounding),
+  inject: [PARAMETER_READER, 'ORDER_SUBTOTAL_ROUNDING'],
 };

@@ -1,5 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { OUTBOX_WRITER } from '../../../shared/ports/outbox-writer.js';
+import { AUDIT_WRITER, type AuditWriter } from '../../../shared/ports/audit-writer.js';
 import type { OutboxWriter } from '../../../shared/ports/outbox-writer.js';
 import { DomainError } from '../../../shared/kernel/domain-error.js';
 import { createId } from '../../../shared/kernel/ids.js';
@@ -59,6 +60,8 @@ export class TripPlanningService {
     @Inject(LOGISTICS_CLOCK) private readonly clock: LogisticsClock,
     @Inject(LOGISTICS_CHANGE_RECORDER) private readonly changes: LogisticsChangeRecorder,
     @Inject(OUTBOX_WRITER) private readonly outbox: OutboxWriter,
+    // Injected by Nest (global backoffice module); the default only serves hand-built tests.
+    @Inject(AUDIT_WRITER) private readonly audit: AuditWriter = { record: async () => undefined },
   ) {}
 
   async recommend(actor: LogisticsActor, limit = 50): Promise<readonly RecommendedStop[]> {
@@ -198,10 +201,16 @@ export class TripPlanningService {
     const target = carrierId ?? actor.sub;
     if (actor.role !== 'operator' && target !== actor.sub)
       throw new DomainError('Solo el operador puede reasignar viajes.', 'invalid_role');
-    return this.mutateTrip(actor, tripId, expectedVersion, (trip, now) => {
-      if (actor.role === 'operator') trip.reassign(target, now);
-      else trip.assign(target, now);
-    });
+    return this.mutateTrip(
+      actor,
+      tripId,
+      expectedVersion,
+      (trip, now) => {
+        if (actor.role === 'operator') trip.reassign(target, now);
+        else trip.assign(target, now);
+      },
+      'trip.reassign',
+    );
   }
 
   async start(actor: LogisticsActor, tripId: string, expectedVersion: number): Promise<TripProps> {
@@ -222,7 +231,13 @@ export class TripPlanningService {
     expectedVersion: number,
     reason: string,
   ): Promise<TripProps> {
-    return this.mutateTrip(actor, tripId, expectedVersion, (trip, now) => trip.cancel(now, reason));
+    return this.mutateTrip(
+      actor,
+      tripId,
+      expectedVersion,
+      (trip, now) => trip.cancel(now, reason),
+      'trip.cancel',
+    );
   }
 
   async listMine(actor: LogisticsActor, limit = 50): Promise<readonly TripProps[]> {
@@ -282,6 +297,8 @@ export class TripPlanningService {
     tripId: string,
     expectedVersion: number,
     mutation: (trip: Trip, now: Date) => void,
+    /** Recorded in the audit log when an operator (staff) performs the change. */
+    operatorAuditAction?: string,
   ): Promise<TripProps> {
     this.requireCarrierOrOperator(actor);
     return this.uow.run(async () => {
@@ -306,6 +323,16 @@ export class TripPlanningService {
       await this.repository.saveTrip(saved, current.route);
       const events = trip.drainEvents();
       await this.publish(saved, events);
+      if (operatorAuditAction && actor.role === 'operator')
+        await this.audit.record({
+          actorId: actor.sub,
+          actorRole: actor.role,
+          action: operatorAuditAction,
+          entity: 'trip',
+          entityId: tripId,
+          before: { status: current.status, carrierId: current.carrierId },
+          after: { status: saved.status, carrierId: saved.carrierId },
+        });
       return saved;
     });
   }

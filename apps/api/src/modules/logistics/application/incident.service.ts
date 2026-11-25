@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { OUTBOX_WRITER } from '../../../shared/ports/outbox-writer.js';
 import type { OutboxWriter } from '../../../shared/ports/outbox-writer.js';
+import { AUDIT_WRITER, type AuditWriter } from '../../../shared/ports/audit-writer.js';
 import { DomainError } from '../../../shared/kernel/domain-error.js';
 import { Incident } from '../domain/incident.js';
 import type { IncidentProps } from '../domain/incident.js';
@@ -29,6 +30,8 @@ export class IncidentService {
     @Inject(LOGISTICS_UNIT_OF_WORK) private readonly uow: LogisticsUnitOfWork,
     @Inject(LOGISTICS_CLOCK) private readonly clock: LogisticsClock,
     @Inject(OUTBOX_WRITER) private readonly outbox: OutboxWriter,
+    // Injected by Nest (global backoffice module); the default only serves hand-built tests.
+    @Inject(AUDIT_WRITER) private readonly audit: AuditWriter = { record: async () => undefined },
   ) {}
 
   async open(actor: LogisticsActor, input: OpenIncidentInput): Promise<IncidentProps> {
@@ -97,6 +100,16 @@ export class IncidentService {
           payload: { incidentId: saved.id, orderId: saved.orderId },
         },
       ]);
+      if (actor.role === 'operator')
+        await this.audit.record({
+          actorId: actor.sub,
+          actorRole: actor.role,
+          action: 'incident.resolve',
+          entity: 'incident',
+          entityId: saved.id,
+          before: { status: current.status },
+          after: { status: saved.status },
+        });
       return saved;
     });
   }

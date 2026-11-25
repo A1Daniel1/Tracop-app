@@ -142,6 +142,17 @@ Todas para el usuario autenticado, sobre sí mismo; detalle en [ADR-018](adr/ADR
 
 Cada aviso se escribe en la bandeja y se envía por el primer canal del orden que alcance al usuario: hoy solo mensajería (Telegram vinculado); push y SMS no tienen proveedor y se registran como omitidos. El SMS solo aplica a avisos críticos (comprobante rechazado, incidencia), que además ignoran el horario sin molestias. La bandeja también llega por `GET /sync/pull` como entidad `notification`.
 
+## Backoffice
+
+Detalle en [ADR-019](adr/ADR-019.md). Importes e importes de parámetros viajan como cadenas de enteros.
+
+| Método y ruta                                                             | Quién                          | Resultado                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /backoffice/parameters`                                              | `operator`, `finance`, `admin` | 200 `{ items }`: `key`, `unit`, `value`, `defaultValue` (variable de entorno), `min`, `max`, `provisional`, `description`, `updatedAt`.                                                                                       |
+| `PUT /backoffice/parameters/{key}`                                        | `admin`                        | `{ value: "<entero>" }`. 200 con el parámetro; 400 fuera de rango (`parameter_out_of_range`) o no entero; 404 clave desconocida. Solo hacia adelante y auditado.                                                              |
+| `GET /backoffice/audit?entity=&entityId=&actorId=&action=&cursor=&limit=` | `admin`                        | 200 `{ items, nextCursor? }`, más recientes primero. Sin IP ni su HMAC.                                                                                                                                                       |
+| `GET /backoffice/metrics`                                                 | `operator`, `finance`, `admin` | 200 con pedidos por estado, `paidOrdersTotalCop`, lotes por estado, pagos (comprobantes por revisar, el más antiguo, disputas, liquidaciones emitidas y pagadas), entregas de notificaciones y outbox (pendientes, fallidos). |
+
 ## Logística
 
 Todas las rutas `/logistics` exigen autenticación. El rol `carrier` gestiona su perfil, crea y opera **sus** viajes, registra check-ins y abre incidencias. El rol `operator` consulta transportistas y todos los viajes, detecta conflictos y reasigna; también puede cancelar viajes y resolver incidencias. Otros roles reciben HTTP 403.

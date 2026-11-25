@@ -7,3 +7,4 @@ export * from './schemas/ordering.js';
 export * from './schemas/logistics.js';
 export * from './schemas/payments.js';
 export * from './schemas/notifications.js';
+export * from './schemas/backoffice.js';

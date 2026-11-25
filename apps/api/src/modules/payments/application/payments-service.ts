@@ -1,5 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { DomainError } from '../../../shared/kernel/domain-error.js';
+import type { AuditWriter } from '../../../shared/ports/audit-writer.js';
+import type { ParameterReader } from '../../../shared/ports/parameter-reader.js';
 import type { OutboxWriter } from '../../../shared/ports/outbox-writer.js';
 import type { PhotoProcessorPort } from '../../../shared/ports/photo-processor.js';
 import type { StoragePort } from '../../../shared/ports/storage.js';
@@ -60,6 +62,8 @@ export class PaymentsService {
     private readonly uow: PaymentsUnitOfWork,
     private readonly clock: PaymentsClock,
     private readonly settings: PaymentsSettings,
+    private readonly audit: AuditWriter,
+    private readonly parameters: ParameterReader,
     private readonly newId: () => string,
   ) {}
 
@@ -193,6 +197,7 @@ export class PaymentsService {
         entity.verify(actor.sub, now);
         await this.orders.markPaid(entity.props.orderId, actor.sub);
         await this.post(entity.props, paymentVerifiedTransaction(entity.props), now);
+        await this.audited(actor, 'payment.verify', entity.props.id, 'proof_uploaded', 'verified');
       },
       expectedVersion,
     );
@@ -212,8 +217,10 @@ export class PaymentsService {
         const now = this.clock.now();
         entity.reject(actor.sub, reason, now);
         // The buyer may pay again; until then the stock lapses after a short grace window.
-        const graceEnd = new Date(now.getTime() + this.settings.rejectionGraceHours * 3_600_000);
+        const graceHours = await this.parameters.get('payment.rejection_grace_hours');
+        const graceEnd = new Date(now.getTime() + Number(graceHours) * 3_600_000);
         await this.orders.resumeStockExpiry(entity.props.orderId, graceEnd);
+        await this.audited(actor, 'payment.reject', entity.props.id, 'proof_uploaded', 'rejected');
       },
       expectedVersion,
     );
@@ -284,6 +291,13 @@ export class PaymentsService {
           );
         }
         await this.orders.close(entity.props.orderId, actor.sub);
+        await this.audited(
+          actor,
+          input.outcome === 'release' ? 'payment.dispute_release' : 'payment.dispute_refund',
+          entity.props.id,
+          'disputed',
+          entity.props.status,
+        );
       },
       input.expectedVersion,
     );
@@ -293,14 +307,15 @@ export class PaymentsService {
   /** Worker job: issue the settlements of held payments whose claim window is over. */
   async issueDueSettlements(limit = 100): Promise<number> {
     const now = this.clock.now();
-    const heldBefore = new Date(now.getTime() - this.settings.claimWindowHours * 3_600_000);
+    const claimWindowHours = Number(await this.parameters.get('payment.claim_window_hours'));
+    const heldBefore = new Date(now.getTime() - claimWindowHours * 3_600_000);
     let issued = 0;
     for (const paymentId of await this.payments.findDueForSettlement(heldBefore, limit)) {
       const didIssue = await this.uow.run(async () => {
         const current = await this.payments.findById(paymentId, true);
         if (!current) return false;
         const payment = Payment.reconstitute(current);
-        if (!payment.isClaimWindowOver(now, this.settings.claimWindowHours)) return false;
+        if (!payment.isClaimWindowOver(now, claimWindowHours)) return false;
         const plan = planSettlements(current, this.newId, now);
         if (!(await this.settlements.insertPlan(plan))) return false;
         await this.publish(
@@ -342,6 +357,15 @@ export class PaymentsService {
         now,
       );
       await this.publish([this.settlementEvent('SettlementPaid', paid, actor.sub, now)]);
+      await this.audit.record({
+        actorId: actor.sub,
+        actorRole: actor.role,
+        action: 'settlement.mark_paid',
+        entity: 'settlement',
+        entityId: paid.id,
+        before: { status: 'issued' },
+        after: { status: 'paid', reference: paid.reference },
+      });
       const all = await this.settlements.listForPayment(paid.paymentId);
       if (all.every((settlement) => settlement.status === 'paid'))
         await this.settle(Payment.reconstitute(paymentProps), paymentProps.version, now);
@@ -366,6 +390,24 @@ export class PaymentsService {
   ): Promise<readonly StoredLedgerEntry[]> {
     this.requireStaff(actor);
     return this.ledger.listForOrder(orderId);
+  }
+
+  private async audited(
+    actor: PaymentsActor,
+    action: string,
+    paymentId: string,
+    before: PaymentStatus,
+    after: PaymentStatus,
+  ): Promise<void> {
+    await this.audit.record({
+      actorId: actor.sub,
+      actorRole: actor.role,
+      action,
+      entity: 'payment',
+      entityId: paymentId,
+      before: { status: before },
+      after: { status: after },
+    });
   }
 
   private async settle(payment: Payment, expectedVersion: number, now: Date): Promise<void> {

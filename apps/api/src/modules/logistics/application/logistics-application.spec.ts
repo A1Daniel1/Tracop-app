@@ -73,10 +73,32 @@ const createHarness = () => {
   };
   const outbox = { append: jest.fn(async () => undefined) };
   const carriers = new CarrierProfileService(repository, uow, clock);
-  const trips = new TripPlanningService(repository, ordering, zones, uow, clock, changes, outbox);
+  const audited: { action: string; actorId: string | null; entityId: string }[] = [];
+  const audit = { record: async (entry: (typeof audited)[number]) => void audited.push(entry) };
+  const trips = new TripPlanningService(
+    repository,
+    ordering,
+    zones,
+    uow,
+    clock,
+    changes,
+    outbox,
+    audit,
+  );
   const checkins = new CheckinService(repository, ordering, uow, clock, changes, outbox);
-  const incidents = new IncidentService(repository, uow, clock, outbox);
-  return { repository, ordering, zones, changes, outbox, carriers, trips, checkins, incidents };
+  const incidents = new IncidentService(repository, uow, clock, outbox, audit);
+  return {
+    repository,
+    ordering,
+    zones,
+    changes,
+    outbox,
+    carriers,
+    trips,
+    checkins,
+    incidents,
+    audited,
+  };
 };
 
 const registerCarrier = async (h: ReturnType<typeof createHarness>) => {
@@ -174,6 +196,14 @@ describe('logistics application', () => {
     expect(started.status).toBe('in_progress');
     const cancelled = await h.trips.cancel(carrier, trip.id, started.version, 'lluvia');
     expect(cancelled.status).toBe('cancelled');
+    // Only the operator's reassignment is a staff action; the carrier's own changes are not.
+    expect(h.audited).toEqual([
+      expect.objectContaining({
+        action: 'trip.reassign',
+        actorId: operator.sub,
+        entityId: trip.id,
+      }),
+    ]);
     expect(await h.trips.resolveConflicts(operator)).toEqual([]);
     await expect(h.trips.resolveConflicts(carrier)).rejects.toThrow('operador');
   });
@@ -251,6 +281,9 @@ describe('logistics application', () => {
     expect(incident.status).toBe('open');
     expect((await h.incidents.list(carrier))[0]?.id).toBe(incident.id);
     expect((await h.incidents.resolve(operator, incident.id)).status).toBe('resolved');
+    expect(h.audited).toEqual([
+      expect.objectContaining({ action: 'incident.resolve', actorId: operator.sub }),
+    ]);
     await expect(h.incidents.resolve(carrier, incident.id)).rejects.toThrow('ya está resuelta');
     await expect(
       h.incidents.open(buyer, {

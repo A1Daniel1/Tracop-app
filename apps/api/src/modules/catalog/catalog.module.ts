@@ -30,6 +30,7 @@ import {
   CATALOG_CLOCK,
   CATALOG_EVENT_WRITER,
   CATALOG_LOT_REPOSITORY,
+  CATALOG_METRICS,
   CATALOG_ORDERING_API,
   CATALOG_PRODUCT_REPOSITORY,
   CATALOG_UNIT_OF_WORK,
@@ -43,6 +44,9 @@ import {
   type PhotoUploadRateLimitPort,
 } from './ports/lot-photo-ports.js';
 import { StorageModule } from '../../shared/infra/storage/storage.module.js';
+import { DrizzleCatalogMetricsQuery } from './adapters/out/catalog-metrics-query.js';
+import { AUDIT_WRITER } from '../../shared/ports/audit-writer.js';
+import { PARAMETER_READER } from '../../shared/ports/parameter-reader.js';
 import {
   PHOTO_PROCESSOR_PORT,
   type PhotoProcessorPort,
@@ -61,6 +65,8 @@ import { STORAGE_PORT, type StoragePort } from '../../shared/ports/storage.js';
     InMemoryProductProposalRateLimiter,
     SharedCatalogClock,
     SharedCatalogEventWriter,
+    DrizzleCatalogMetricsQuery,
+    { provide: CATALOG_METRICS, useExisting: DrizzleCatalogMetricsQuery },
     { provide: CATALOG_CATEGORY_REPOSITORY, useExisting: DrizzleCategoryRepository },
     { provide: CATALOG_PRODUCT_REPOSITORY, useExisting: DrizzleProductRepository },
     { provide: CATALOG_LOT_REPOSITORY, useExisting: DrizzleLotRepository },
@@ -127,6 +133,8 @@ import { STORAGE_PORT, type StoragePort } from '../../shared/ports/storage.js';
         CATALOG_SETTINGS,
         CHANGE_RECORDER,
         LOT_PHOTO_REPOSITORY,
+        AUDIT_WRITER,
+        PARAMETER_READER,
       ],
     },
     {
@@ -141,6 +149,6 @@ import { STORAGE_PORT, type StoragePort } from '../../shared/ports/storage.js';
         new CatalogMaintenanceService(catalog, photos),
     },
   ],
-  exports: [CatalogService, DeleteLot, CATALOG_ORDERING_API, CATALOG_MAINTENANCE],
+  exports: [CatalogService, DeleteLot, CATALOG_ORDERING_API, CATALOG_MAINTENANCE, CATALOG_METRICS],
 })
 export class CatalogModule {}
