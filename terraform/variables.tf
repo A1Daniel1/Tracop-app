@@ -35,9 +35,9 @@ variable "web_bucket" {
 }
 
 variable "repo_url" {
-  description = "Repositorio del backend (se clona y se compila en la propia EC2; sin ECR)."
+  description = "Repositorio del backend (se clona y se compila en la propia EC2; sin ECR). Apunta al fork con el código de despliegue."
   type        = string
-  default     = "https://github.com/SWNT-Tracop/Tracop-app.git"
+  default     = "https://github.com/A1Daniel1/Tracop-app.git"
 }
 
 variable "repo_branch" {
