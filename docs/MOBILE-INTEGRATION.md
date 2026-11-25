@@ -34,7 +34,7 @@ Todas las rutas exigen `Authorization: Bearer <accessToken>` salvo las públicas
 - **Idempotencia por `opId`**: repetir la misma operación devuelve el resultado guardado; reutilizar un `opId` con otro contenido devuelve `rejected` con `op_id_reused`. Si una operación falla, las siguientes de la misma `entity:entityId` en ese lote se rechazan con `dependency_failed`; las demás siguen.
 - **Concurrencia optimista**: `update`, `transition` y `delete` llevan `baseVersion`; usen el `serverVersion` de la operación exitosa anterior para la siguiente. Un `conflict` obliga a hacer pull y reintentar.
 - `GET /sync/pull?cursor=&limit=`: cursor numérico del servidor (no una marca de tiempo), `limit` 1–500 (200 por defecto). Guarden el `nextCursor` recibido sin modificarlo y sigan pidiendo mientras `hasMore` sea `true`. Apliquen un cambio solo si su versión es más reciente que la local. Un `delete` con `payload.tombstone: true` es un borrado que deben conservar.
-- Entidades: pull entrega `category`, `product`, `lot`, `trip`, `checkin` e `incident`. Push acepta `lot` (dueño del lote), `trip` (`create`; `transition` solo con `payload.action: "start"`), `checkin` (`create`), `incident` (`create`) y `carrier_profile` (`create`/`update`, `entityId` = el propio usuario).
+- Entidades: pull entrega `category`, `product`, `lot`, `trip`, `checkin`, `incident` y `notification` (la bandeja, solo del propio usuario). Push acepta `lot` (dueño del lote), `trip` (`create`; `transition` solo con `payload.action: "start"`), `checkin` (`create`), `incident` (`create`) y `carrier_profile` (`create`/`update`, `entityId` = el propio usuario).
 - Visibilidad: la taxonomía aprobada es global; lotes, propuestas de producto pendientes, viajes y check-ins solo los recibe su dueño. Una propuesta rechazada llega a su proponente como `delete` con `rejectionReason`.
 - **Pedidos y pagos no entran en sync**: solo en línea.
 - Límites: 30 push y 120 pull por usuario cada 60 s (429).
@@ -73,6 +73,12 @@ El comprador paga por transferencia o Nequi fuera de la app y sube una foto del 
 4. Verificado, el pedido pasa a `paid` y entra en logística. Desde entonces, y hasta que se emitan las liquidaciones (`PAYMENT_CLAIM_WINDOW_HOURS` después de la entrega), el comprador puede disputar (`POST /payments/{id}/dispute`).
 
 `proofUrl` es una URL firmada de corta duración: muéstrenla, no la guarden. El proveedor no ve el pago: sabe que está pagado por el estado del pedido. Productores, proveedores y transportistas ven sus liquidaciones en `GET /settlements`.
+
+## Notificaciones
+
+- La bandeja (`GET /me/inbox`, más recientes primero) también llega por sync como `notification` con `{ id, kind, title, body, createdAt, readAt }`: muéstrenla offline y marquen leído con `POST /me/inbox/{id}/read` cuando haya señal (es idempotente).
+- Los textos ya vienen redactados en español; usen `kind` solo para el ícono o la navegación. No contienen direcciones ni datos de otros usuarios.
+- Preferencias en `GET`/`PUT /me/notification-preferences`: orden de canales y horario sin molestias (hora de Colombia). Hoy solo Telegram entrega fuera de la app; push llegará con FCM.
 
 ## Errores y límites
 

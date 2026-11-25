@@ -10,6 +10,8 @@ import type { ProviderProfileProps, ProviderPublicSummary } from '../domain/prov
 export interface UserRepository {
   findByPhone(phone: PhoneNumber): Promise<UserProps | null>;
   findById(id: string): Promise<UserProps | null>;
+  /** Ids of active users with the role, oldest first. */
+  listActiveIdsByRole(role: UserProps['role'], limit: number): Promise<readonly string[]>;
   create(user: UserProps): Promise<void>;
   update(user: UserProps): Promise<void>;
 }
@@ -75,7 +77,27 @@ export interface ChannelLinkRepository {
     channelUserId: string,
   ): Promise<ChannelLinkProps | null>;
   findVerifiedByPhone(phone: PhoneNumber): Promise<ChannelLinkProps | null>;
+  /** The user's most recently verified channel link, if any. */
+  findVerifiedByUser(userId: string): Promise<ChannelLinkProps | null>;
   create(link: ChannelLinkProps): Promise<void>;
+}
+
+/** How to reach a user with a notification; no phone or name, only what delivery needs. */
+export interface NotificationContact {
+  readonly userId: string;
+  readonly locale: string;
+  readonly channel: IdentityChannelLink | null;
+}
+
+/** Identity data the notifications module may read. */
+export interface IdentityNotificationDirectory {
+  /** Active users only; suspended or unknown users are not notified. */
+  findNotificationContacts(userIds: readonly string[]): Promise<readonly NotificationContact[]>;
+  /** Active staff of a role (operator, finance, admin). */
+  listActiveStaffIds(
+    role: 'operator' | 'finance' | 'admin',
+    limit: number,
+  ): Promise<readonly string[]>;
 }
 
 export interface IdentityChannelLink {

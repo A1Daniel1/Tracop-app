@@ -17,6 +17,7 @@ describe('provider profile application', () => {
   const users: UserRepository = {
     findById: async () => user,
     findByPhone: async () => null,
+    listActiveIdsByRole: async () => [],
     create: async () => undefined,
     update: async () => undefined,
   };

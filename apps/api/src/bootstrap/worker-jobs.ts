@@ -1,6 +1,7 @@
 import type { CatalogMaintenanceApi } from '../modules/catalog/index.js';
 import type { IdentityMaintenanceApi } from '../modules/identity/index.js';
 import type { MessagingMaintenanceApi } from '../modules/messaging/index.js';
+import type { NotificationsMaintenanceApi } from '../modules/notifications/index.js';
 import type { OrderingMaintenanceApi } from '../modules/ordering/index.js';
 import type { PaymentsMaintenanceApi } from '../modules/payments/index.js';
 import type { AppEnvironment } from '../shared/infra/env.js';
@@ -13,6 +14,7 @@ export interface WorkerJobDependencies {
   readonly identity: IdentityMaintenanceApi;
   readonly messaging: MessagingMaintenanceApi;
   readonly payments: PaymentsMaintenanceApi;
+  readonly notifications: NotificationsMaintenanceApi;
   readonly outbox: OutboxDispatcher;
 }
 
@@ -24,6 +26,7 @@ export type WorkerJobSchedule = Pick<
   | 'JOB_RETENTION_CRON'
   | 'JOB_OUTBOX_DISPATCH_CRON'
   | 'JOB_ISSUE_SETTLEMENTS_CRON'
+  | 'JOB_SEND_NOTIFICATIONS_CRON'
 >;
 
 /**
@@ -68,6 +71,12 @@ export const workerJobs = (
     ),
     job('payments.issue-settlements', schedule.JOB_ISSUE_SETTLEMENTS_CRON, () =>
       dependencies.payments.issueDueSettlements(),
+    ),
+    job(
+      'notifications.send-due',
+      schedule.JOB_SEND_NOTIFICATIONS_CRON,
+      () => dependencies.notifications.sendDueNotifications(),
+      50,
     ),
     job(
       'shared.dispatch-outbox',

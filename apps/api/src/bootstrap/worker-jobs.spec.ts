@@ -7,6 +7,7 @@ const schedule = {
   JOB_RETENTION_CRON: '40 4 * * *',
   JOB_OUTBOX_DISPATCH_CRON: '* * * * *',
   JOB_ISSUE_SETTLEMENTS_CRON: '*/15 * * * *',
+  JOB_SEND_NOTIFICATIONS_CRON: '* * * * *',
 };
 
 const dependencies = () => {
@@ -32,6 +33,9 @@ const dependencies = () => {
     },
     messaging: { purgeProcessedUpdates: record('messaging.updates', 6) },
     payments: { issueDueSettlements: record('payments.settlements', 7) },
+    notifications: {
+      sendDueNotifications: record('notifications.send', { sent: 0, retried: 0, failed: 0 }),
+    },
     outbox: {
       dispatch: record('outbox.dispatch', {
         claimed: 0,
@@ -45,7 +49,7 @@ const dependencies = () => {
 };
 
 describe('workerJobs', () => {
-  it('declares the nine periodic jobs with their schedules and limits', () => {
+  it('declares the ten periodic jobs with their schedules and limits', () => {
     const jobs = workerJobs(dependencies().deps, schedule);
     expect(
       jobs.map(({ name, cron, timeoutSeconds, retryLimit }) => [
@@ -63,6 +67,7 @@ describe('workerJobs', () => {
       ['identity.purge-sessions', '40 4 * * *', 240, 3],
       ['messaging.purge-processed-updates', '40 4 * * *', 240, 3],
       ['payments.issue-settlements', '*/15 * * * *', 240, 3],
+      ['notifications.send-due', '* * * * *', 50, 3],
       ['shared.dispatch-outbox', '* * * * *', 50, 3],
     ]);
     expect(jobs.map((job) => job.name)).not.toContain('sync.compact-change-log');
@@ -81,6 +86,7 @@ describe('workerJobs', () => {
       'identity.sessions',
       'messaging.updates',
       'payments.settlements',
+      'notifications.send',
       'outbox.dispatch',
     ]);
     expect(results.slice(0, 3)).toEqual([1, { reservations: 0, quotes: 0 }, 2]);

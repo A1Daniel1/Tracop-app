@@ -73,6 +73,12 @@ export class MemoryUserRepository implements UserRepository {
   async findById(id: string): Promise<UserProps | null> {
     return this.state.users.get(id) ?? null;
   }
+  async listActiveIdsByRole(role: UserProps['role'], limit: number): Promise<readonly string[]> {
+    return [...this.state.users.values()]
+      .filter((user) => user.role === role && user.status === 'active')
+      .map((user) => user.id)
+      .slice(0, limit);
+  }
   async create(user: UserProps): Promise<void> {
     this.state.users.set(user.id, user);
   }

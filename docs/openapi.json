@@ -11055,6 +11055,595 @@
         "summary": "Marcar una liquidación como pagada (finance, operator, admin)",
         "tags": ["payments"]
       }
+    },
+    "/me/notification-preferences": {
+      "get": {
+        "description": "Sin preferencias guardadas: mensajería, push y SMS, sin horario sin molestias. El SMS solo se usa para avisos críticos; push y SMS aún no tienen proveedor.",
+        "operationId": "NotificationsController_getPreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "channelOrder": {
+                      "minItems": 1,
+                      "maxItems": 3,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["messaging", "push", "sms"]
+                      }
+                    },
+                    "quietHours": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "type": "string",
+                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                        },
+                        "end": {
+                          "type": "string",
+                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                        }
+                      },
+                      "required": ["start", "end"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["channelOrder", "quietHours"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "channelOrder": ["messaging", "push", "sms"],
+                  "quietHours": {
+                    "start": "22:00",
+                    "end": "06:00"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mis preferencias de notificación",
+        "tags": ["notifications"]
+      },
+      "put": {
+        "description": "Horario sin molestias en hora de Colombia (HH:MM, puede cruzar la medianoche); los avisos críticos lo ignoran.",
+        "operationId": "NotificationsController_savePreferences",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "channelOrder": {
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": ["messaging", "push", "sms"]
+                    }
+                  },
+                  "quietHours": {
+                    "nullable": true,
+                    "type": "object",
+                    "properties": {
+                      "start": {
+                        "type": "string",
+                        "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                      },
+                      "end": {
+                        "type": "string",
+                        "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                      }
+                    },
+                    "required": ["start", "end"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["channelOrder", "quietHours"],
+                "additionalProperties": false
+              },
+              "examples": {
+                "synthetic": {
+                  "summary": "Ejemplo sintético",
+                  "value": {
+                    "channelOrder": ["messaging", "push", "sms"],
+                    "quietHours": {
+                      "start": "22:00",
+                      "end": "06:00"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "channelOrder": {
+                      "minItems": 1,
+                      "maxItems": 3,
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["messaging", "push", "sms"]
+                      }
+                    },
+                    "quietHours": {
+                      "nullable": true,
+                      "type": "object",
+                      "properties": {
+                        "start": {
+                          "type": "string",
+                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                        },
+                        "end": {
+                          "type": "string",
+                          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+                        }
+                      },
+                      "required": ["start", "end"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["channelOrder", "quietHours"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "channelOrder": ["messaging", "push", "sms"],
+                  "quietHours": {
+                    "start": "22:00",
+                    "end": "06:00"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "La solicitud no cumple el contrato o una regla de entrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "Solicitud inválida."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Guardar mis preferencias de notificación",
+        "tags": ["notifications"]
+      }
+    },
+    "/me/inbox": {
+      "get": {
+        "description": "También llega por `GET /sync/pull` como entidad `notification`.",
+        "operationId": "NotificationsController_inbox",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": [
+                              "order_received",
+                              "payment_verified_buyer",
+                              "payment_verified_provider",
+                              "payment_rejected",
+                              "pickup_scheduled",
+                              "in_transit",
+                              "delivered",
+                              "settlement_issued",
+                              "settlement_paid",
+                              "incident_opened"
+                            ]
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "body": {
+                            "type": "string"
+                          },
+                          "createdAt": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          },
+                          "readAt": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          }
+                        },
+                        "required": ["id", "kind", "title", "body", "createdAt", "readAt"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["items"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "items": [
+                    {
+                      "id": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                      "kind": "delivered",
+                      "title": "Pedido entregado",
+                      "body": "Registramos la entrega del pedido #018F47A2. Si hay un problema, repórtalo en la app.",
+                      "createdAt": "2026-11-24T15:00:00.000Z",
+                      "readAt": null
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "La solicitud no cumple el contrato o una regla de entrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "Solicitud inválida."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mi bandeja de notificaciones (más recientes primero)",
+        "tags": ["notifications"]
+      }
+    },
+    "/me/inbox/{id}/read": {
+      "post": {
+        "operationId": "NotificationsController_markRead",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                    },
+                    "kind": {
+                      "type": "string",
+                      "enum": [
+                        "order_received",
+                        "payment_verified_buyer",
+                        "payment_verified_provider",
+                        "payment_rejected",
+                        "pickup_scheduled",
+                        "in_transit",
+                        "delivered",
+                        "settlement_issued",
+                        "settlement_paid",
+                        "incident_opened"
+                      ]
+                    },
+                    "title": {
+                      "type": "string"
+                    },
+                    "body": {
+                      "type": "string"
+                    },
+                    "createdAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "readAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                  },
+                  "required": ["id", "kind", "title", "body", "createdAt", "readAt"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "id": "018f47a2-8b45-7cc2-9a1e-123456789abc",
+                  "kind": "delivered",
+                  "title": "Pedido entregado",
+                  "body": "Registramos la entrega del pedido #018F47A2. Si hay un problema, repórtalo en la app.",
+                  "createdAt": "2026-11-24T15:00:00.000Z",
+                  "readAt": "2026-11-24T15:05:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "La solicitud no cumple el contrato o una regla de entrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "Solicitud inválida."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El recurso solicitado no existe o no es visible para este usuario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 404,
+                  "code": "not_found",
+                  "message": "Recurso no encontrado."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Marcar una notificación como leída (idempotente)",
+        "tags": ["notifications"]
+      }
     }
   },
   "info": {

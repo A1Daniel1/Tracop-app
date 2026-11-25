@@ -10,6 +10,7 @@ import {
   OUTBOX_DISPATCHER_SETTINGS,
   type OutboxDispatcherSettings,
 } from '../shared/ports/outbox-dispatcher.js';
+import { NOTIFICATIONS_OUTBOX_SUBSCRIBER } from '../modules/notifications/index.js';
 import { PAYMENTS_OUTBOX_SUBSCRIBER } from '../modules/payments/index.js';
 import {
   OUTBOX_SUBSCRIBERS,
@@ -33,8 +34,11 @@ import { WorkerLifecycle } from './worker-lifecycle.js';
     },
     {
       provide: OUTBOX_SUBSCRIBERS,
-      inject: [PAYMENTS_OUTBOX_SUBSCRIBER],
-      useFactory: (payments: OutboxSubscriberPort): readonly OutboxSubscriberPort[] => [payments],
+      inject: [PAYMENTS_OUTBOX_SUBSCRIBER, NOTIFICATIONS_OUTBOX_SUBSCRIBER],
+      useFactory: (
+        payments: OutboxSubscriberPort,
+        notifications: OutboxSubscriberPort,
+      ): readonly OutboxSubscriberPort[] => [payments, notifications],
     },
     PostgresOutboxDispatcher,
     { provide: OUTBOX_DISPATCHER, useExisting: PostgresOutboxDispatcher },

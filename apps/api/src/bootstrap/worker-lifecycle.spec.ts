@@ -30,6 +30,7 @@ const environment = {
   JOB_RETENTION_CRON: '40 4 * * *',
   JOB_OUTBOX_DISPATCH_CRON: '* * * * *',
   JOB_ISSUE_SETTLEMENTS_CRON: '*/15 * * * *',
+  JOB_SEND_NOTIFICATIONS_CRON: '* * * * *',
 } as unknown as AppEnvironment;
 
 const lifecycle = (scheduler: FakeScheduler) => {
@@ -43,18 +44,19 @@ const lifecycle = (scheduler: FakeScheduler) => {
     { purgeExpiredOtpCodes: zero, purgeEndedSessions: zero, purgeRateLimitWindows: zero },
     { purgeProcessedUpdates: zero },
     { issueDueSettlements: zero },
+    { sendDueNotifications: async () => ({ sent: 0, retried: 0, failed: 0 }) },
     { dispatch: async () => ({ claimed: 0, published: 0, retried: 0, deadLettered: 0 }) },
   );
 };
 
 describe('WorkerLifecycle', () => {
-  it('starts the scheduler before registering the nine jobs and stops it on shutdown', async () => {
+  it('starts the scheduler before registering the ten jobs and stops it on shutdown', async () => {
     const scheduler = new FakeScheduler();
     const worker = lifecycle(scheduler);
     await worker.onApplicationBootstrap();
     expect(scheduler.events[0]).toBe('start');
-    expect(scheduler.jobs).toHaveLength(9);
-    expect(new Set(scheduler.jobs.map((job) => job.name)).size).toBe(9);
+    expect(scheduler.jobs).toHaveLength(10);
+    expect(new Set(scheduler.jobs.map((job) => job.name)).size).toBe(10);
     await worker.onApplicationShutdown();
     expect(scheduler.events.at(-1)).toBe('stop');
   });

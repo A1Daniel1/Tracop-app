@@ -6,6 +6,7 @@ import { IdentityDataModule } from './identity-data.module.js';
 import {
   CHANNEL_LINK_REPOSITORY,
   IDENTITY_CHANNEL_APPLICATION,
+  IDENTITY_NOTIFICATION_DIRECTORY,
   USER_REPOSITORY,
 } from './ports/tokens.js';
 
@@ -20,7 +21,8 @@ import {
       useFactory: (...dependencies: ConstructorParameters<typeof IdentityChannelService>) =>
         new IdentityChannelService(...dependencies),
     },
+    { provide: IDENTITY_NOTIFICATION_DIRECTORY, useExisting: IDENTITY_CHANNEL_APPLICATION },
   ],
-  exports: [IDENTITY_CHANNEL_APPLICATION],
+  exports: [IDENTITY_CHANNEL_APPLICATION, IDENTITY_NOTIFICATION_DIRECTORY],
 })
 export class IdentityChannelModule {}
