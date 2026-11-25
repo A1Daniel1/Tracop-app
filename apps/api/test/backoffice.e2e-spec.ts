@@ -268,4 +268,64 @@ describePostgres('backoffice parameters and audit log (Nest + PostgreSQL)', () =
       { actor_id: operator.userId, action: 'product.create', entity_id: productId },
     ]);
   });
+
+  it('reports each module aggregates to the staff, computed on demand', async () => {
+    const operator = await staff('operator');
+    const categoryId = createId();
+    const productId = createId();
+    await pool.query(
+      `INSERT INTO catalog.categories (id, name, depth, created_at, updated_at) VALUES ($1, 'C', 1, now(), now())`,
+      [categoryId],
+    );
+    await pool.query(
+      `INSERT INTO catalog.products (id, category_id, name, unit, search_text, attributes, created_at, updated_at)
+       VALUES ($1, $2, 'Papa', 'kg', 'papa', '{}', now(), now())`,
+      [productId, categoryId],
+    );
+    const lotId = createId();
+    await pool.query(
+      `INSERT INTO catalog.lots (id, provider_id, product_id, quantity, unit, unit_price, quality_grade,
+         available_from, available_until, location_lat, location_lng, status, version, created_at, updated_at)
+       VALUES ($1, $2, $3, 10, 'kg', 4500, NULL, NOW(), NOW() + INTERVAL '7 days', 4.6, -74.1,
+         'published', 1, NOW(), NOW())`,
+      [lotId, createId(), productId],
+    );
+    const buyerId = createId();
+    await app.get(OrderingService).createOrder(
+      { sub: buyerId, role: 'buyer' },
+      {
+        id: createId(),
+        buyerId,
+        lines: [{ lotId, quantityMilli: 1000n }],
+        deliveryAddress: 'Calle sintética 3, Bogotá',
+        deliveryWindow: null,
+      },
+    );
+
+    const response = await http()
+      .get('/backoffice/metrics')
+      .set({ Authorization: `Bearer ${operator.token}` })
+      .expect(200);
+
+    expect(response.body).toMatchObject({
+      ordersByStatus: expect.objectContaining({ quoted: 1, paid: 0, cancelled: 0 }),
+      paidOrdersTotalCop: '0',
+      lotsByStatus: expect.objectContaining({ published: 1, sold_out: 0 }),
+      payments: {
+        proofsAwaitingReview: 0,
+        oldestProofUploadedAt: null,
+        openDisputes: 0,
+        settlementsIssued: { count: 0, amountCop: '0' },
+        settlementsPaid: { count: 0, amountCop: '0' },
+      },
+      notificationDeliveries: { pending: 0, sent: 0, failed: 0, skipped: 0 },
+      outbox: { pending: 2, deadLettered: 0 },
+    });
+    // Finance reads them too; non-staff roles get 403 (backoffice-service.spec.ts).
+    const finance = await staff('finance');
+    await http()
+      .get('/backoffice/metrics')
+      .set({ Authorization: `Bearer ${finance.token}` })
+      .expect(200);
+  });
 });

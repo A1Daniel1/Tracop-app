@@ -1,6 +1,11 @@
 import type { ParameterKey } from '../../../shared/kernel/parameter-keys.js';
 import type { AuditEntryInput } from '../../../shared/ports/audit-writer.js';
-import type { AuditRecord, ParameterDefaults, StoredParameter } from '../ports/backoffice-ports.js';
+import type {
+  AuditRecord,
+  BackofficeMetrics,
+  ParameterDefaults,
+  StoredParameter,
+} from '../ports/backoffice-ports.js';
 import { BackofficeService } from './backoffice-service.js';
 
 const now = new Date('2026-11-25T15:00:00.000Z');
@@ -13,6 +18,21 @@ const defaults: ParameterDefaults = {
   'payment.claim_window_hours': 48n,
   'payment.rejection_grace_hours': 4n,
   'catalog.product_proposal_pending_limit': 5n,
+};
+
+const metrics: BackofficeMetrics = {
+  ordersByStatus: { quoted: 2 },
+  paidOrdersTotalCop: 9000n,
+  lotsByStatus: { published: 1 },
+  payments: {
+    proofsAwaitingReview: 1,
+    oldestProofUploadedAt: now,
+    openDisputes: 0,
+    settlementsIssued: { count: 0, amountCop: 0n },
+    settlementsPaid: { count: 0, amountCop: 0n },
+  },
+  notificationDeliveries: { failed: 0 },
+  outbox: { pending: 3, deadLettered: 0 },
 };
 
 const harness = (records: AuditRecord[] = []) => {
@@ -29,6 +49,7 @@ const harness = (records: AuditRecord[] = []) => {
     defaults,
     { run: async (operation) => operation() },
     { now: () => now },
+    { collect: async () => metrics },
   );
   return { service, stored, audited };
 };
@@ -102,5 +123,16 @@ describe('BackofficeService', () => {
       await expect(h.service.listAudit(admin, {}, cursor, 1)).rejects.toMatchObject({
         code: 'invalid_cursor',
       });
+  });
+
+  it('serves metrics to the staff only, stamped with the time', async () => {
+    const h = harness();
+    expect(await h.service.metrics({ sub: 'o', role: 'operator' })).toEqual({
+      ...metrics,
+      generatedAt: now,
+    });
+    await expect(h.service.metrics({ sub: 's', role: 'supplier' })).rejects.toMatchObject({
+      code: 'forbidden',
+    });
   });
 });

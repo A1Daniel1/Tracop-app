@@ -17,6 +17,7 @@ import type {
   LotReservationPort,
   OrderAggregate,
   OrderRepository,
+  OrderingMetrics,
   OrderingRateLimit,
   OrderingUnitOfWork,
   PricingPort,
@@ -442,6 +443,12 @@ export class OrderingService {
       order.transition('closed', now, actorId ? { actorId } : {});
       return true;
     });
+  }
+
+  /** Backoffice metrics (aggregates only, no personal data). */
+  async metrics(): Promise<OrderingMetrics> {
+    if (!this.orderRepository.metrics) throw new Error('metrics_unavailable');
+    return this.orderRepository.metrics();
   }
 
   async listMine(

@@ -132,6 +132,13 @@ export interface CatalogOrderingApi {
 
 export const CATALOG_ORDERING_API = Symbol('CATALOG_ORDERING_API');
 
+/** Lots per status (every status, zero included), for the backoffice. */
+export interface CatalogMetricsQuery {
+  lotsByStatus(): Promise<Readonly<Record<string, number>>>;
+}
+
+export const CATALOG_METRICS = Symbol('CATALOG_METRICS');
+
 export interface CatalogCursor {
   readonly version: 1;
   readonly sort: 'price' | 'distance' | 'availability' | 'recent';

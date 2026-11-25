@@ -27,11 +27,13 @@ import {
 import {
   DrizzleLedgerRepository,
   DrizzlePaymentRepository,
+  DrizzlePaymentsMetricsQuery,
   DrizzleSettlementRepository,
 } from './adapters/out/drizzle-payments-repositories.js';
 import { PaymentsService } from './application/payments-service.js';
 import {
   PAYMENTS_MAINTENANCE,
+  PAYMENTS_METRICS,
   PAYMENTS_OUTBOX_SUBSCRIBER,
   PAYMENTS_SERVICE,
   type PaymentsMaintenanceApi,
@@ -52,6 +54,8 @@ import {
     DrizzlePaymentRepository,
     DrizzleLedgerRepository,
     DrizzleSettlementRepository,
+    DrizzlePaymentsMetricsQuery,
+    { provide: PAYMENTS_METRICS, useExisting: DrizzlePaymentsMetricsQuery },
     {
       provide: PAYMENTS_SETTINGS,
       inject: [APP_ENVIRONMENT],
@@ -130,6 +134,6 @@ import {
       useFactory: (service: PaymentsService) => new OrderDeliveredSubscriber(service),
     },
   ],
-  exports: [PAYMENTS_SERVICE, PAYMENTS_MAINTENANCE, PAYMENTS_OUTBOX_SUBSCRIBER],
+  exports: [PAYMENTS_SERVICE, PAYMENTS_MAINTENANCE, PAYMENTS_OUTBOX_SUBSCRIBER, PAYMENTS_METRICS],
 })
 export class PaymentsModule {}

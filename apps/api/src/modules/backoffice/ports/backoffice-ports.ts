@@ -54,3 +54,25 @@ export type ParameterDefaults = Readonly<Record<ParameterKey, bigint>>;
 export const PARAMETER_REPOSITORY = Symbol('PARAMETER_REPOSITORY');
 export const AUDIT_QUERY_REPOSITORY = Symbol('AUDIT_QUERY_REPOSITORY');
 export const PARAMETER_DEFAULTS = Symbol('PARAMETER_DEFAULTS');
+
+/** Aggregates from every module, read through their public queries (no cross-schema joins). */
+export interface BackofficeMetrics {
+  readonly ordersByStatus: Readonly<Record<string, number>>;
+  readonly paidOrdersTotalCop: bigint;
+  readonly lotsByStatus: Readonly<Record<string, number>>;
+  readonly payments: {
+    readonly proofsAwaitingReview: number;
+    readonly oldestProofUploadedAt: Date | null;
+    readonly openDisputes: number;
+    readonly settlementsIssued: { readonly count: number; readonly amountCop: bigint };
+    readonly settlementsPaid: { readonly count: number; readonly amountCop: bigint };
+  };
+  readonly notificationDeliveries: Readonly<Record<string, number>>;
+  readonly outbox: { readonly pending: number; readonly deadLettered: number };
+}
+
+export interface MetricsSourcesPort {
+  collect(): Promise<BackofficeMetrics>;
+}
+
+export const METRICS_SOURCES_PORT = Symbol('METRICS_SOURCES_PORT');

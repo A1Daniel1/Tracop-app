@@ -49,6 +49,854 @@
         "tags": ["health"]
       }
     },
+    "/backoffice/parameters": {
+      "get": {
+        "description": "Valor vigente, valor por defecto (del entorno), rango y si sigue PROVISIONAL (AGENTS §23).",
+        "operationId": "BackofficeController_listParameters",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "key": {
+                            "type": "string",
+                            "enum": [
+                              "order.commission_rate_bps",
+                              "order.freight_cop",
+                              "order.quote_ttl_hours",
+                              "order.reservation_ttl_hours",
+                              "payment.claim_window_hours",
+                              "payment.rejection_grace_hours",
+                              "catalog.product_proposal_pending_limit"
+                            ]
+                          },
+                          "unit": {
+                            "type": "string",
+                            "enum": ["bps", "cop", "hours", "count"]
+                          },
+                          "value": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9]\\d{0,18})$"
+                          },
+                          "defaultValue": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9]\\d{0,18})$"
+                          },
+                          "min": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9]\\d{0,18})$"
+                          },
+                          "max": {
+                            "type": "string",
+                            "pattern": "^-?(0|[1-9]\\d{0,18})$"
+                          },
+                          "provisional": {
+                            "type": "boolean"
+                          },
+                          "description": {
+                            "type": "string"
+                          },
+                          "updatedAt": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          }
+                        },
+                        "required": [
+                          "key",
+                          "unit",
+                          "value",
+                          "defaultValue",
+                          "min",
+                          "max",
+                          "provisional",
+                          "description",
+                          "updatedAt"
+                        ],
+                        "additionalProperties": false
+                      }
+                    }
+                  },
+                  "required": ["items"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "items": [
+                    {
+                      "key": "order.commission_rate_bps",
+                      "unit": "bps",
+                      "value": "500",
+                      "defaultValue": "0",
+                      "min": "0",
+                      "max": "10000",
+                      "provisional": true,
+                      "description": "Comisión sobre el subtotal, en puntos básicos (100 = 1 %).",
+                      "updatedAt": "2026-11-25T15:00:00.000Z"
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol autenticado no está autorizado para esta operación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "No tienes permiso para este recurso."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Parámetros de negocio (operator, finance, admin)",
+        "tags": ["backoffice"]
+      }
+    },
+    "/backoffice/parameters/{key}": {
+      "put": {
+        "description": "Solo hacia adelante: afecta lo que ocurra desde ahora (por ejemplo, la comisión solo aplica a cotizaciones nuevas). Queda en el audit log con el valor anterior y el nuevo.",
+        "operationId": "BackofficeController_updateParameter",
+        "parameters": [
+          {
+            "name": "key",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "value": {
+                    "type": "string",
+                    "pattern": "^-?(0|[1-9]\\d{0,18})$"
+                  }
+                },
+                "required": ["value"],
+                "additionalProperties": false
+              },
+              "examples": {
+                "synthetic": {
+                  "summary": "Ejemplo sintético",
+                  "value": {
+                    "value": "500"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "key": {
+                      "type": "string",
+                      "enum": [
+                        "order.commission_rate_bps",
+                        "order.freight_cop",
+                        "order.quote_ttl_hours",
+                        "order.reservation_ttl_hours",
+                        "payment.claim_window_hours",
+                        "payment.rejection_grace_hours",
+                        "catalog.product_proposal_pending_limit"
+                      ]
+                    },
+                    "unit": {
+                      "type": "string",
+                      "enum": ["bps", "cop", "hours", "count"]
+                    },
+                    "value": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,18})$"
+                    },
+                    "defaultValue": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,18})$"
+                    },
+                    "min": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,18})$"
+                    },
+                    "max": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,18})$"
+                    },
+                    "provisional": {
+                      "type": "boolean"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "updatedAt": {
+                      "nullable": true,
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    }
+                  },
+                  "required": [
+                    "key",
+                    "unit",
+                    "value",
+                    "defaultValue",
+                    "min",
+                    "max",
+                    "provisional",
+                    "description",
+                    "updatedAt"
+                  ],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "key": "order.commission_rate_bps",
+                  "unit": "bps",
+                  "value": "500",
+                  "defaultValue": "0",
+                  "min": "0",
+                  "max": "10000",
+                  "provisional": true,
+                  "description": "Comisión sobre el subtotal, en puntos básicos (100 = 1 %).",
+                  "updatedAt": "2026-11-25T15:00:00.000Z"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "La solicitud no cumple el contrato o una regla de entrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "Solicitud inválida."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol autenticado no está autorizado para esta operación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "No tienes permiso para este recurso."
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "El recurso solicitado no existe o no es visible para este usuario.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 404
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 404,
+                  "code": "not_found",
+                  "message": "Recurso no encontrado."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Cambiar un parámetro (admin)",
+        "tags": ["backoffice"]
+      }
+    },
+    "/backoffice/metrics": {
+      "get": {
+        "description": "Agregados calculados al momento por cada módulo: pedidos por estado, importe pagado, lotes, cola de comprobantes y disputas, liquidaciones, entregas de notificaciones y outbox. Sin datos personales.",
+        "operationId": "BackofficeController_metrics",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "generatedAt": {
+                      "type": "string",
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                    },
+                    "ordersByStatus": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "paidOrdersTotalCop": {
+                      "type": "string",
+                      "pattern": "^-?(0|[1-9]\\d{0,18})$"
+                    },
+                    "lotsByStatus": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "payments": {
+                      "type": "object",
+                      "properties": {
+                        "proofsAwaitingReview": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "oldestProofUploadedAt": {
+                          "nullable": true,
+                          "type": "string",
+                          "format": "date-time",
+                          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                        },
+                        "openDisputes": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "settlementsIssued": {
+                          "type": "object",
+                          "properties": {
+                            "count": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "amountCop": {
+                              "type": "string",
+                              "pattern": "^-?(0|[1-9]\\d{0,18})$"
+                            }
+                          },
+                          "required": ["count", "amountCop"],
+                          "additionalProperties": false
+                        },
+                        "settlementsPaid": {
+                          "type": "object",
+                          "properties": {
+                            "count": {
+                              "type": "integer",
+                              "minimum": 0,
+                              "maximum": 9007199254740991
+                            },
+                            "amountCop": {
+                              "type": "string",
+                              "pattern": "^-?(0|[1-9]\\d{0,18})$"
+                            }
+                          },
+                          "required": ["count", "amountCop"],
+                          "additionalProperties": false
+                        }
+                      },
+                      "required": [
+                        "proofsAwaitingReview",
+                        "oldestProofUploadedAt",
+                        "openDisputes",
+                        "settlementsIssued",
+                        "settlementsPaid"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "notificationDeliveries": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    },
+                    "outbox": {
+                      "type": "object",
+                      "properties": {
+                        "pending": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        },
+                        "deadLettered": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "maximum": 9007199254740991
+                        }
+                      },
+                      "required": ["pending", "deadLettered"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "generatedAt",
+                    "ordersByStatus",
+                    "paidOrdersTotalCop",
+                    "lotsByStatus",
+                    "payments",
+                    "notificationDeliveries",
+                    "outbox"
+                  ],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "generatedAt": "2026-11-25T15:00:00.000Z",
+                  "ordersByStatus": {
+                    "quoted": 4,
+                    "paid": 2
+                  },
+                  "paidOrdersTotalCop": "90000",
+                  "lotsByStatus": {
+                    "published": 3,
+                    "sold_out": 1
+                  },
+                  "payments": {
+                    "proofsAwaitingReview": 1,
+                    "oldestProofUploadedAt": "2026-11-25T14:00:00.000Z",
+                    "openDisputes": 0,
+                    "settlementsIssued": {
+                      "count": 1,
+                      "amountCop": "45000"
+                    },
+                    "settlementsPaid": {
+                      "count": 2,
+                      "amountCop": "90000"
+                    }
+                  },
+                  "notificationDeliveries": {
+                    "pending": 0,
+                    "sent": 12,
+                    "failed": 1,
+                    "skipped": 4
+                  },
+                  "outbox": {
+                    "pending": 0,
+                    "deadLettered": 0
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol autenticado no está autorizado para esta operación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "No tienes permiso para este recurso."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Métricas operativas (operator, finance, admin)",
+        "tags": ["backoffice"]
+      }
+    },
+    "/backoffice/audit": {
+      "get": {
+        "description": "Más recientes primero. No expone la IP ni su HMAC.",
+        "operationId": "BackofficeController_audit",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Respuesta correcta.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "actorId": {
+                            "nullable": true,
+                            "type": "string",
+                            "format": "uuid",
+                            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+                          },
+                          "actorRole": {
+                            "type": "string"
+                          },
+                          "action": {
+                            "type": "string"
+                          },
+                          "entity": {
+                            "type": "string"
+                          },
+                          "entityId": {
+                            "type": "string"
+                          },
+                          "before": {
+                            "nullable": true,
+                            "type": "object",
+                            "additionalProperties": {}
+                          },
+                          "after": {
+                            "nullable": true,
+                            "type": "object",
+                            "additionalProperties": {}
+                          },
+                          "at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "actorId",
+                          "actorRole",
+                          "action",
+                          "entity",
+                          "entityId",
+                          "before",
+                          "after",
+                          "at"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "nextCursor": {
+                      "type": "string"
+                    }
+                  },
+                  "required": ["items"],
+                  "additionalProperties": false
+                },
+                "example": {
+                  "items": []
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "La solicitud no cumple el contrato o una regla de entrada.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 400
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 400,
+                  "message": "Solicitud inválida."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Falta autenticación o las credenciales/sesión no son válidas.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 401
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 401,
+                  "message": "Autenticación requerida."
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "El rol autenticado no está autorizado para esta operación.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["statusCode", "message"],
+                  "properties": {
+                    "statusCode": {
+                      "type": "integer",
+                      "example": 403
+                    },
+                    "code": {
+                      "type": "string",
+                      "description": "Código de dominio, si aplica."
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Solicitud inválida."
+                    }
+                  },
+                  "additionalProperties": false
+                },
+                "example": {
+                  "statusCode": 403,
+                  "message": "No tienes permiso para este recurso."
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Audit log de acciones del personal (admin)",
+        "tags": ["backoffice"]
+      }
+    },
     "/auth/register": {
       "post": {
         "description": "Registra la intención de crear una cuenta y solicita el consentimiento vigente. La respuesta no revela si el teléfono ya existe.",

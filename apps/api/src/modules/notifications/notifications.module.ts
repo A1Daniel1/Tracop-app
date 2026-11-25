@@ -7,10 +7,14 @@ import { createId } from '../../shared/kernel/ids.js';
 import { NotificationsController } from './adapters/in/notifications.controller.js';
 import { NotificationsSubscriber } from './adapters/in/notifications.subscriber.js';
 import { DisabledNotificationChannel } from './adapters/out/disabled-channels.js';
-import { DrizzleNotificationRepository } from './adapters/out/drizzle-notifications-repository.js';
+import {
+  DrizzleNotificationRepository,
+  DrizzleNotificationsMetricsQuery,
+} from './adapters/out/drizzle-notifications-repository.js';
 import { NotificationsService } from './application/notifications-service.js';
 import {
   NOTIFICATIONS_MAINTENANCE,
+  NOTIFICATIONS_METRICS,
   NOTIFICATIONS_OUTBOX_SUBSCRIBER,
   NOTIFICATIONS_SERVICE,
   type NotificationsMaintenanceApi,
@@ -30,6 +34,8 @@ import {
   controllers: [NotificationsController],
   providers: [
     DrizzleNotificationRepository,
+    DrizzleNotificationsMetricsQuery,
+    { provide: NOTIFICATIONS_METRICS, useExisting: DrizzleNotificationsMetricsQuery },
     {
       provide: NOTIFICATIONS_SETTINGS,
       inject: [APP_ENVIRONMENT],
@@ -88,6 +94,11 @@ import {
       useFactory: (service: NotificationsService) => new NotificationsSubscriber(service),
     },
   ],
-  exports: [NOTIFICATIONS_SERVICE, NOTIFICATIONS_MAINTENANCE, NOTIFICATIONS_OUTBOX_SUBSCRIBER],
+  exports: [
+    NOTIFICATIONS_SERVICE,
+    NOTIFICATIONS_MAINTENANCE,
+    NOTIFICATIONS_OUTBOX_SUBSCRIBER,
+    NOTIFICATIONS_METRICS,
+  ],
 })
 export class NotificationsModule {}

@@ -11,6 +11,8 @@ import type {
   AuditFilter,
   AuditQueryRepository,
   AuditRecord,
+  BackofficeMetrics,
+  MetricsSourcesPort,
   BackofficeClock,
   BackofficeUnitOfWork,
   ParameterDefaults,
@@ -38,7 +40,16 @@ export class BackofficeService {
     private readonly defaults: ParameterDefaults,
     private readonly uow: BackofficeUnitOfWork,
     private readonly clock: BackofficeClock,
+    private readonly metricsSources: MetricsSourcesPort,
   ) {}
+
+  /** Operational aggregates; staff only, no personal data. */
+  async metrics(
+    actor: BackofficeActor,
+  ): Promise<BackofficeMetrics & { readonly generatedAt: Date }> {
+    this.requireRole(actor, STAFF_ROLES);
+    return { ...(await this.metricsSources.collect()), generatedAt: this.clock.now() };
+  }
 
   /** Every parameter with its current value; staff only. */
   async listParameters(actor: BackofficeActor): Promise<readonly ParameterView[]> {

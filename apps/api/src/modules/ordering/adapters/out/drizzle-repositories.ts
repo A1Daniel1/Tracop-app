@@ -5,7 +5,13 @@ import {
 } from '../../../../shared/ports/parameter-reader.js';
 import { and, asc, desc, eq, gt, isNull, lt, sql } from 'drizzle-orm';
 import { DatabaseService } from '../../../../shared/infra/database.js';
-import type { OrderAggregate, OrderRepository, PricingPort } from '../../ports/ordering-ports.js';
+import type {
+  OrderAggregate,
+  OrderingMetrics,
+  OrderRepository,
+  PricingPort,
+} from '../../ports/ordering-ports.js';
+import { ORDER_STATES } from '../../domain/order.js';
 import type { OrderEvent, OrderLineProps, OrderProps } from '../../domain/order.js';
 import type { PricingConfiguration, QuoteAmounts } from '../../domain/pricing.js';
 import type { QuoteProps } from '../../domain/quote.js';
@@ -61,6 +67,26 @@ const toQuoteProps = (row: typeof quotes.$inferSelect): QuoteProps => ({
 @Injectable()
 export class DrizzleOrderRepository implements OrderRepository {
   constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
+
+  async metrics(): Promise<OrderingMetrics> {
+    const counts = await this.database.current().execute(sql`
+      SELECT status, count(*)::int AS count FROM ordering.orders
+      WHERE deleted_at IS NULL GROUP BY status
+    `);
+    const paid = await this.database.current().execute(sql`
+      SELECT COALESCE(sum(q.total), 0)::text AS total
+      FROM ordering.orders o JOIN ordering.quotes q ON q.order_id = o.id
+      WHERE o.deleted_at IS NULL
+        AND o.status IN ('paid', 'pickup_scheduled', 'in_transit', 'delivered', 'closed')
+    `);
+    const byStatus: Record<string, number> = Object.fromEntries(ORDER_STATES.map((s) => [s, 0]));
+    for (const row of counts.rows as { status: string; count: number }[])
+      byStatus[row.status] = row.count;
+    return {
+      byStatus,
+      paidTotalCop: BigInt((paid.rows as { total: string }[])[0]?.total ?? '0'),
+    };
+  }
 
   async findById(id: string, lock = false): Promise<OrderAggregate | null> {
     const db = this.database.current();

@@ -60,3 +60,33 @@ export const auditEntryResponseSchema = z
 export const auditPageResponseSchema = z
   .object({ items: z.array(auditEntryResponseSchema), nextCursor: z.string().optional() })
   .strict();
+
+const counts = z.record(z.string(), z.number().int().nonnegative());
+const amountCount = z
+  .object({ count: z.number().int().nonnegative(), amountCop: integerString })
+  .strict();
+
+export const metricsResponseSchema = z
+  .object({
+    generatedAt: z.string().datetime(),
+    ordersByStatus: counts,
+    paidOrdersTotalCop: integerString,
+    lotsByStatus: counts,
+    payments: z
+      .object({
+        proofsAwaitingReview: z.number().int().nonnegative(),
+        oldestProofUploadedAt: z.string().datetime().nullable(),
+        openDisputes: z.number().int().nonnegative(),
+        settlementsIssued: amountCount,
+        settlementsPaid: amountCount,
+      })
+      .strict(),
+    notificationDeliveries: counts,
+    outbox: z
+      .object({
+        pending: z.number().int().nonnegative(),
+        deadLettered: z.number().int().nonnegative(),
+      })
+      .strict(),
+  })
+  .strict();

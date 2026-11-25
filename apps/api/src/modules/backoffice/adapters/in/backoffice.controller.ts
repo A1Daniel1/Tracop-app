@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
   auditPageResponseSchema,
   auditQuerySchema,
+  metricsResponseSchema,
   parameterListResponseSchema,
   parameterResponseSchema,
   updateParameterSchema,
@@ -11,7 +12,7 @@ import { AuthGuard, type AuthPrincipal } from '../../../../shared/auth/index.js'
 import { ApiErrorResponses, ApiZodBody, ApiZodResponse } from '../../../../shared/infra/openapi.js';
 import type { BackofficeService, ParameterView } from '../../application/backoffice-service.js';
 import { BACKOFFICE_SERVICE } from '../../application/backoffice-tokens.js';
-import type { AuditRecord } from '../../ports/backoffice-ports.js';
+import type { AuditRecord, BackofficeMetrics } from '../../ports/backoffice-ports.js';
 
 type AuthenticatedRequest = { readonly identity: AuthPrincipal };
 
@@ -37,6 +38,28 @@ const serializeAudit = (record: AuditRecord) => ({
   before: record.before,
   after: record.after,
   at: record.at.toISOString(),
+});
+
+const serializeMetrics = (metrics: BackofficeMetrics & { readonly generatedAt: Date }) => ({
+  generatedAt: metrics.generatedAt.toISOString(),
+  ordersByStatus: metrics.ordersByStatus,
+  paidOrdersTotalCop: metrics.paidOrdersTotalCop.toString(),
+  lotsByStatus: metrics.lotsByStatus,
+  payments: {
+    proofsAwaitingReview: metrics.payments.proofsAwaitingReview,
+    oldestProofUploadedAt: metrics.payments.oldestProofUploadedAt?.toISOString() ?? null,
+    openDisputes: metrics.payments.openDisputes,
+    settlementsIssued: {
+      count: metrics.payments.settlementsIssued.count,
+      amountCop: metrics.payments.settlementsIssued.amountCop.toString(),
+    },
+    settlementsPaid: {
+      count: metrics.payments.settlementsPaid.count,
+      amountCop: metrics.payments.settlementsPaid.amountCop.toString(),
+    },
+  },
+  notificationDeliveries: metrics.notificationDeliveries,
+  outbox: metrics.outbox,
 });
 
 const parameterExample = {
@@ -88,6 +111,34 @@ export class BackofficeController {
   ) {
     const { value } = updateParameterSchema.parse(body);
     return serializeParameter(await this.backoffice.updateParameter(req.identity, key, value));
+  }
+
+  @Get('metrics')
+  @ApiOperation({
+    summary: 'Métricas operativas (operator, finance, admin)',
+    description:
+      'Agregados calculados al momento por cada módulo: pedidos por estado, importe pagado, lotes, ' +
+      'cola de comprobantes y disputas, liquidaciones, entregas de notificaciones y outbox. Sin datos ' +
+      'personales.',
+  })
+  @ApiZodResponse(200, metricsResponseSchema, {
+    generatedAt: '2026-11-25T15:00:00.000Z',
+    ordersByStatus: { quoted: 4, paid: 2 },
+    paidOrdersTotalCop: '90000',
+    lotsByStatus: { published: 3, sold_out: 1 },
+    payments: {
+      proofsAwaitingReview: 1,
+      oldestProofUploadedAt: '2026-11-25T14:00:00.000Z',
+      openDisputes: 0,
+      settlementsIssued: { count: 1, amountCop: '45000' },
+      settlementsPaid: { count: 2, amountCop: '90000' },
+    },
+    notificationDeliveries: { pending: 0, sent: 12, failed: 1, skipped: 4 },
+    outbox: { pending: 0, deadLettered: 0 },
+  })
+  @ApiErrorResponses(401, 403)
+  async metrics(@Req() req: AuthenticatedRequest) {
+    return serializeMetrics(await this.backoffice.metrics(req.identity));
   }
 
   @Get('audit')

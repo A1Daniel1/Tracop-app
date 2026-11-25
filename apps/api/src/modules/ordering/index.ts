@@ -35,6 +35,7 @@ export type {
   OrderRepository,
   OrderingUnitOfWork,
   OrderingClock,
+  OrderingMetrics,
   OrderingRateLimit,
   ProviderDirectoryPort,
   ProviderPublicSummary,

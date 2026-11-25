@@ -61,6 +61,14 @@ export interface OrderRepository {
   ): Promise<{ items: readonly OrderAggregate[]; nextCursor?: string }>;
   findExpiredQuoteIds(now: Date, limit: number): Promise<readonly string[]>;
   listByStatus?(status: OrderProps['status'], limit: number): Promise<readonly OrderAggregate[]>;
+  metrics?(): Promise<OrderingMetrics>;
+}
+
+export interface OrderingMetrics {
+  /** Orders per status (every status, zero included). */
+  readonly byStatus: Readonly<Record<string, number>>;
+  /** Sum of quote totals of orders paid or beyond (not cancelled, disputed or refunded). */
+  readonly paidTotalCop: bigint;
 }
 
 export interface OrderingUnitOfWork {

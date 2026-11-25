@@ -1,6 +1,7 @@
 export { NotificationsModule } from './notifications.module.js';
 export {
   NOTIFICATIONS_MAINTENANCE,
+  NOTIFICATIONS_METRICS,
   NOTIFICATIONS_OUTBOX_SUBSCRIBER,
   NOTIFICATIONS_SERVICE,
   type NotificationsMaintenanceApi,
@@ -13,6 +14,7 @@ export {
   type ChannelSendResult,
   type NotificationChangeRecorder,
   type NotificationChannelPort,
+  type NotificationsMetricsQuery,
   type RecipientContact,
   type RecipientDirectoryPort,
 } from './ports/notifications-ports.js';

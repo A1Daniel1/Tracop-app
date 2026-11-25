@@ -15,7 +15,12 @@ import {
 } from './adapters/out/drizzle-backoffice-repositories.js';
 import { BackofficeService } from './application/backoffice-service.js';
 import { BACKOFFICE_SERVICE } from './application/backoffice-tokens.js';
-import { PARAMETER_DEFAULTS, type ParameterDefaults } from './ports/backoffice-ports.js';
+import {
+  METRICS_SOURCES_PORT,
+  PARAMETER_DEFAULTS,
+  type MetricsSourcesPort,
+  type ParameterDefaults,
+} from './ports/backoffice-ports.js';
 
 /**
  * Global: every module writes audit entries and reads run-time parameters through the shared
@@ -63,6 +68,7 @@ import { PARAMETER_DEFAULTS, type ParameterDefaults } from './ports/backoffice-p
         PARAMETER_DEFAULTS,
         UNIT_OF_WORK,
         APP_CLOCK,
+        METRICS_SOURCES_PORT,
       ],
       useFactory: (
         parameters: DrizzleParameterRepository,
@@ -71,7 +77,8 @@ import { PARAMETER_DEFAULTS, type ParameterDefaults } from './ports/backoffice-p
         defaults: ParameterDefaults,
         uow: UnitOfWork,
         clock: Clock,
-      ) => new BackofficeService(parameters, auditQueries, audit, defaults, uow, clock),
+        metrics: MetricsSourcesPort,
+      ) => new BackofficeService(parameters, auditQueries, audit, defaults, uow, clock, metrics),
     },
   ],
   exports: [AUDIT_WRITER, PARAMETER_READER, BACKOFFICE_SERVICE],

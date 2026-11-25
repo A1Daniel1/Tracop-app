@@ -16,6 +16,7 @@ import type {
   DueDelivery,
   InboxEntry,
   NotificationRepository,
+  NotificationsMetricsQuery,
 } from '../../ports/notifications-ports.js';
 
 const notifications = pgSchema('notifications');
@@ -247,5 +248,22 @@ export class DrizzleNotificationRepository implements NotificationRepository {
       )
       .returning({ id: deliveriesTable.id });
     return rows.length === 1;
+  }
+}
+
+@Injectable()
+export class DrizzleNotificationsMetricsQuery implements NotificationsMetricsQuery {
+  constructor(@Inject(DatabaseService) private readonly database: DatabaseService) {}
+
+  async deliveriesByStatus(): Promise<
+    Readonly<Record<'pending' | 'sent' | 'failed' | 'skipped', number>>
+  > {
+    const result = await this.database.current().execute(sql`
+      SELECT status, count(*)::int AS count FROM notifications.deliveries GROUP BY status
+    `);
+    const counts = { pending: 0, sent: 0, failed: 0, skipped: 0 };
+    for (const row of result.rows as { status: keyof typeof counts; count: number }[])
+      counts[row.status] = row.count;
+    return counts;
   }
 }

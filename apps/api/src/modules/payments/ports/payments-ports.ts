@@ -79,6 +79,18 @@ export interface SettlementRepository {
   }): Promise<readonly SettlementProps[]>;
 }
 
+export interface PaymentsMetrics {
+  readonly proofsAwaitingReview: number;
+  readonly oldestProofUploadedAt: Date | null;
+  readonly openDisputes: number;
+  readonly settlementsIssued: { readonly count: number; readonly amountCop: bigint };
+  readonly settlementsPaid: { readonly count: number; readonly amountCop: bigint };
+}
+
+export interface PaymentsMetricsQuery {
+  snapshot(): Promise<PaymentsMetrics>;
+}
+
 export interface PaymentsUnitOfWork {
   run<T>(operation: () => Promise<T>): Promise<T>;
 }
