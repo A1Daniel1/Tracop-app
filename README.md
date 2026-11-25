@@ -28,7 +28,7 @@ pnpm --filter @tracop/api worker        # desarrollo (tsx)
 pnpm --filter @tracop/api worker:start  # tras pnpm build (node dist/worker.js)
 ```
 
-Imprime `Worker ready. Registered jobs: …` y se detiene limpio con `Ctrl+C`/`SIGTERM`. Expira lotes, reservas y cotizaciones, emite las liquidaciones de pagos vencida la ventana de reclamo, purga fotos huérfanas y datos vencidos (OTP, sesiones, ventanas de rate limit, updates de Telegram) y despacha el outbox. pg-boss crea su schema `pgboss` al arrancar. Crons y retenciones: variables `JOB_*`, `OUTBOX_*` y `*_RETENTION_*` ([ADR-016](docs/adr/ADR-016.md)).
+Imprime `Worker ready. Registered jobs: …` y se detiene limpio con `Ctrl+C`/`SIGTERM`. Expira lotes, reservas y cotizaciones, emite las liquidaciones de pagos vencida la ventana de reclamo, envía las notificaciones pendientes, purga fotos huérfanas y datos vencidos (OTP, sesiones, ventanas de rate limit, updates de Telegram) y despacha el outbox. pg-boss crea su schema `pgboss` al arrancar. Crons y retenciones: variables `JOB_*`, `OUTBOX_*` y `*_RETENTION_*` ([ADR-016](docs/adr/ADR-016.md)).
 
 ## Bot de Telegram (creación y configuración)
 
@@ -231,4 +231,5 @@ El workflow ejecuta `pnpm test` antes del escaneo para generar los reportes LCOV
 - [ADR-015: propuestas de producto](docs/adr/ADR-015.md)
 - [ADR-016: trabajador y outbox](docs/adr/ADR-016.md)
 - [ADR-017: pagos, ledger y liquidaciones](docs/adr/ADR-017.md)
+- [ADR-018: notificaciones](docs/adr/ADR-018.md)
 - [Aviso de privacidad (texto pendiente)](docs/PRIVACY_NOTICE.md)

@@ -129,6 +129,19 @@ Conciliación manual por transferencia o Nequi; detalle en [ADR-017](adr/ADR-017
 
 Al entregarse el pedido, el pago pasa a `held` (consumidor del outbox). El trabajador emite las liquidaciones —al proveedor por su neto y al transportista que entregó por el flete— cuando pasan `PAYMENT_CLAIM_WINDOW_HOURS` desde la entrega. Las URLs firmadas no deben guardarse ni registrarse.
 
+## Notificaciones
+
+Todas para el usuario autenticado, sobre sí mismo; detalle en [ADR-018](adr/ADR-018.md).
+
+| Método y ruta                      | Resultado                                                                                                                                                    |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `GET /me/notification-preferences` | 200 `{ channelOrder, quietHours }`. Sin preferencias: `["messaging", "push", "sms"]` y `null`.                                                               |
+| `PUT /me/notification-preferences` | `{ channelOrder: [1–3 canales sin repetir], quietHours: { start, end } \| null }` (HH:MM hora de Colombia; puede cruzar la medianoche). 400 si no es válido. |
+| `GET /me/inbox?cursor=&limit=`     | 200 `{ items, nextCursor? }`, más recientes primero (`limit` 1–100, 20 por defecto); cursor opaco, 400 `invalid_cursor` si se altera.                        |
+| `POST /me/inbox/{id}/read`         | 200 con `readAt`; idempotente. El aviso de otro usuario responde 404.                                                                                        |
+
+Cada aviso se escribe en la bandeja y se envía por el primer canal del orden que alcance al usuario: hoy solo mensajería (Telegram vinculado); push y SMS no tienen proveedor y se registran como omitidos. El SMS solo aplica a avisos críticos (comprobante rechazado, incidencia), que además ignoran el horario sin molestias. La bandeja también llega por `GET /sync/pull` como entidad `notification`.
+
 ## Logística
 
 Todas las rutas `/logistics` exigen autenticación. El rol `carrier` gestiona su perfil, crea y opera **sus** viajes, registra check-ins y abre incidencias. El rol `operator` consulta transportistas y todos los viajes, detecta conflictos y reasigna; también puede cancelar viajes y resolver incidencias. Otros roles reciben HTTP 403.
