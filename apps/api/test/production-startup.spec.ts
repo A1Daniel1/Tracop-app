@@ -69,11 +69,18 @@ describe('production startup (env.ts)', () => {
       expect(message).toContain(`"${key}"`);
   });
 
-  it('starts with a complete production configuration and refuses the console OTP sender', () => {
+  it('starts with a complete production configuration and refuses the console and demo OTP senders', () => {
     only(COMPLETE_PRODUCTION);
     expect(loadAppEnvironment(NO_ENV_FILE)).toMatchObject({ APP_PROFILE: 'production' });
     only({ ...COMPLETE_PRODUCTION, OTP_SENDER: 'console' });
     expect(() => loadAppEnvironment(NO_ENV_FILE)).toThrow(/OTP_SENDER=telegram/);
+    // The demo capture sender exists only with APP_PROFILE=demo, which production cannot use.
+    only({ ...COMPLETE_PRODUCTION, OTP_SENDER: 'demo_capture' });
+    expect(() => loadAppEnvironment(NO_ENV_FILE)).toThrow(/OTP_SENDER=demo_capture is only/);
+    only({ ...COMPLETE_PRODUCTION, APP_PROFILE: 'demo', OTP_SENDER: 'demo_capture' });
+    expect(() => loadAppEnvironment(NO_ENV_FILE)).toThrow(/never runs with NODE_ENV=production/);
+    only({ ...COMPLETE_PRODUCTION, NODE_ENV: 'development', OTP_SENDER: 'demo_capture' });
+    expect(() => loadAppEnvironment(NO_ENV_FILE)).toThrow(/only available with APP_PROFILE=demo/);
     only({ ...COMPLETE_PRODUCTION, TELEGRAM_MODE: 'polling' });
     expect(() => loadAppEnvironment(NO_ENV_FILE)).toThrow(/TELEGRAM_MODE/);
     only({ ...COMPLETE_PRODUCTION, S3_ENDPOINT: 'http://s3.internal.test' });

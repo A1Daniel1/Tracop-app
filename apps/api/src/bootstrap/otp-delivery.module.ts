@@ -3,6 +3,7 @@ import type pino from 'pino';
 import { APP_ENVIRONMENT, APP_LOGGER } from '../shared/infra/tokens.js';
 import type { AppEnvironment } from '../shared/infra/env.js';
 import {
+  DemoCaptureOtpSender,
   DevelopmentOtpSender,
   IDENTITY_CHANNEL_APPLICATION,
   IdentityChannelModule,
@@ -30,6 +31,9 @@ import { TelegramOtpSender } from './telegram-otp-sender.adapter.js';
         if (environment.NODE_ENV === 'test') return new InMemoryOtpSender();
         if (environment.NODE_ENV === 'development' && environment.OTP_SENDER === 'console') {
           return new DevelopmentOtpSender(environment);
+        }
+        if (environment.APP_PROFILE === 'demo' && environment.OTP_SENDER === 'demo_capture') {
+          return new DemoCaptureOtpSender(environment);
         }
         if (environment.OTP_SENDER === 'telegram' && environment.TELEGRAM_BOT_TOKEN) {
           return new TelegramOtpSender(identity, messaging, logger);
