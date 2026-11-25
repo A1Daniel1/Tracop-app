@@ -438,6 +438,7 @@ export class PaymentsService {
       occurredAt: now.toISOString(),
       payload: {
         settlementId: settlement.id,
+        beneficiaryId: settlement.beneficiaryId,
         beneficiaryKind: settlement.beneficiaryKind,
         amount: settlement.amount.toString(),
       },

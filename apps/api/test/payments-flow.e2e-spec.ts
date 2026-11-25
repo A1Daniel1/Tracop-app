@@ -410,6 +410,16 @@ describePostgres('payments over HTTP (Nest + PostgreSQL)', () => {
       'SettlementPaid',
       'PaymentSettled',
     ]);
+    // Settlement events name the beneficiary so notifications can reach them.
+    const issued = await pool.query<{ payload: Record<string, unknown> }>(
+      `SELECT payload FROM shared.outbox_events
+       WHERE aggregate = $1 AND type IN ('SettlementIssued', 'SettlementPaid') ORDER BY created_at, id`,
+      [`payment:${paymentId}`],
+    );
+    expect(issued.rows.map(({ payload }) => payload.beneficiaryId)).toEqual([
+      supplier.userId,
+      supplier.userId,
+    ]);
   });
 
   it('rejects a proof: the order keeps waiting, the stock lapses after the grace window and the buyer pays again', async () => {
