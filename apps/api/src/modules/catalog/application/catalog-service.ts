@@ -429,6 +429,19 @@ export class CatalogService {
       const current = await this.lockOwnedLot(id, actor.sub);
       if (current.version !== expectedVersion)
         throw new DomainError('Conflicto de versión.', 'version_conflict');
+      // A carrier may already be on the way to the reserved (or sold) stock: its pickup point
+      // cannot move while any of it is reserved.
+      const movesLocation =
+        (patch.locationLat !== undefined && patch.locationLat !== current.locationLat) ||
+        (patch.locationLng !== undefined && patch.locationLng !== current.locationLng);
+      if (
+        movesLocation &&
+        (await this.lots.getAvailableQuantity(id, this.clock.now())) < current.quantityMilli
+      )
+        throw new DomainError(
+          'No se puede cambiar la ubicación de un lote con reservas.',
+          'lot_location_locked',
+        );
       const isActiveLot = current.status === 'published' || current.status === 'reserved';
       if (
         current.status !== 'draft' &&
@@ -662,6 +675,17 @@ export class CatalogService {
 
   async isOrderReservationExpired(orderId: string, now: Date): Promise<boolean> {
     return this.lots.isOrderReservationExpired(orderId, now);
+  }
+
+  async getLotLocations(
+    lotIds: readonly string[],
+  ): Promise<ReadonlyMap<string, { readonly lat: number; readonly lng: number }>> {
+    const locations = new Map<string, { lat: number; lng: number }>();
+    for (const lotId of new Set(lotIds)) {
+      const lot = await this.lots.findById(lotId);
+      if (lot) locations.set(lotId, { lat: lot.locationLat, lng: lot.locationLng });
+    }
+    return locations;
   }
 
   async findExpiredReservationOrderIds(

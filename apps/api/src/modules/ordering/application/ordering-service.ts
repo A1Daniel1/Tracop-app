@@ -445,6 +445,21 @@ export class OrderingService {
     });
   }
 
+  /**
+   * Delivery address and lots of an order, for logistics to show the assigned carrier and staff
+   * where to go. Not exposed by any controller; logistics decides who may see it.
+   */
+  async getDeliveryDetails(
+    orderId: string,
+  ): Promise<{ readonly deliveryAddress: string; readonly lotIds: readonly string[] } | null> {
+    const aggregate = await this.orderRepository.findById(orderId);
+    if (!aggregate) return null;
+    return {
+      deliveryAddress: aggregate.order.deliveryAddress,
+      lotIds: [...new Set(aggregate.lines.map((line) => line.lotId))],
+    };
+  }
+
   /** Backoffice metrics (aggregates only, no personal data). */
   async metrics(): Promise<OrderingMetrics> {
     if (!this.orderRepository.metrics) throw new Error('metrics_unavailable');

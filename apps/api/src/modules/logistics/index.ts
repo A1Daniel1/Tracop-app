@@ -56,3 +56,9 @@ export type {
 export type { RecordCheckinInput } from './application/checkin.service.js';
 export type { UpsertCarrierInput } from './application/carrier-profile.service.js';
 export type { OpenIncidentInput } from './application/incident.service.js';
+export { TripLocationService } from './application/trip-location.service.js';
+export {
+  ORDER_LOCATION_PORT,
+  type LocationRateLimitPort,
+  type OrderLocationPort,
+} from './ports/trip-location-ports.js';

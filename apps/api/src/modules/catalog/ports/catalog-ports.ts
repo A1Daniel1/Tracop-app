@@ -124,6 +124,13 @@ export interface CatalogOrderingApi {
   }): Promise<void>;
   releaseOrderReservations(orderId: string): Promise<void>;
   findExpiredReservationOrderIds(now: Date, limit: number): Promise<readonly string[]>;
+  /**
+   * Exact pickup coordinates of the given lots (deleted lots included: they may still be picked
+   * up). Not exposed by any controller; logistics decides who may see them.
+   */
+  getLotLocations(
+    lotIds: readonly string[],
+  ): Promise<ReadonlyMap<string, { readonly lat: number; readonly lng: number }>>;
   holdOrderReservations(orderId: string): Promise<void>;
   resumeOrderReservationExpiry(orderId: string, expiresAt: Date): Promise<void>;
   consumeOrderReservations(orderId: string): Promise<void>;

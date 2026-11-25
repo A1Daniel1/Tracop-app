@@ -228,7 +228,7 @@ El workflow ejecuta `pnpm test` antes del escaneo para generar los reportes LCOV
 - [ADR-009: mensajería con Telegram](docs/adr/ADR-009.md)
 - [Referencia de la API](docs/API.md) y [contrato OpenAPI](docs/openapi.json)
 - [Integración con la app móvil](docs/MOBILE-INTEGRATION.md)
-- [ADR-013: logística sin coordenadas y check-ins offline](docs/adr/ADR-013.md)
+- [ADR-013: logística sin coordenadas, check-ins offline y ubicación exacta para el asignado](docs/adr/ADR-013.md)
 - [ADR-014: pedidos, cotizaciones y reservas](docs/adr/ADR-014.md)
 - [ADR-015: propuestas de producto](docs/adr/ADR-015.md)
 - [ADR-016: trabajador y outbox](docs/adr/ADR-016.md)

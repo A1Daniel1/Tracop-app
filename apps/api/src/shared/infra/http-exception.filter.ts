@@ -27,6 +27,7 @@ const domainStatus: Record<string, number> = {
   lot_unavailable: HttpStatus.CONFLICT,
   reservation_conflict: HttpStatus.CONFLICT,
   reservation_expired: HttpStatus.CONFLICT,
+  lot_location_locked: HttpStatus.CONFLICT,
   proof_upload_missing: HttpStatus.CONFLICT,
   settlement_issued: HttpStatus.CONFLICT,
   ledger_already_posted: HttpStatus.CONFLICT,

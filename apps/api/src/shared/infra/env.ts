@@ -113,6 +113,10 @@ const envSchema = z.object({
   SESSION_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
   PROCESSED_UPDATES_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(7),
   RATE_LIMIT_RETENTION_SECONDS: z.coerce.number().int().positive().default(86_400),
+  // PROVISIONAL: how long a downloaded location pack may be kept by the app.
+  LOGISTICS_LOCATION_MAX_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(24),
+  LOGISTICS_LOCATION_RATE_LIMIT: z.coerce.number().int().positive().default(30),
+  LOGISTICS_LOCATION_RATE_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
   JOB_EXPIRE_LOTS_CRON: z.string().trim().min(9).default('*/5 * * * *'),
   JOB_EXPIRE_ORDERS_CRON: z.string().trim().min(9).default('*/5 * * * *'),
   JOB_PURGE_PHOTOS_CRON: z.string().trim().min(9).default('17 * * * *'),

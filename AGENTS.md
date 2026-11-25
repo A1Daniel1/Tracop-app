@@ -388,7 +388,7 @@ Unidades actualmente aceptadas por el catálogo: `kg`, `g`, `lb`, `und`, `docena
 - `carriers` (user_id, vehicle_type, capacity_kg > 0, plate, created_at, updated_at, deleted_at); placa única entre activos.
 - `trips` (id, carrier_id, status, version, planned_at, route jsonb, created_at, updated_at, deleted_at); `status` ∈ `planned`, `assigned`, `in_progress`, `completed`, `cancelled`.
 - `trip_stops` (id, trip_id, order_id, order_version, kind, sequence, zone, scheduled_at, completed_at); `kind` ∈ `pickup`, `delivery`; únicos (trip_id, sequence) y (trip_id, order_id, kind).
-- `checkins` (id, stop_id, trip_id, order_id, carrier_id, kind, client_ts, media_ref, created_at); único (stop_id, kind). **Sin coordenadas** (ver [ADR-013](docs/adr/ADR-013.md)).
+- `checkins` (id, stop_id, trip_id, order_id, carrier_id, kind, client_ts, media_ref, created_at); único (stop_id, kind). **Sin coordenadas** (ver [ADR-013](docs/adr/ADR-013.md)). Ninguna tabla de logistics guarda coordenadas ni direcciones: la ubicación exacta (solo para el transportista asignado y el personal) se lee en cada petición de catalog y ordering.
 - `incidents` (id, order_id, trip_id, type, description, status, opened_at, closed_at, deleted_at); `status` ∈ `open`, `resolved`.
 
 **payments**
@@ -658,6 +658,7 @@ La fuente de verdad es el esquema zod de `apps/api/src/shared/infra/env.ts` (val
 | Almacenamiento                | `S3_ENDPOINT`, `S3_PUBLIC_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_API_ACCESS_KEY`, `S3_API_SECRET_KEY`, `S3_POLICY_ACCESS_KEY`, `S3_POLICY_SECRET_KEY`; MinIO local: `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_CORS_ALLOWED_ORIGINS`                                                                         |
 | Sync                          | `SYNC_PUSH_MAX_BODY_BYTES`, `SYNC_PUSH_RATE_LIMIT`, `SYNC_PULL_RATE_LIMIT`, `SYNC_RATE_WINDOW_SECONDS`                                                                                                                                                                                                               |
 | Pedidos                       | `ORDER_QUOTE_TTL_HOURS`, `ORDER_RESERVATION_TTL_HOURS`, `ORDER_SUBTOTAL_ROUNDING`, `ORDER_COMMISSION_RATE_BPS`, `ORDER_FREIGHT_COP` (comisión y flete PROVISIONALES), `ORDER_RATE_LIMIT`, `ORDER_RATE_WINDOW_SECONDS`, `ORDER_LOCK_TIMEOUT_MS`, `ORDER_STATEMENT_TIMEOUT_MS`                                         |
+| Logística                     | `LOGISTICS_LOCATION_MAX_TTL_HOURS` (24, PROVISIONAL), `LOGISTICS_LOCATION_RATE_LIMIT`, `LOGISTICS_LOCATION_RATE_WINDOW_SECONDS`                                                                                                                                                                                      |
 | Pagos (PROVISIONAL)           | `PAYMENT_REJECTION_GRACE_HOURS`, `PAYMENT_CLAIM_WINDOW_HOURS`, `PAYMENT_PROOF_MAX_BYTES`, `PAYMENT_PROOF_UPLOAD_URL_TTL_SECONDS`, `PAYMENT_PROOF_DOWNLOAD_URL_TTL_SECONDS`                                                                                                                                           |
 | Notificaciones                | `NOTIFICATIONS_MAX_ATTEMPTS`, `NOTIFICATIONS_RETRY_BASE_SECONDS`, `NOTIFICATIONS_RETRY_MAX_SECONDS`, `NOTIFICATIONS_LEASE_SECONDS`                                                                                                                                                                                   |
 | Trabajador                    | `JOB_EXPIRE_LOTS_CRON`, `JOB_EXPIRE_ORDERS_CRON`, `JOB_PURGE_PHOTOS_CRON`, `JOB_RETENTION_CRON`, `JOB_OUTBOX_DISPATCH_CRON`, `JOB_ISSUE_SETTLEMENTS_CRON`, `JOB_SEND_NOTIFICATIONS_CRON`, `OUTBOX_LEASE_SECONDS`, `OUTBOX_MAX_ATTEMPTS`, `OUTBOX_RETRY_BASE_SECONDS`, `OUTBOX_RETRY_MAX_SECONDS`                     |
@@ -708,27 +709,27 @@ La fuente de verdad es el esquema zod de `apps/api/src/shared/infra/env.ts` (val
 
 ## 22. Decisiones de arquitectura vigentes (ADR resumidas)
 
-| ADR | Decisión                                                                | Tradeoff aceptado                                                            |
-| --- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| 001 | Monolito modular hexagonal                                              | Menos escalado independiente; mucho menos complejidad operativa en el piloto |
-| 002 | Cliente grueso offline-first con outbox y sync                          | Más complejidad de sync y pruebas, a cambio de funcionar sin señal           |
-| 003 | **Sin blockchain en el piloto**; eventos con hash encadenado            | Sin "inmutabilidad total"; se puede anclar a una cadena después              |
-| 004 | **Telegram primero**, WhatsApp después vía el mismo puerto              | La demo valida el flujo pero no la adopción real                             |
-| 005 | LLM en el servidor con confirmación humana obligatoria                  | Costo y latencia por uso; mitiga alucinaciones                               |
-| 006 | Pagos con conciliación manual en el piloto                              | Menos automatización, valida la transacción sin integrar pasarela            |
-| 007 | PostgreSQL con schema por módulo + pg-boss                              | Sin Redis ni broker; suficiente para el piloto                               |
-| 008 | Autenticación por teléfono + OTP con JWT y refresh rotativo             | `jose@4` fijado por dual CJS/ESM; ventana de gracia de refresh pendiente     |
-| 009 | Mensajería con Telegram (webhook/polling), puerto único                 | Polling solo dev; OTP fire-and-forget; rate limit en memoria                 |
-| 010 | Núcleo de catálogo (taxonomía curada, lotes, búsqueda)                  | Búsqueda filtra en memoria antes de paginar                                  |
-| 011 | Fotos de lote con POST prefirmado y re-codificación a WebP              | Dependencia de sharp (libvips, LGPL) aceptada provisionalmente               |
-| 012 | Idempotencia de sync y cursores serializados                            | Un lock global de secuencia serializa las escrituras del change log          |
-| 013 | Logística sin coordenadas; viaje creado por el transportista            | Zonas gruesas; ubicación exacta para el transportista pendiente              |
-| 014 | Pedidos de un proveedor; reserva al aceptar, vence a las 24 h           | Un pedido sin comprobante se cancela al vencer la reserva                    |
-| 015 | Propuestas de producto con revisión del personal                        | Revisión manual; deduplicación por tokens con confirmación                   |
-| 016 | Trabajador con pg-boss y despachador del outbox con lease               | Entrega al menos una vez; consumidores idempotentes                          |
-| 017 | Pagos manuales con ledger inmutable y liquidación tras reclamo          | Revisión humana de cada comprobante; reserva retenida mientras tanto         |
-| 018 | Notificaciones desde el outbox; bandeja siempre, canales tras un puerto | Push y SMS sin proveedor (skipped); sin escalado ni resúmenes aún            |
-| 019 | Audit log transaccional, parámetros editables y métricas al vuelo       | Una consulta corta por parámetro en cada uso; sin snapshots de métricas      |
+| ADR | Decisión                                                                  | Tradeoff aceptado                                                            |
+| --- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 001 | Monolito modular hexagonal                                                | Menos escalado independiente; mucho menos complejidad operativa en el piloto |
+| 002 | Cliente grueso offline-first con outbox y sync                            | Más complejidad de sync y pruebas, a cambio de funcionar sin señal           |
+| 003 | **Sin blockchain en el piloto**; eventos con hash encadenado              | Sin "inmutabilidad total"; se puede anclar a una cadena después              |
+| 004 | **Telegram primero**, WhatsApp después vía el mismo puerto                | La demo valida el flujo pero no la adopción real                             |
+| 005 | LLM en el servidor con confirmación humana obligatoria                    | Costo y latencia por uso; mitiga alucinaciones                               |
+| 006 | Pagos con conciliación manual en el piloto                                | Menos automatización, valida la transacción sin integrar pasarela            |
+| 007 | PostgreSQL con schema por módulo + pg-boss                                | Sin Redis ni broker; suficiente para el piloto                               |
+| 008 | Autenticación por teléfono + OTP con JWT y refresh rotativo               | `jose@4` fijado por dual CJS/ESM; ventana de gracia de refresh pendiente     |
+| 009 | Mensajería con Telegram (webhook/polling), puerto único                   | Polling solo dev; OTP fire-and-forget; rate limit en memoria                 |
+| 010 | Núcleo de catálogo (taxonomía curada, lotes, búsqueda)                    | Búsqueda filtra en memoria antes de paginar                                  |
+| 011 | Fotos de lote con POST prefirmado y re-codificación a WebP                | Dependencia de sharp (libvips, LGPL) aceptada provisionalmente               |
+| 012 | Idempotencia de sync y cursores serializados                              | Un lock global de secuencia serializa las escrituras del change log          |
+| 013 | Logística sin coordenadas en su schema; viaje creado por el transportista | Ubicación exacta solo para el asignado y el personal, en línea, auditada     |
+| 014 | Pedidos de un proveedor; reserva al aceptar, vence a las 24 h             | Un pedido sin comprobante se cancela al vencer la reserva                    |
+| 015 | Propuestas de producto con revisión del personal                          | Revisión manual; deduplicación por tokens con confirmación                   |
+| 016 | Trabajador con pg-boss y despachador del outbox con lease                 | Entrega al menos una vez; consumidores idempotentes                          |
+| 017 | Pagos manuales con ledger inmutable y liquidación tras reclamo            | Revisión humana de cada comprobante; reserva retenida mientras tanto         |
+| 018 | Notificaciones desde el outbox; bandeja siempre, canales tras un puerto   | Push y SMS sin proveedor (skipped); sin escalado ni resúmenes aún            |
+| 019 | Audit log transaccional, parámetros editables y métricas al vuelo         | Una consulta corta por parámetro en cada uso; sin snapshots de métricas      |
 
 ---
 
