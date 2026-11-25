@@ -23,7 +23,7 @@ Todas las rutas exigen `Authorization: Bearer <accessToken>` salvo las públicas
 | Perfil de proveedor | `PUT /me/provider-profile` (`producer`, `supplier`) | `displayName`, `municipality`, `department`, `lat`, `lng`, `description`                                                                                                                | 200 `{ status: "saved" }`                                                              |
 
 - El access token dura `ACCESS_TOKEN_TTL_SECONDS` (900 s) y el refresh `REFRESH_TOKEN_TTL_SECONDS` (30 días). El OTP vale 300 s y admite 5 intentos.
-- **El refresh rota**: cada renovación devuelve un refresh nuevo y el anterior deja de servir. Reutilizar uno ya rotado revoca toda la familia de sesiones del dispositivo y responde 401 `session_invalid`. **No lancen dos refresh en paralelo con el mismo token** (no hay ventana de gracia todavía). El refresh está atado al `deviceId`.
+- **El refresh rota**: cada renovación devuelve un refresh nuevo y el anterior deja de servir. Reutilizar uno ya rotado revoca toda la familia de sesiones del dispositivo y responde 401 `session_invalid`. Si la respuesta de un refresh se pierde (red inestable), reintentar con el **mismo** refresh dentro de `REFRESH_GRACE_SECONDS` (30 s) devuelve un par nuevo, siempre que el refresh que se perdió no se haya usado; pasado ese tiempo, o si ya se usó, es reutilización y se revoca la familia. Guarden siempre el último par recibido. El refresh está atado al `deviceId`.
 - Iniciar sesión de nuevo en un dispositivo revoca su sesión anterior.
 - Límites: 3 OTP por teléfono cada 10 min y 1 por minuto; 30 solicitudes y 60 verificaciones por IP cada 10 min (429 con `Retry-After`).
 - Nunca guarden ni registren tokens ni URLs firmadas en logs.
