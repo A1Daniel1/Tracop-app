@@ -136,8 +136,8 @@ import type {
     },
     {
       provide: ASSISTANT_INBOX,
-      inject: [DrizzleInboxRepository],
-      useFactory: (inbox: DrizzleInboxRepository) => new AssistantInbox(inbox),
+      inject: [DrizzleInboxRepository, ASSISTANT_CLOCK],
+      useFactory: (inbox: DrizzleInboxRepository, clock: Clock) => new AssistantInbox(inbox, clock),
     },
     {
       provide: ASSISTANT_INBOX_PROCESSOR,

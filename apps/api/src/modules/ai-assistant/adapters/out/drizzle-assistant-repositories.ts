@@ -146,11 +146,12 @@ export class DrizzleInboxRepository implements InboxRepository {
     readonly channelUserId: string;
     readonly payload: InboxPayload;
     readonly receivedAt: Date;
+    readonly availableAt: Date;
   }): Promise<void> {
     await this.rows.query(sql`
       INSERT INTO ai_assistant.inbox (id, channel, channel_user_id, payload, received_at, available_at)
       VALUES (${item.id}::uuid, ${item.channel}, ${item.channelUserId}, ${JSON.stringify(item.payload)}::jsonb,
-        ${item.receivedAt.toISOString()}::timestamptz, ${item.receivedAt.toISOString()}::timestamptz)`);
+        ${item.receivedAt.toISOString()}::timestamptz, ${item.availableAt.toISOString()}::timestamptz)`);
     await this.rows.query(sql`SELECT pg_notify(${INBOX_NOTIFY_CHANNEL}, '')`);
   }
 

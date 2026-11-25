@@ -20,7 +20,10 @@ export interface AssistantInboundMessage {
 
 /** Public use case for messaging: queue a chat message in the caller's transaction. */
 export class AssistantInbox {
-  constructor(private readonly inbox: InboxRepository) {}
+  constructor(
+    private readonly inbox: InboxRepository,
+    private readonly clock: Clock,
+  ) {}
 
   async accept(message: AssistantInboundMessage): Promise<void> {
     const payload: InboxPayload =
@@ -33,6 +36,9 @@ export class AssistantInbox {
       channelUserId: message.channelUserId,
       payload,
       receivedAt: message.receivedAt,
+      // The worker leases by the assistant's clock, not by the channel's timestamp: a message
+      // stamped ahead of that clock would otherwise wait in the inbox until the clock caught up.
+      availableAt: this.clock.now(),
     });
   }
 }

@@ -871,6 +871,20 @@ describePostgres('ai-assistant: lot drafts over Telegram (Nest + PostgreSQL + fa
     expect(repliesTo(supplier.chatId)).toHaveLength(1);
   });
 
+  it('handles a message stamped ahead of the assistant clock right away', async () => {
+    // Regression: available_at came from the channel timestamp, so a message (or a button,
+    // stamped by the server's wall clock) newer than the assistant clock stayed in the inbox.
+    const supplier = await account('supplier');
+    const update = textUpdate(supplier.chatId, 'papa criolla');
+    update.message.date = Math.floor(clock.now().getTime() / 1000) + 86_400;
+    await send(update);
+    await processor.drain();
+    expect((await pool.query(`SELECT count(*)::int AS n FROM ai_assistant.inbox`)).rows[0].n).toBe(
+      0,
+    );
+    expect(repliesTo(supplier.chatId)).toHaveLength(1);
+  });
+
   it('answers voice notes and photos as not available yet', async () => {
     const supplier = await account('supplier');
     const voice = await send({

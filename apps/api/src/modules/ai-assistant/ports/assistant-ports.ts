@@ -164,6 +164,7 @@ export interface InboxRepository {
     readonly channelUserId: string;
     readonly payload: InboxPayload;
     readonly receivedAt: Date;
+    readonly availableAt: Date;
   }): Promise<void>;
   /**
    * Leases the oldest item of a chat with no other leased item, so the messages of one person
