@@ -522,6 +522,42 @@ describePostgres('payments over HTTP (Nest + PostgreSQL)', () => {
     expect(await ledgerBalance(orderId)).toEqual({});
   });
 
+  it('answers 404 to another buyer disputing a payment, whatever version it sends', async () => {
+    // Regression: the version was checked before the buyer, so a wrong version answered 409 and
+    // revealed that someone else's payment exists.
+    const { lotId } = await supplierWithLot(10);
+    const buyer = await register('buyer');
+    const intruder = await register('buyer');
+    const finance = await staff('finance');
+    const orderId = await acceptedOrder(buyer, lotId, 2);
+    const payment = (await initiate(buyer, orderId).expect(201)).body as { id: string };
+    const confirmed = await uploadProof(buyer, payment.id);
+    const verified = await http()
+      .post(`/payments/${payment.id}/verify`)
+      .set(bearer(finance))
+      .send({ expectedVersion: confirmed.body.version })
+      .expect(200);
+
+    const missing = await http()
+      .post(`/payments/${createId()}/dispute`)
+      .set(bearer(intruder))
+      .send({ expectedVersion: verified.body.version, reason: 'No llegó.' })
+      .expect(404);
+    for (const expectedVersion of [verified.body.version + 1, verified.body.version])
+      await http()
+        .post(`/payments/${payment.id}/dispute`)
+        .set(bearer(intruder))
+        .send({ expectedVersion, reason: 'No llegó.' })
+        .expect(404)
+        .expect(({ body }) => expect(body).toEqual(missing.body));
+    // The owner's payment is untouched and the owner can still dispute it.
+    await http()
+      .post(`/payments/${payment.id}/dispute`)
+      .set(bearer(buyer))
+      .send({ expectedVersion: verified.body.version, reason: 'No llegó.' })
+      .expect(200);
+  });
+
   it('refuses a dispute once settlements were issued', async () => {
     const { lotId } = await supplierWithLot(10);
     const buyer = await register('buyer');

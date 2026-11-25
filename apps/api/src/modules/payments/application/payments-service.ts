@@ -260,13 +260,13 @@ export class PaymentsService {
     const payment = await this.mutate(
       paymentId,
       async (entity) => {
-        if (entity.props.buyerId !== actor.sub) throw notFound();
         if ((await this.settlements.listForPayment(entity.props.id)).length)
           throw new DomainError('El pago ya está en liquidación.', 'settlement_issued');
         entity.dispute(actor.sub, reason, this.clock.now());
         await this.orders.markDisputed(entity.props.orderId, actor.sub);
       },
       expectedVersion,
+      (current) => current.buyerId === actor.sub,
     );
     return this.view(payment, actor);
   }
@@ -426,14 +426,20 @@ export class PaymentsService {
   }
 
   /** Locks the payment, applies `change` and saves it with its events, in one transaction. */
+  /**
+   * Loads the payment for update and applies `change`. `canSee` runs before the version check,
+   * so someone who may not see the payment gets the 404 of a missing one, never a 409 that would
+   * reveal it exists.
+   */
   private async mutate(
     paymentId: string,
     change: (payment: Payment) => Promise<void>,
     expectedVersion?: number,
+    canSee: (payment: PaymentProps) => boolean = () => true,
   ): Promise<PaymentProps> {
     return this.uow.run(async () => {
       const current = await this.payments.findById(paymentId, true);
-      if (!current) throw notFound();
+      if (!current || !canSee(current)) throw notFound();
       if (expectedVersion !== undefined && current.version !== expectedVersion)
         throw new DomainError('Conflicto de versión.', 'version_conflict');
       const payment = Payment.reconstitute(current);
