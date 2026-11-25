@@ -50,6 +50,9 @@ if (hasSourceInLayer('domain')) {
   coverageThreshold['./src/modules/logistics/domain/**/*.ts'] = {
     lines: 90,
   };
+  coverageThreshold['./src/modules/payments/domain/**/*.ts'] = {
+    lines: 90,
+  };
 }
 coverageThreshold['./src/shared/auth/**/*.ts'] = { lines: 80 };
 coverageThreshold['./src/modules/identity/domain/provider-profile.ts'] = { lines: 90 };
@@ -84,6 +87,7 @@ module.exports = {
     'src/modules/ordering/application/**/*.ts',
     'src/modules/logistics/domain/**/*.ts',
     'src/modules/logistics/application/**/*.ts',
+    'src/modules/payments/domain/**/*.ts',
     'src/modules/messaging/application/**/*.ts',
     'src/modules/sync/application/**/*.ts',
     'src/shared/auth/**/*.ts',
