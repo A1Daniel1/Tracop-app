@@ -49,6 +49,23 @@
         "tags": ["health"]
       }
     },
+    "/ready": {
+      "get": {
+        "description": "Público. 200 si la base de datos responde y algún trabajador latió en los últimos `READY_WORKER_MAX_AGE_SECONDS` (180); si no, 503 indicando qué falla. No da más detalles.",
+        "operationId": "OperationsController_ready",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "{ status: \"ready\", database: \"ok\", worker: \"ok\" }"
+          },
+          "503": {
+            "description": "{ status: \"not_ready\", database, worker }"
+          }
+        },
+        "summary": "Comprobar si el servicio puede atender",
+        "tags": ["health"]
+      }
+    },
     "/backoffice/parameters": {
       "get": {
         "description": "Valor vigente, valor por defecto (del entorno), rango y si sigue PROVISIONAL (AGENTS §23).",

@@ -1,4 +1,7 @@
 import { OUTBOX_METRICS } from '../ports/outbox-metrics.js';
+import { HTTP_METRICS, OPERATIONS_PROBE } from '../ports/operations.js';
+import { HttpMetrics } from './http-metrics.js';
+import { PostgresOperationsProbe } from './operations-probe.js';
 import { PostgresOutboxMetricsQuery } from './outbox-metrics.js';
 import { Global, Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
@@ -38,6 +41,9 @@ import { InMemorySearchRateLimiter } from './search-rate-limiter.js';
     outboxWriterProvider,
     PostgresOutboxMetricsQuery,
     { provide: OUTBOX_METRICS, useExisting: PostgresOutboxMetricsQuery },
+    PostgresOperationsProbe,
+    { provide: OPERATIONS_PROBE, useExisting: PostgresOperationsProbe },
+    { provide: HTTP_METRICS, useValue: new HttpMetrics() },
     HttpExceptionFilter,
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
@@ -48,6 +54,8 @@ import { InMemorySearchRateLimiter } from './search-rate-limiter.js';
     { provide: BACKGROUND_DISPATCHER, useExisting: ImmediateBackgroundDispatcher },
   ],
   exports: [
+    OPERATIONS_PROBE,
+    HTTP_METRICS,
     APP_ENVIRONMENT,
     APP_LOGGER,
     APP_CLOCK,

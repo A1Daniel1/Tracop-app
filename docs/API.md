@@ -230,6 +230,13 @@ El cliente móvil puede encolar el perfil (`carrier_profile`, `create`/`update`)
 
 La lectura de candidatos para logística devuelve únicamente `orderId`, `status`, `version`, ventana de entrega, zona de entrega, zonas de recogida y líneas con `lotId`, cantidad y unidad. No devuelve nombre/teléfono del comprador, IDs de comprador/proveedor, precio ni dirección de entrega completa. Un transportista solo puede abrir una incidencia asociada a un viaje propio y a un pedido que tenga paradas en ese viaje; tampoco puede consultar ni resolver incidencias de otro transportista. El operador conserva lectura global y capacidad de resolución.
 
+## Operations
+
+- `GET /health`: liveness, always 200 while the process runs.
+- `GET /ready`: public; 200 `{ status: "ready", database: "ok", worker: "ok" }` when the database answers and a worker beat within `READY_WORKER_MAX_AGE_SECONDS` (180); otherwise 503 with `database` (`ok`/`unreachable`) and `worker` (`ok`/`stale`).
+- `GET /metrics`: Prometheus text, only with `Authorization: Bearer <METRICS_TOKEN>`; 404 without the token or when it is not configured. Requests by method, route template and status, durations, outbox pending and dead-lettered, worker heartbeat age, uptime and memory. No ids or personal data in labels.
+- Every response carries `X-Request-Id`; the API logs one structured line per request with that id.
+
 ## IDs and idempotency
 
 - Lot creation validates that its client-supplied ID is UUID v7. Category and product creation also accept a client-supplied ID, but their schemas validate UUID format without enforcing version 7. Do not infer uniform UUID v7 enforcement across create endpoints.

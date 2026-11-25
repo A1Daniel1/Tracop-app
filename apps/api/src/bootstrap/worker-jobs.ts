@@ -19,6 +19,7 @@ export interface WorkerJobDependencies {
   readonly outbox: OutboxDispatcher;
   readonly assistantInbox: Pick<InboxProcessor, 'drain'>;
   readonly assistantMaintenance: Pick<AssistantMaintenance, 'run'>;
+  readonly heartbeat: () => Promise<void>;
 }
 
 export type WorkerJobSchedule = Pick<
@@ -33,6 +34,7 @@ export type WorkerJobSchedule = Pick<
   | 'JOB_AI_INBOX_CRON'
   | 'JOB_AI_MAINTENANCE_CRON'
   | 'JOB_EXPIRE_UNVERIFIED_CRON'
+  | 'JOB_WORKER_HEARTBEAT_CRON'
 >;
 
 /**
@@ -102,6 +104,13 @@ export const workerJobs = (
     ),
     job('ai-assistant.maintenance', schedule.JOB_AI_MAINTENANCE_CRON, () =>
       dependencies.assistantMaintenance.run(),
+    ),
+    // Liveness for GET /ready: a beat proves the scheduler is running jobs.
+    job(
+      'shared.worker-heartbeat',
+      schedule.JOB_WORKER_HEARTBEAT_CRON,
+      () => dependencies.heartbeat(),
+      30,
     ),
   ];
 };

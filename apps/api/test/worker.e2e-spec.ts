@@ -17,6 +17,7 @@ const EXPECTED_JOBS = [
   'ordering.expire-reservations-and-quotes',
   'payments.issue-settlements',
   'shared.dispatch-outbox',
+  'shared.worker-heartbeat',
 ];
 
 /** Starts the real worker (tsx, real pg-boss) and resolves once it reports ready. */

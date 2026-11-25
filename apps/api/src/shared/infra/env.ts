@@ -182,6 +182,11 @@ const envSchema = z.object({
   AI_USAGE_RETENTION_DAYS: z.coerce.number().int().min(1).max(730).default(90),
   AI_INBOX_LEASE_SECONDS: z.coerce.number().int().min(10).max(600).default(60),
   AI_INBOX_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  JOB_WORKER_HEARTBEAT_CRON: z.string().trim().min(9).default('* * * * *'),
+  // A worker whose newest heartbeat is older than this makes GET /ready answer 503.
+  READY_WORKER_MAX_AGE_SECONDS: z.coerce.number().int().min(60).max(3600).default(180),
+  // Bearer token for GET /metrics; without it the endpoint does not exist (404).
+  METRICS_TOKEN: optionalText(z.string().min(32)),
   JOB_AI_INBOX_CRON: z.string().trim().min(9).default('* * * * *'),
   JOB_AI_MAINTENANCE_CRON: z.string().trim().min(9).default('*/10 * * * *'),
   S3_ENDPOINT: optionalText(z.string().url()),

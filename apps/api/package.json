@@ -26,6 +26,8 @@
     "openapi:export": "pnpm --filter @tracop/contracts build && OPENAPI_EXPORT=true jest --runInBand --coverage=false test/openapi-export.spec.ts",
     "openapi:check": "pnpm --filter @tracop/contracts build && OPENAPI_CHECK=true jest --runInBand --coverage=false test/openapi-export.spec.ts",
     "worker": "tsx src/worker.ts",
+    "worker:dev": "tsx watch src/worker.ts",
+    "outbox:status": "tsx scripts/outbox-status.ts",
     "worker:start": "node dist/worker.js"
   },
   "dependencies": {
