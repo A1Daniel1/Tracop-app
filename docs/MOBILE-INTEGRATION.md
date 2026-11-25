@@ -81,6 +81,13 @@ El comprador paga por transferencia o Nequi fuera de la app y sube una foto del 
 - Los textos ya vienen redactados en español; usen `kind` solo para el ícono o la navegación. No contienen direcciones ni datos de otros usuarios.
 - Preferencias en `GET`/`PUT /me/notification-preferences`: orden de canales y horario sin molestias (hora de Colombia). Hoy solo Telegram entrega fuera de la app; push llegará con FCM.
 
+## Confianza
+
+- Tras recibir un pedido pagado, el comprador puede calificar al proveedor y, si lo hubo, al transportista: `POST /trust/ratings` con un `id` UUID v7 generado por la app (reintentar con el mismo `id` es seguro) y `score` de 1 a 5, durante 7 días tras la entrega. Fuera de eso la API responde 404; no muestren el botón.
+- El bloque `provider` de lotes y pedidos trae `verified`, `rating` (texto con un decimal, por ejemplo `"4.3"`, o `null` mientras haya pocas calificaciones) y `ratingsCount`. Muestren `rating` tal cual; no calculen promedios.
+- Productores, proveedores y transportistas ven su reputación en `GET /trust/me`. Los comentarios llegan como textos sueltos: no tienen pedido ni fecha, y su orden no es cronológico a propósito.
+- El proveedor solicita la verificación con `POST /trust/verification-requests`; el estado aparece en `GET /trust/me` (`verification`).
+
 ## Errores y límites
 
 Formato: `{ statusCode, code?, message, details?, suggestions? }`; los 429 traen `Retry-After` (segundos). Errores de validación: 400 sin `code`. Cuerpo máximo: 64 KiB (256 KiB en `/sync/push`, 413 si se supera).
